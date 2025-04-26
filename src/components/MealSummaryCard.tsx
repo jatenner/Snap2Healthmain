@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Image from 'next/image';
 
 interface MealSummaryCardProps {
@@ -16,21 +16,48 @@ export const MealSummaryCard: React.FC<MealSummaryCardProps> = ({
   calories,
   goal
 }) => {
+  const [imageError, setImageError] = useState(false);
+  
+  // Placeholder image for fallbacks
+  const placeholderImage = `data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23cccccc'%3E%3Cpath d='M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 16H6c-.55 0-1-.45-1-1V6c0-.55.45-1 1-1h12c.55 0 1 .45 1 1v12c0 .55-.45 1-1 1zm-4.44-6.19l-2.35 3.02-1.56-1.88c-.2-.25-.58-.24-.78.01l-1.74 2.23c-.2.25-.02.61.29.61h8.98c.28 0 .48-.34.28-.59l-2.55-3.21c-.2-.25-.58-.24-.77.02z'/%3E%3C/svg%3E`;
+
+  // Log image URL for debugging
+  if (imageUrl) {
+    console.log("MealSummaryCard rendering with imageUrl:", imageUrl);
+  }
+
   return (
     <div className="bg-white rounded-xl shadow-md overflow-hidden">
       <div className="flex flex-col md:flex-row">
         {/* Image Section */}
-        {imageUrl && (
+        {imageUrl && !imageError && (
           <div className="md:w-1/3 relative">
             <div className="relative h-64 md:h-full w-full">
               <Image
                 src={imageUrl}
                 alt={caption}
                 fill
+                unoptimized // Add this to bypass Next.js image optimization
                 sizes="(max-width: 768px) 100vw, 33vw"
                 style={{ objectFit: 'cover' }}
                 className="rounded-t-lg md:rounded-l-lg md:rounded-t-none"
+                onError={(e) => {
+                  console.error(`Error loading image in MealSummaryCard: ${imageUrl}`);
+                  setImageError(true);
+                }}
               />
+            </div>
+          </div>
+        )}
+        
+        {/* Fallback if image failed to load */}
+        {imageUrl && imageError && (
+          <div className="md:w-1/3 bg-gray-100 flex items-center justify-center h-64 md:h-auto">
+            <div className="text-center p-4">
+              <svg className="w-12 h-12 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <p className="mt-2 text-sm text-gray-500">Image unavailable</p>
             </div>
           </div>
         )}

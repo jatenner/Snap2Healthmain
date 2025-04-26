@@ -38,6 +38,36 @@ export const uploadMealImage = async (file: File, userId: string): Promise<strin
     console.log(`Preparing to upload image to Supabase: ${filePath}`);
     console.log(`File type: ${file.type}, size: ${(file.size / 1024).toFixed(2)}KB`);
     
+    // Ensure bucket exists before upload
+    try {
+      // Check if bucket exists first
+      const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
+      
+      if (bucketsError) {
+        console.error('Error checking buckets:', bucketsError);
+      } else {
+        const bucketExists = buckets.some(bucket => bucket.name === 'meal-images');
+        
+        if (!bucketExists) {
+          console.log('Creating meal-images bucket...');
+          const { error: createError } = await supabase.storage.createBucket('meal-images', {
+            public: true
+          });
+          
+          if (createError) {
+            console.error('Error creating bucket:', createError);
+          } else {
+            console.log('Bucket created successfully');
+          }
+        } else {
+          console.log('Bucket meal-images already exists');
+        }
+      }
+    } catch (e) {
+      console.warn('Error checking/creating bucket:', e);
+      // Continue anyway as the bucket might already exist
+    }
+    
     // Skip bucket creation/updates - assume bucket exists and is configured properly
     console.log('Uploading to existing meal-images bucket');
     
@@ -90,9 +120,21 @@ export const uploadMealImage = async (file: File, userId: string): Promise<strin
       .getPublicUrl(filePath);
 
     // Verify URL is valid and accessible
-    if (!urlData.publicUrl) {
+    if (!urlData?.publicUrl) {
+      console.error('Failed to generate public URL. URL data:', urlData);
       throw new Error('Failed to generate public URL for uploaded image');
     }
+
+    console.log(`Generated public URL: ${urlData.publicUrl}`);
+    
+    // Add debugging info about the URL
+    const urlParts = urlData.publicUrl.split('/');
+    console.log('URL structure:', {
+      domain: urlParts[2],
+      path: urlParts.slice(3).join('/'),
+      containsBucketName: urlData.publicUrl.includes('meal-images'),
+      containsUserId: urlData.publicUrl.includes(userId)
+    });
 
     // Make one final check that the URL is accessible
     try {
@@ -100,6 +142,8 @@ export const uploadMealImage = async (file: File, userId: string): Promise<strin
       const testFetch = await fetch(urlData.publicUrl, { method: 'HEAD' });
       if (!testFetch.ok) {
         console.warn(`Warning: Image URL returned status ${testFetch.status} - it may not be accessible yet`);
+      } else {
+        console.log(`URL is accessible: ${testFetch.status} ${testFetch.statusText}`);
       }
     } catch (e) {
       console.warn('Warning: Could not verify URL is accessible:', e);

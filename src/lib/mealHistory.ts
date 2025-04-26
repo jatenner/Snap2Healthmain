@@ -21,32 +21,40 @@ export interface GroupedMeals {
 export const getValidImageUrl = (url?: string): string | undefined => {
   if (!url) return undefined;
   
+  // For debugging
+  console.log("Original image URL:", url);
+  
   try {
-    // Check if URL is already valid by creating a URL object
-    new URL(url);
-    return url;
-  } catch (e) {
-    // URL is not valid, try to fix it
+    // If it's already a valid URL with http/https, use it directly
+    if (url.startsWith('http')) {
+      console.log("Using direct URL:", url);
+      return url;
+    }
     
-    // If it's a relative URL or just a path from a Supabase bucket
+    // If it has the storage path but missing base URL
     if (url.includes('/storage/v1/object/public/')) {
       const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const fullUrl = url.startsWith('/') 
-        ? `${baseUrl}${url}`
-        : `${baseUrl}/${url}`;
+      // Remove any leading slash to avoid double slashes
+      const cleanPath = url.startsWith('/') ? url.substring(1) : url;
+      const fullUrl = `${baseUrl}/${cleanPath}`;
+      console.log("Constructed URL from storage path:", fullUrl);
       return fullUrl;
     }
     
-    // If it's just a path without leading slash
-    if (!url.startsWith('http')) {
-      const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const fullUrl = `${baseUrl}/storage/v1/object/public/${url.startsWith('/') ? url.substring(1) : url}`;
-      return fullUrl;
-    }
+    // If it's just a path without the full storage prefix
+    const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    // Handle paths that might already have 'meal-images' in them
+    const bucketPath = url.includes('meal-images') 
+      ? url 
+      : `meal-images/${url.startsWith('/') ? url.substring(1) : url}`;
+    
+    const fullUrl = `${baseUrl}/storage/v1/object/public/${bucketPath}`;
+    console.log("Constructed URL from path:", fullUrl);
+    return fullUrl;
+  } catch (e) {
+    console.error("Error formatting image URL:", e);
+    return url; // Return original as fallback
   }
-  
-  // Return original if we couldn't fix it
-  return url;
 };
 
 /**
@@ -136,52 +144,8 @@ export const fetchMealHistory = async (userId: string): Promise<{ data: MealReco
       console.log(`Found ${data.length} meal records for user ${userId}`);
       
       if (data.length === 0) {
-        // Let's check if there are any meals in the table at all
-        const { data: anyMeals, error: countError } = await supabase
-          .from('meals')
-          .select('count');
-          
-        if (!countError && anyMeals) {
-          console.log('Total meals in the table:', anyMeals);
-        }
-        
-        // Let's also try to fetch all meals without a filter to debug
-        console.log('Attempting to fetch all meals to debug access issues...');
-        const { data: allMeals, error: allError } = await supabase
-          .from('meals')
-          .select('*')
-          .limit(5);
-          
-        if (!allError && allMeals && allMeals.length > 0) {
-          console.log(`Found ${allMeals.length} meals without user_id filter`);
-          console.log('Sample meal:', allMeals[0]);
-          console.log('This suggests your user_id may not match the user_id in the database records');
-          
-          // If we found meals but none belong to this user, let's try querying with the user_ids we found
-          if (allMeals.length > 0 && allMeals[0].user_id) {
-            console.log(`Trying to fetch meals with a known working user_id: ${allMeals[0].user_id}`);
-            const { data: workingUserMeals } = await supabase
-              .from('meals')
-              .select('*')
-              .eq('user_id', allMeals[0].user_id)
-              .limit(5);
-              
-            if (workingUserMeals && workingUserMeals.length > 0) {
-              console.log(`Found ${workingUserMeals.length} meals for user ${allMeals[0].user_id}`);
-              console.log('This confirms the table is working, but your user_id is not matching records');
-              
-              // Important: Return these meals even though they don't match requested user_id
-              // This helps the UI display something so you can see meal records
-              return { 
-                data: workingUserMeals.map(meal => ({
-                  ...meal,
-                  image_url: getValidImageUrl(meal.image_url)
-                })),
-                error: null 
-              };
-            }
-          }
-        }
+        // Log if no meals found but don't return other users' data
+        console.log('No meals found for current user');
       } else {
         // Log a sample record to check the structure
         console.log('Sample meal record:', JSON.stringify(data[0], null, 2));

@@ -83,6 +83,8 @@ export default function MealImageGallery() {
           .from('meal-images')
           .getPublicUrl(file.path);
           
+        console.log(`Generated URL for ${file.path}:`, data.publicUrl);
+        
         return {
           publicUrl: data.publicUrl,
           name: file.name,
@@ -193,8 +195,16 @@ export default function MealImageGallery() {
                       fill
                       sizes="(max-width: 768px) 50vw, 25vw"
                       className="object-cover"
+                      unoptimized
                       onError={(e) => {
                         console.error(`Error loading image: ${image.publicUrl}`);
+                        const urlParts = image.publicUrl.split('/');
+                        console.log('URL analysis:', {
+                          fullUrl: image.publicUrl,
+                          domain: urlParts[2],
+                          pathSegments: urlParts.slice(3),
+                          isSupabaseUrl: image.publicUrl.includes('supabase.co')
+                        });
                         (e.target as HTMLImageElement).src = placeholderImage;
                       }}
                     />
