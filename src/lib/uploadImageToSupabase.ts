@@ -55,11 +55,25 @@ export const uploadMealImage = async (file: File, userId: string): Promise<strin
     console.log(`Preparing to upload image to Supabase: ${filePath}`);
     console.log(`File type: ${file.type}, size: ${(file.size / 1024).toFixed(2)}KB`);
     
-    // Try upload with retry logic
+    // Enhanced retry logic with better error handling
     let uploadAttempt = 0;
     const maxAttempts = 3;
     let uploadError = null;
     let data = null;
+    const retryableErrors = [
+      'timeout', 
+      'network error', 
+      'connection', 
+      'socket', 
+      'ETIMEDOUT', 
+      'ECONNREFUSED', 
+      'ECONNRESET',
+      'fetch failed',
+      'Failed to fetch'
+    ];
+    
+    // Track both error type and details for better diagnostics
+    const errors = [];
 
     while (uploadAttempt < maxAttempts) {
       try {
@@ -89,16 +103,31 @@ export const uploadMealImage = async (file: File, userId: string): Promise<strin
           break;
         }
         
+        // Keep track of all errors for detailed reporting
+        const errorDetails = {
+          attempt: uploadAttempt,
+          message: uploadError.message,
+          details: uploadError.details,
+          hint: uploadError.hint,
+          code: uploadError.code,
+          timestamp: new Date().toISOString()
+        };
+        errors.push(errorDetails);
+        
         // Log detailed error info for debugging RLS issues
-        if (uploadError) {
-          console.error('Upload error details:', {
-            message: uploadError.message,
-            details: uploadError.details,
-            hint: uploadError.hint,
-            code: uploadError.code
-          });
-          
-          // Handle RLS policy violations - usually no need to retry these
+        console.error(`Upload attempt ${uploadAttempt} failed:`, errorDetails);
+        
+        // Determine if we should retry based on error type
+        const isRetryableError = retryableErrors.some(errType => 
+          uploadError.message?.toLowerCase().includes(errType.toLowerCase())
+        );
+        
+        // Don't retry permission errors or non-retryable errors
+        if (!isRetryableError || 
+            uploadError.message?.includes('row-level security') || 
+            uploadError.message?.includes('permission denied') ||
+            uploadError.message?.includes('Unauthorized')) {
+            
           if (uploadError.message?.includes('row-level security') || 
               uploadError.message?.includes('permission denied') ||
               uploadError.message?.includes('Unauthorized')) {
@@ -107,35 +136,101 @@ export const uploadMealImage = async (file: File, userId: string): Promise<strin
             console.error('2. The bucket "meal-images" exists');
             console.error('3. You are using the correct user auth session');
             console.error(`4. The path structure matches: users/${userId}/*`);
-            break; // Don't retry permission errors
+          } else {
+            console.error(`Not retrying due to non-retryable error: ${uploadError.message}`);
           }
+          
+          break; // Don't retry these types of errors
         }
         
-        console.warn(`Upload attempt ${uploadAttempt} failed:`, uploadError.message);
-        
-        // Wait before retrying with exponential backoff
+        // Wait longer between retries to handle network issues
         if (uploadAttempt < maxAttempts) {
-          const backoffTime = Math.pow(2, uploadAttempt) * 500; // 1s, 2s, 4s
+          const backoffTime = 2000 * uploadAttempt; // 2s, 4s, 6s - fixed increasing delay
+          console.log(`Waiting ${backoffTime}ms before retry ${uploadAttempt + 1}...`);
           await new Promise(resolve => setTimeout(resolve, backoffTime));
         }
-      } catch (e) {
+      } catch (e: any) {
+        // Handle unexpected exceptions during upload
+        const errorDetails = {
+          attempt: uploadAttempt,
+          message: e.message || 'Unknown error',
+          stack: e.stack,
+          timestamp: new Date().toISOString()
+        };
+        errors.push(errorDetails);
         uploadError = e;
-        console.warn(`Upload attempt ${uploadAttempt} failed with exception:`, e);
+        console.warn(`Upload attempt ${uploadAttempt} failed with exception:`, errorDetails);
+        
+        // Wait before retrying after exception
+        if (uploadAttempt < maxAttempts) {
+          const backoffTime = 2000 * uploadAttempt;
+          console.log(`Waiting ${backoffTime}ms before retry ${uploadAttempt + 1}...`);
+          await new Promise(resolve => setTimeout(resolve, backoffTime));
+        }
       }
     }
 
+    // Handle all upload attempts failing
     if (uploadError) {
-      console.error('All upload attempts failed:', uploadError);
-      throw new Error(`Failed to upload image: ${uploadError.message || JSON.stringify(uploadError)}`);
+      console.error('All upload attempts failed:', errors);
+      
+      // Create user-friendly error message based on error type
+      let userMessage = 'Failed to upload image.';
+      
+      if (uploadError.message?.includes('row-level security') || 
+          uploadError.message?.includes('permission denied') ||
+          uploadError.message?.includes('Unauthorized')) {
+        userMessage = 'Permission denied. You may not have access to upload to this location.';
+      } else if (retryableErrors.some(errType => 
+        uploadError.message?.toLowerCase().includes(errType.toLowerCase())
+      )) {
+        userMessage = 'Network issue detected. Please check your internet connection and try again.';
+      } else if (uploadError.message?.includes('already exists')) {
+        userMessage = 'A file with this name already exists. Please try again with a different file.';
+      }
+      
+      throw new Error(`${userMessage} (Error: ${uploadError.message || JSON.stringify(uploadError)})`);
     }
 
     // Use signed URLs instead of public URLs to ensure policies are enforced
-    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-      .from('meal-images')
-      .createSignedUrl(filePath, 60 * 60 * 24 * 7); // 7 day expiry
+    // Also add retry logic for getting the signed URL
+    let urlAttempt = 0;
+    const maxUrlAttempts = 2;
+    let signedUrlData = null;
+    let signedUrlError = null;
+    
+    while (urlAttempt < maxUrlAttempts) {
+      try {
+        urlAttempt++;
+        console.log(`Getting signed URL, attempt ${urlAttempt}/${maxUrlAttempts}`);
+        
+        const result = await supabase.storage
+          .from('meal-images')
+          .createSignedUrl(filePath, 60 * 60 * 24 * 7); // 7 day expiry
+          
+        signedUrlData = result.data;
+        signedUrlError = result.error;
+        
+        if (!signedUrlError && signedUrlData?.signedUrl) {
+          break;
+        }
+        
+        if (urlAttempt < maxUrlAttempts) {
+          console.log(`Retrying signed URL generation in 1s...`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      } catch (e) {
+        signedUrlError = e;
+        console.warn(`Failed to get signed URL on attempt ${urlAttempt}:`, e);
+        
+        if (urlAttempt < maxUrlAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+    }
       
     if (signedUrlError || !signedUrlData?.signedUrl) {
-      console.error('Failed to generate signed URL:', signedUrlError);
+      console.error('Failed to generate signed URL, falling back to public URL:', signedUrlError);
       
       // Fall back to public URL if signed URL fails
       const { data: urlData } = supabase.storage
@@ -143,7 +238,7 @@ export const uploadMealImage = async (file: File, userId: string): Promise<strin
         .getPublicUrl(filePath);
         
       if (!urlData?.publicUrl) {
-        throw new Error('Failed to generate URL for uploaded image');
+        throw new Error('Failed to generate any URL for the uploaded image');
       }
       
       return urlData.publicUrl;
@@ -153,6 +248,11 @@ export const uploadMealImage = async (file: File, userId: string): Promise<strin
     return signedUrlData.signedUrl;
   } catch (error: any) {
     console.error('Error in uploadMealImage:', error);
-    throw error;
+    // Make sure we throw a clean Error object with a user-friendly message
+    if (error instanceof Error) {
+      throw error;
+    } else {
+      throw new Error(`Failed to upload image: ${error?.message || JSON.stringify(error)}`);
+    }
   }
 }; 
