@@ -170,23 +170,48 @@ export default function DashboardPage() {
     setGroupedMeals(groupMealsByDate(refreshedMeals));
   };
 
-  // Format date for section headers
+  // Format date as header (Today, Yesterday, or date)
   const formatDateHeader = (dateString: string) => {
     try {
-      // Parse the date string to ensure proper timezone handling
-      const date = new Date(dateString + 'T00:00:00');
+      // Handle ISO strings that might have invalid format
+      if (!dateString) return 'No date';
       
-      // Use toLocaleDateString for consistent date formatting
+      // Try to create a valid date object
+      const date = new Date(dateString);
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        console.warn(`Invalid date string: ${dateString}`);
+        return 'Invalid date';
+      }
+      
+      const today = new Date();
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      
+      // Normalize dates to compare just the date portion
+      const normalizeDate = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      
+      const normalizedDate = normalizeDate(date);
+      const normalizedToday = normalizeDate(today);
+      const normalizedYesterday = normalizeDate(yesterday);
+      
+      if (normalizedDate.getTime() === normalizedToday.getTime()) {
+        return 'Today';
+      }
+      
+      if (normalizedDate.getTime() === normalizedYesterday.getTime()) {
+        return 'Yesterday';
+      }
+      
       return new Intl.DateTimeFormat('en-US', {
-        weekday: 'long',
-        month: 'long',
+        month: 'short',
         day: 'numeric',
-        year: 'numeric',
-        timeZone: 'UTC'  // Use UTC to avoid timezone shifts
+        year: 'numeric'
       }).format(date);
     } catch (error) {
-      console.error('Error formatting date header:', error);
-      return dateString; // Return the original string if parsing fails
+      console.error('Error formatting date header:', error, 'Date string:', dateString);
+      return 'Date error';
     }
   };
 
