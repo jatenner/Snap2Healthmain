@@ -181,16 +181,39 @@ export const groupMealsByDate = (meals: MealRecord[]): GroupedMeals => {
       return;
     }
     
-    // Format the date as YYYY-MM-DD for grouping
-    const dateKey = formatMealDate(meal.created_at);
-    
-    // Create an array for this date if it doesn't exist
-    if (!grouped[dateKey]) {
-      grouped[dateKey] = [];
+    try {
+      // Validate the date before formatting
+      const date = new Date(meal.created_at);
+      if (isNaN(date.getTime())) {
+        console.warn(`Invalid date string for meal ${meal.id}: ${meal.created_at}`);
+        // Use a fallback date key for invalid dates
+        const dateKey = 'Invalid date';
+        if (!grouped[dateKey]) {
+          grouped[dateKey] = [];
+        }
+        grouped[dateKey].push(meal);
+        return;
+      }
+      
+      // Format the date as YYYY-MM-DD for grouping
+      const dateKey = formatMealDate(meal.created_at);
+      
+      // Create an array for this date if it doesn't exist
+      if (!grouped[dateKey]) {
+        grouped[dateKey] = [];
+      }
+      
+      // Add the meal to the appropriate date group
+      grouped[dateKey].push(meal);
+    } catch (error) {
+      console.error(`Error processing date for meal ${meal.id}:`, error);
+      // Use a fallback date key for error cases
+      const dateKey = 'Date error';
+      if (!grouped[dateKey]) {
+        grouped[dateKey] = [];
+      }
+      grouped[dateKey].push(meal);
     }
-    
-    // Add the meal to the appropriate date group
-    grouped[dateKey].push(meal);
   });
   
   return grouped;

@@ -280,7 +280,28 @@ export async function POST(request: NextRequest) {
         console.log('Meals table exists check result:', tableExists);
         
         // Use a consistent timestamp for the record
-        const timestamp = new Date().toISOString();
+        // Ensure we have a valid date
+        let timestamp;
+        try {
+          const now = new Date();
+          // Validate that the date is valid
+          if (isNaN(now.getTime())) {
+            console.warn('Generated an invalid date, using ISO string workaround');
+            timestamp = new Date().toISOString();
+          } else {
+            timestamp = now.toISOString();
+          }
+          // Double-check the timestamp is valid
+          const testDate = new Date(timestamp);
+          if (isNaN(testDate.getTime())) {
+            console.warn(`Generated invalid ISO string: ${timestamp}, using fallback`);
+            timestamp = new Date().toUTCString();
+          }
+          console.log('Using timestamp:', timestamp);
+        } catch (dateError) {
+          console.error('Error generating timestamp:', dateError);
+          timestamp = new Date().toISOString(); // Fallback
+        }
         
         // Create meal data with or without AI analysis
         const mealData = {
