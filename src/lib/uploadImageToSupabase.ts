@@ -34,45 +34,15 @@ export const uploadMealImage = async (file: File, userId: string): Promise<strin
     console.log(`Using timestamp for filename: ${timestamp} (${new Date(timestamp).toISOString()})`);
     const cleanFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_'); // Sanitize filename
     const fileName = `${timestamp}-${cleanFileName}`;
+    
+    // Ensure files are stored in user-specific folders for proper security
+    // Format: users/[userId]/[filename]
     const filePath = `users/${userId}/${fileName}`;
 
     console.log(`Preparing to upload image to Supabase: ${filePath}`);
     console.log(`File type: ${file.type}, size: ${(file.size / 1024).toFixed(2)}KB`);
     
-    // Ensure bucket exists before upload
-    try {
-      // Check if bucket exists first
-      const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
-      
-      if (bucketsError) {
-        console.error('Error checking buckets:', bucketsError);
-      } else {
-        const bucketExists = buckets.some(bucket => bucket.name === 'meal-images');
-        
-        if (!bucketExists) {
-          console.log('Creating meal-images bucket...');
-          const { error: createError } = await supabase.storage.createBucket('meal-images', {
-            public: true
-          });
-          
-          if (createError) {
-            console.error('Error creating bucket:', createError);
-          } else {
-            console.log('Bucket created successfully');
-          }
-        } else {
-          console.log('Bucket meal-images already exists');
-        }
-      }
-    } catch (e) {
-      console.warn('Error checking/creating bucket:', e);
-      // Continue anyway as the bucket might already exist
-    }
-    
-    // Skip bucket creation/updates - assume bucket exists and is configured properly
-    console.log('Uploading to existing meal-images bucket');
-    
-    // Try upload with retry
+    // Try upload with retry logic
     let uploadAttempt = 0;
     const maxAttempts = 3;
     let uploadError = null;
@@ -83,11 +53,21 @@ export const uploadMealImage = async (file: File, userId: string): Promise<strin
         uploadAttempt++;
         console.log(`Upload attempt ${uploadAttempt}/${maxAttempts}`);
         
+        // Upload with metadata to enforce ownership and enable filtering
         const result = await supabase.storage
           .from('meal-images')
           .upload(filePath, file, {
             cacheControl: '3600',
             upsert: true, // Overwrite if exists
+            contentType: file.type,
+            duplex: 'half',
+            // Add metadata to associate with the user and enable filtering
+            metadata: {
+              user_id: userId,
+              uploaded_at: new Date().toISOString(),
+              original_name: file.name,
+              content_type: file.type
+            }
           });
           
         data = result.data;
@@ -96,6 +76,14 @@ export const uploadMealImage = async (file: File, userId: string): Promise<strin
         if (!uploadError) {
           console.log('Upload successful on attempt', uploadAttempt);
           break;
+        }
+        
+        // Handle specific permission errors from storage policies
+        if (uploadError.message?.includes('row-level security') || 
+            uploadError.message?.includes('permission denied')) {
+          console.error('Permission denied error - check Supabase storage policies');
+          console.error('Ensure you have a policy that allows INSERT with: auth.uid() = request.auth.uid');
+          break; // Don't retry permission errors
         }
         
         console.warn(`Upload attempt ${uploadAttempt} failed:`, uploadError.message);
@@ -120,7 +108,7 @@ export const uploadMealImage = async (file: File, userId: string): Promise<strin
       .from('meal-images')
       .getPublicUrl(filePath);
 
-    // Verify URL is valid and accessible
+    // Verify URL is valid
     if (!urlData?.publicUrl) {
       console.error('Failed to generate public URL. URL data:', urlData);
       throw new Error('Failed to generate public URL for uploaded image');
@@ -137,14 +125,26 @@ export const uploadMealImage = async (file: File, userId: string): Promise<strin
       containsUserId: urlData.publicUrl.includes(userId)
     });
 
-    // Make one final check that the URL is accessible
+    // Make a final check that the URL is accessible with the current user auth
     try {
-      console.log(`Verifying URL is accessible: ${urlData.publicUrl}`);
-      const testFetch = await fetch(urlData.publicUrl, { method: 'HEAD' });
-      if (!testFetch.ok) {
-        console.warn(`Warning: Image URL returned status ${testFetch.status} - it may not be accessible yet`);
-      } else {
-        console.log(`URL is accessible: ${testFetch.status} ${testFetch.statusText}`);
+      // Use authenticated fetch to verify access
+      const authFetch = await supabase.auth.getSession();
+      if (authFetch.data?.session) {
+        const authHeader = {
+          Authorization: `Bearer ${authFetch.data.session.access_token}`
+        };
+        
+        console.log(`Verifying URL is accessible with auth: ${urlData.publicUrl}`);
+        const testFetch = await fetch(urlData.publicUrl, { 
+          method: 'HEAD',
+          headers: authHeader
+        });
+        
+        if (!testFetch.ok) {
+          console.warn(`Warning: Image URL returned status ${testFetch.status} - check storage policies`);
+        } else {
+          console.log(`URL is accessible: ${testFetch.status} ${testFetch.statusText}`);
+        }
       }
     } catch (e) {
       console.warn('Warning: Could not verify URL is accessible:', e);
