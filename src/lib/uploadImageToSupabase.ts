@@ -29,8 +29,9 @@ export const uploadMealImage = async (file: File, userId: string): Promise<strin
       throw new Error(`Invalid file type. Allowed types are: ${allowedTypes.join(', ')}`);
     }
 
-    // Generate a unique filename with timestamp
+    // Generate a unique filename with timestamp - use current date in milliseconds
     const timestamp = new Date().getTime();
+    console.log(`Using timestamp for filename: ${timestamp} (${new Date(timestamp).toISOString()})`);
     const cleanFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_'); // Sanitize filename
     const fileName = `${timestamp}-${cleanFileName}`;
     const filePath = `users/${userId}/${fileName}`;

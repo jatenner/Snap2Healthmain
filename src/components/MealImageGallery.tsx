@@ -70,10 +70,21 @@ export default function MealImageGallery() {
         if (match && match[1]) {
           const timestamp = parseInt(match[1]);
           if (!isNaN(timestamp)) {
-            return new Date(timestamp).toISOString();
+            // Check if the timestamp is realistic (between 2020 and current year + 1)
+            // This avoids future dates like 2025
+            const date = new Date(timestamp);
+            const currentYear = new Date().getFullYear();
+            
+            if (date.getFullYear() >= 2020 && date.getFullYear() <= currentYear + 1) {
+              console.log(`Valid timestamp extracted from filename: ${filename} -> ${date.toISOString()}`);
+              return date.toISOString();
+            } else {
+              console.log(`Unrealistic year in filename timestamp: ${date.getFullYear()}, using current date`);
+            }
           }
         }
-        return new Date().toISOString(); // Fallback to current date
+        // If we can't extract a valid date, or the date is unrealistic, use current date
+        return new Date().toISOString();
       };
       
       // Convert file paths to public URLs with date information

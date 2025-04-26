@@ -268,6 +268,8 @@ export async function POST(request: NextRequest) {
 
     // Store in Supabase if we have a user ID and image URL
     // We'll store the record even if AI analysis fails
+    let savedMealId = null;
+    
     if (userId && imageUrl) {
       try {
         console.log('Saving meal to database with image URL:', imageUrl);
@@ -277,6 +279,9 @@ export async function POST(request: NextRequest) {
         const tableExists = await ensureMealsTableExists();
         console.log('Meals table exists check result:', tableExists);
         
+        // Use a consistent timestamp for the record
+        const timestamp = new Date().toISOString();
+        
         // Create meal data with or without AI analysis
         const mealData = {
           user_id: userId,
@@ -284,7 +289,8 @@ export async function POST(request: NextRequest) {
           caption: caption || "My meal",
           analysis: validatedAnalysis,
           image_url: imageUrl,
-          created_at: new Date().toISOString(), // Explicitly set creation timestamp
+          created_at: timestamp, // Explicitly set creation timestamp
+          ingredients: ingredients // Save ingredients list separately for easier access
         };
         
         console.log('Inserting meal record:', JSON.stringify(mealData, null, 2));
@@ -326,22 +332,10 @@ export async function POST(request: NextRequest) {
             const responseData = await response.json();
             console.log('Successfully inserted meal via REST API:', responseData);
             
-            // Return the analysis with the saved ID to help with debugging
+            // Set the saved meal ID if available
             if (responseData && responseData.length > 0) {
-              console.log('Meal inserted with ID:', responseData[0].id);
-              return NextResponse.json(
-                {
-                  caption,
-                  ingredients: ingredients || [],
-                  analysis: validatedAnalysis,
-                  imageUrl,
-                  goal: userGoal,
-                  mealId: responseData[0].id,
-                  savedToDatabase: true,
-                  aiAnalysis: !!openaiApiKey
-                },
-                { status: 201 }
-              );
+              savedMealId = responseData[0].id;
+              console.log('Meal inserted with ID:', savedMealId);
             }
           } else {
             const errorData = await response.json();
@@ -349,52 +343,19 @@ export async function POST(request: NextRequest) {
             throw new Error(`Database insertion failed: ${JSON.stringify(errorData)}`);
           }
         } else {
-          console.log('Successfully saved meal to database:', insertedMeal?.[0]?.id);
-          return NextResponse.json(
-            {
-              caption,
-              ingredients: ingredients || [],
-              analysis: validatedAnalysis,
-              imageUrl,
-              goal: userGoal,
-              mealId: insertedMeal?.[0]?.id,
-              savedToDatabase: true,
-              aiAnalysis: !!openaiApiKey
-            },
-            { status: 201 }
-          );
+          // Successfully inserted with Supabase client
+          if (insertedMeal && insertedMeal.length > 0) {
+            savedMealId = insertedMeal[0].id;
+            console.log('Meal inserted with ID:', savedMealId);
+          }
         }
       } catch (dbError: any) {
-        console.error('Error saving to database:', dbError);
-        
-        // Return the analysis data even if database storage failed
-        return NextResponse.json({
-          caption,
-          ingredients: ingredients || [],
-          analysis: validatedAnalysis,
-          imageUrl,
-          goal: userGoal,
-          savedToDatabase: false,
-          databaseError: true
-        });
+        console.error('Database error:', dbError);
+        // Continue even if database storage fails
       }
-    } else {
-      console.log('Missing user ID or image URL - skipping database storage');
-      if (!userId) console.log('User ID is missing');
-      if (!imageUrl) console.log('Image URL is missing');
-      
-      // Return analysis data without attempting database storage
-      return NextResponse.json({
-        caption,
-        ingredients: ingredients || [],
-        analysis: validatedAnalysis,
-        imageUrl,
-        goal: userGoal,
-        savedToDatabase: false
-      });
     }
 
-    // Return the analysis even if database storage was skipped
+    // Return the analysis results
     return NextResponse.json(
       {
         caption,
@@ -402,10 +363,12 @@ export async function POST(request: NextRequest) {
         analysis: validatedAnalysis,
         imageUrl,
         goal: userGoal,
-        savedToDatabase: false,
+        mealId: savedMealId,
+        savedToDatabase: !!savedMealId,
+        timestamp: new Date().toISOString(), // Include timestamp in response
         aiAnalysis: !!openaiApiKey
       },
-      { status: 200 }
+      { status: savedMealId ? 201 : 200 }
     );
   } catch (error: any) {
     return createErrorResponse(error);

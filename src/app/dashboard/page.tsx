@@ -208,16 +208,34 @@ export default function DashboardPage() {
 
   // Render nutrition information
   const renderNutrition = (meal: MealRecord) => {
+    console.log(`Rendering nutrition for meal ${meal.id}:`, meal.analysis);
+    
     // Handle the case where analysis might be missing or invalid
-    if (!meal.analysis || !meal.analysis.calories) {
+    if (!meal.analysis || typeof meal.analysis !== 'object' || !meal.analysis.calories) {
+      console.warn(`No valid analysis data for meal ${meal.id}:`, meal.analysis);
       return (
         <div className="p-4 bg-gray-50 rounded-lg">
           <p className="text-gray-500 italic">No detailed analysis available for this meal.</p>
+          <button 
+            onClick={() => {
+              router.push(`/meal-analysis?id=${meal.id}`);
+            }}
+            className="mt-2 py-1 px-3 bg-blue-100 hover:bg-blue-200 text-blue-700 text-sm rounded-md"
+          >
+            Re-analyze meal
+          </button>
         </div>
       );
     }
     
     const { analysis } = meal;
+    
+    // Log analysis data for debugging
+    console.log(`Analysis data for meal ${meal.id}:`, {
+      calories: analysis.calories,
+      macrosCount: analysis.macronutrients?.length || 0,
+      microsCount: analysis.micronutrients?.length || 0
+    });
     
     return (
       <div className="mt-4 p-4 bg-gray-50 rounded-lg space-y-6">
@@ -462,6 +480,30 @@ export default function DashboardPage() {
     }
   };
 
+  // Validate and fix image URLs
+  const getValidatedImageUrl = (meal: MealRecord) => {
+    if (!meal.image_url) return null;
+    
+    // Check if URL appears to be valid
+    try {
+      // If it's a relative URL, make it absolute
+      if (!meal.image_url.startsWith('http')) {
+        const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        if (meal.image_url.includes('/storage/v1/object/public/')) {
+          return `${baseUrl}${meal.image_url.startsWith('/') ? '' : '/'}${meal.image_url}`;
+        } else {
+          return `${baseUrl}/storage/v1/object/public/meal-images/${meal.image_url.startsWith('/') ? meal.image_url.substring(1) : meal.image_url}`;
+        }
+      }
+      
+      // URL is already absolute, return it
+      return meal.image_url;
+    } catch (e) {
+      console.error(`Invalid image URL for meal ${meal.id}:`, meal.image_url, e);
+      return null;
+    }
+  };
+
   // Add this function near the others
   if (loading) {
     return (
@@ -607,7 +649,7 @@ export default function DashboardPage() {
                               <div className="flex-shrink-0">
                                 <div className="relative h-20 w-20 rounded-lg overflow-hidden">
                                   <Image
-                                    src={meal.image_url}
+                                    src={getValidatedImageUrl(meal) || ''}
                                     alt={meal.caption || 'Meal image'}
                                     fill
                                     className="object-cover"

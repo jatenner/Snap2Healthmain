@@ -24,6 +24,22 @@ export const MealSummaryCard: React.FC<MealSummaryCardProps> = ({
   // Log image URL for debugging
   if (imageUrl) {
     console.log("MealSummaryCard rendering with imageUrl:", imageUrl);
+    
+    // Additional diagnostic checks
+    try {
+      const url = new URL(imageUrl);
+      console.log("Image URL analysis:", {
+        protocol: url.protocol,
+        hostname: url.hostname,
+        pathname: url.pathname,
+        search: url.search,
+        isSupabase: url.hostname.includes('supabase')
+      });
+    } catch (e) {
+      console.error("Invalid image URL format:", imageUrl, e);
+    }
+  } else {
+    console.log("MealSummaryCard rendering without imageUrl");
   }
 
   return (
