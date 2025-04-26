@@ -17,6 +17,17 @@ export const uploadMealImage = async (file: File, userId: string): Promise<strin
       throw new Error('No user ID provided for upload');
     }
     
+    // Validate user session is active to ensure auth.uid matches
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !sessionData.session) {
+      throw new Error('Authentication required. Please log in again.');
+    }
+    
+    // Confirm the userId matches the current authenticated user
+    if (sessionData.session.user.id !== userId) {
+      throw new Error('User ID mismatch. Cannot upload files for another user.');
+    }
+    
     // Check file size (10MB limit)
     const MAX_SIZE = 10 * 1024 * 1024; // 10MB
     if (file.size > MAX_SIZE) {
@@ -29,13 +40,15 @@ export const uploadMealImage = async (file: File, userId: string): Promise<strin
       throw new Error(`Invalid file type. Allowed types are: ${allowedTypes.join(', ')}`);
     }
 
-    // Generate a unique filename with timestamp - use current date in milliseconds
+    // Generate a unique filename with timestamp and user ID to ensure uniqueness
     const timestamp = new Date().getTime();
-    console.log(`Using timestamp for filename: ${timestamp} (${new Date(timestamp).toISOString()})`);
-    const cleanFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_'); // Sanitize filename
-    const fileName = `${timestamp}-${cleanFileName}`;
+    const extension = file.name.substring(file.name.lastIndexOf('.')) || '';
+    const baseFileName = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9._-]/g, '_');
     
-    // Ensure files are stored in user-specific folders for proper security
+    // Format: timestamp-filename-userId.extension
+    const fileName = `${timestamp}-${baseFileName}-${userId}${extension}`;
+    
+    // CRITICAL: Match exact path format from the RLS policy
     // Format: users/[userId]/[filename]
     const filePath = `users/${userId}/${fileName}`;
 
@@ -53,20 +66,18 @@ export const uploadMealImage = async (file: File, userId: string): Promise<strin
         uploadAttempt++;
         console.log(`Upload attempt ${uploadAttempt}/${maxAttempts}`);
         
-        // Upload with metadata to enforce ownership and enable filtering
+        // Upload with metadata that matches RLS policy expectations
         const result = await supabase.storage
           .from('meal-images')
           .upload(filePath, file, {
             cacheControl: '3600',
             upsert: true, // Overwrite if exists
             contentType: file.type,
-            duplex: 'half',
-            // Add metadata to associate with the user and enable filtering
+            // CRITICAL: Use 'user_id' key to match RLS policy requiring auth.uid() = metadata->>'user_id'
             metadata: {
               user_id: userId,
-              uploaded_at: new Date().toISOString(),
-              original_name: file.name,
-              content_type: file.type
+              timestamp: timestamp.toString(),
+              filename: file.name
             }
           });
           
@@ -78,19 +89,34 @@ export const uploadMealImage = async (file: File, userId: string): Promise<strin
           break;
         }
         
-        // Handle specific permission errors from storage policies
-        if (uploadError.message?.includes('row-level security') || 
-            uploadError.message?.includes('permission denied')) {
-          console.error('Permission denied error - check Supabase storage policies');
-          console.error('Ensure you have a policy that allows INSERT with: auth.uid() = request.auth.uid');
-          break; // Don't retry permission errors
+        // Log detailed error info for debugging RLS issues
+        if (uploadError) {
+          console.error('Upload error details:', {
+            message: uploadError.message,
+            details: uploadError.details,
+            hint: uploadError.hint,
+            code: uploadError.code
+          });
+          
+          // Handle RLS policy violations - usually no need to retry these
+          if (uploadError.message?.includes('row-level security') || 
+              uploadError.message?.includes('permission denied') ||
+              uploadError.message?.includes('Unauthorized')) {
+            console.error('Permission denied error. Check if:');
+            console.error("1. Your RLS policy is properly configured to check metadata->>'user_id' = auth.uid()");
+            console.error('2. The bucket "meal-images" exists');
+            console.error('3. You are using the correct user auth session');
+            console.error(`4. The path structure matches: users/${userId}/*`);
+            break; // Don't retry permission errors
+          }
         }
         
         console.warn(`Upload attempt ${uploadAttempt} failed:`, uploadError.message);
         
-        // Wait a bit before retrying
+        // Wait before retrying with exponential backoff
         if (uploadAttempt < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 1000 * uploadAttempt)); // Increasing wait time
+          const backoffTime = Math.pow(2, uploadAttempt) * 500; // 1s, 2s, 4s
+          await new Promise(resolve => setTimeout(resolve, backoffTime));
         }
       } catch (e) {
         uploadError = e;
@@ -100,59 +126,31 @@ export const uploadMealImage = async (file: File, userId: string): Promise<strin
 
     if (uploadError) {
       console.error('All upload attempts failed:', uploadError);
-      throw new Error(`Failed to upload image after ${maxAttempts} attempts: ${uploadError.message || JSON.stringify(uploadError)}`);
+      throw new Error(`Failed to upload image: ${uploadError.message || JSON.stringify(uploadError)}`);
     }
 
-    // Get the public URL
-    const { data: urlData } = supabase.storage
+    // Use signed URLs instead of public URLs to ensure policies are enforced
+    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
       .from('meal-images')
-      .getPublicUrl(filePath);
-
-    // Verify URL is valid
-    if (!urlData?.publicUrl) {
-      console.error('Failed to generate public URL. URL data:', urlData);
-      throw new Error('Failed to generate public URL for uploaded image');
-    }
-
-    console.log(`Generated public URL: ${urlData.publicUrl}`);
-    
-    // Add debugging info about the URL
-    const urlParts = urlData.publicUrl.split('/');
-    console.log('URL structure:', {
-      domain: urlParts[2],
-      path: urlParts.slice(3).join('/'),
-      containsBucketName: urlData.publicUrl.includes('meal-images'),
-      containsUserId: urlData.publicUrl.includes(userId)
-    });
-
-    // Make a final check that the URL is accessible with the current user auth
-    try {
-      // Use authenticated fetch to verify access
-      const authFetch = await supabase.auth.getSession();
-      if (authFetch.data?.session) {
-        const authHeader = {
-          Authorization: `Bearer ${authFetch.data.session.access_token}`
-        };
+      .createSignedUrl(filePath, 60 * 60 * 24 * 7); // 7 day expiry
+      
+    if (signedUrlError || !signedUrlData?.signedUrl) {
+      console.error('Failed to generate signed URL:', signedUrlError);
+      
+      // Fall back to public URL if signed URL fails
+      const { data: urlData } = supabase.storage
+        .from('meal-images')
+        .getPublicUrl(filePath);
         
-        console.log(`Verifying URL is accessible with auth: ${urlData.publicUrl}`);
-        const testFetch = await fetch(urlData.publicUrl, { 
-          method: 'HEAD',
-          headers: authHeader
-        });
-        
-        if (!testFetch.ok) {
-          console.warn(`Warning: Image URL returned status ${testFetch.status} - check storage policies`);
-        } else {
-          console.log(`URL is accessible: ${testFetch.status} ${testFetch.statusText}`);
-        }
+      if (!urlData?.publicUrl) {
+        throw new Error('Failed to generate URL for uploaded image');
       }
-    } catch (e) {
-      console.warn('Warning: Could not verify URL is accessible:', e);
-      // Don't throw here, it might just be a CORS issue
+      
+      return urlData.publicUrl;
     }
-
-    console.log(`Successfully uploaded image. Public URL: ${urlData.publicUrl}`);
-    return urlData.publicUrl;
+    
+    console.log(`Successfully uploaded image. Signed URL generated with 7 day expiry.`);
+    return signedUrlData.signedUrl;
   } catch (error: any) {
     console.error('Error in uploadMealImage:', error);
     throw error;
