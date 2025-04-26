@@ -194,6 +194,18 @@ export default function MealHistoryPage() {
       // Handle ISO strings that might have invalid format
       if (!dateString) return 'No date';
       
+      // Special case for handling literal strings like "Today"
+      if (dateString === 'Today' || dateString === 'Yesterday' || dateString === 'Invalid date') {
+        return dateString;
+      }
+      
+      // Handle literal string dates that might be in the data
+      if (typeof dateString === 'string' && 
+          (dateString.includes('at') || dateString.includes('AM') || dateString.includes('PM'))) {
+        console.warn(`Date string appears to be pre-formatted: ${dateString}`);
+        return dateString;
+      }
+      
       // Try to create a valid date object
       const date = new Date(dateString);
       
@@ -201,6 +213,19 @@ export default function MealHistoryPage() {
       if (isNaN(date.getTime())) {
         console.warn(`Invalid date string: ${dateString}`);
         return 'Invalid date';
+      }
+      
+      // Check for future dates and use current date instead
+      const now = new Date();
+      if (date.getFullYear() > now.getFullYear()) {
+        console.warn(`Future date detected: ${dateString}, using current date instead`);
+        return new Intl.DateTimeFormat('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+        }).format(now);
       }
       
       return new Intl.DateTimeFormat('en-US', {

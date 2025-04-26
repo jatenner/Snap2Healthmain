@@ -70,20 +70,31 @@ export default function MealImageGallery() {
         if (match && match[1]) {
           const timestamp = parseInt(match[1]);
           if (!isNaN(timestamp)) {
-            // Check if the timestamp is realistic (between 2020 and current year + 1)
-            // This avoids future dates like 2025
-            const date = new Date(timestamp);
+            // Check if timestamp is in milliseconds (13 digits) or seconds (10 digits)
+            const adjustedTimestamp = timestamp.toString().length <= 10 
+              ? timestamp * 1000  // Convert seconds to milliseconds
+              : timestamp;
+              
+            const date = new Date(adjustedTimestamp);
             const currentYear = new Date().getFullYear();
+            const currentDate = new Date();
             
-            if (date.getFullYear() >= 2020 && date.getFullYear() <= currentYear + 1) {
+            // Validate the year is reasonable (not in future)
+            if (date.getFullYear() >= 2020 && date.getFullYear() <= currentYear) {
               console.log(`Valid timestamp extracted from filename: ${filename} -> ${date.toISOString()}`);
               return date.toISOString();
+            } else if (date.getFullYear() > currentYear) {
+              console.warn(`Future year detected in filename timestamp: ${date.getFullYear()}, using today's date`);
+              return currentDate.toISOString();
             } else {
               console.log(`Unrealistic year in filename timestamp: ${date.getFullYear()}, using current date`);
+              return currentDate.toISOString();
             }
           }
         }
-        // If we can't extract a valid date, or the date is unrealistic, use current date
+        
+        // If we can't extract a valid date, use current date
+        console.log(`Couldn't extract valid date from filename: ${filename}, using current date`);
         return new Date().toISOString();
       };
       
