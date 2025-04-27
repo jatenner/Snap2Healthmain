@@ -54,3 +54,4 @@ supabase/.temp/
 node_modules/supabase/bin/
 node_modules/**/*.bin
 node_modules/
+.vercel

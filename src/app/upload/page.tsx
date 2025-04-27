@@ -113,6 +113,8 @@ export default function UploadPage() {
           imageUrl = await uploadMealImage(file, user.id);
           console.log('Image uploaded successfully:', imageUrl);
           debugData.push(`Image uploaded: ${imageUrl}`);
+          
+          // Make sure imageUrl is properly added to the form data
           formData.append('imageUrl', imageUrl);
         } catch (uploadError: any) {
           debugData.push(`Upload error: ${uploadError.message}`);
@@ -139,6 +141,12 @@ export default function UploadPage() {
       if (user) {
         console.log('Adding user ID to form data:', user.id);
         formData.append('userId', user.id);
+        
+        // Log the contents of FormData to debug
+        console.log('FormData contents:');
+        for (const pair of formData.entries()) {
+          console.log(`- ${pair[0]}: ${typeof pair[1] === 'string' ? pair[1] : 'File/Blob object'}`);
+        }
       }
       
       // Submit to API

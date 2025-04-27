@@ -212,6 +212,7 @@ export const uploadMealImage = async (file: File, userId: string): Promise<strin
         signedUrlError = result.error;
         
         if (!signedUrlError && signedUrlData?.signedUrl) {
+          console.log(`Successfully got signed URL: ${signedUrlData.signedUrl}`);
           break;
         }
         
@@ -241,7 +242,25 @@ export const uploadMealImage = async (file: File, userId: string): Promise<strin
         throw new Error('Failed to generate any URL for the uploaded image');
       }
       
+      console.log(`Using public URL instead: ${urlData.publicUrl}`);
+
+      // Validate the URL before returning it
+      try {
+        new URL(urlData.publicUrl);
+        console.log('Public URL is valid');
+      } catch (e) {
+        console.error('Generated an invalid public URL:', e);
+      }
+      
       return urlData.publicUrl;
+    }
+    
+    // Validate the URL before returning it
+    try {
+      new URL(signedUrlData.signedUrl);
+      console.log('Signed URL is valid');
+    } catch (e) {
+      console.error('Generated an invalid signed URL:', e);
     }
     
     console.log(`Successfully uploaded image. Signed URL generated with 7 day expiry.`);

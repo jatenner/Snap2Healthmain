@@ -280,8 +280,27 @@ export async function POST(request: NextRequest) {
     console.log('Analyze request received with:');
     console.log('- Image file:', imageFile ? `${imageFile.name} (${imageFile.size} bytes)` : 'None');
     console.log('- Image URL:', imageUrl || 'None');
+    console.log('- Image URL type:', imageUrl ? typeof imageUrl : 'N/A');
+    console.log('- Image URL length:', imageUrl ? imageUrl.length : 0);
     console.log('- User ID:', userId || 'None');
     console.log('- Goal ID:', goalId || 'None');
+
+    // Validate imageUrl format
+    if (imageUrl) {
+      console.log('Validating image URL format...');
+      try {
+        // Check if it's a valid URL
+        if (!imageUrl.startsWith('http')) {
+          console.warn('Image URL does not start with http:', imageUrl);
+        }
+        
+        // Try parsing as URL
+        const url = new URL(imageUrl);
+        console.log('Image URL is valid. Host:', url.hostname);
+      } catch (e) {
+        console.error('Invalid image URL format:', e);
+      }
+    }
 
     // Ensure we have an image
     if (!imageFile && !imageUrl) {
@@ -403,12 +422,19 @@ export async function POST(request: NextRequest) {
     let mealId = null;
     if (userId && imageUrl) {
       try {
+        console.log('Preparing to save meal to database');
+        console.log('- User ID:', userId);
+        console.log('- Image URL to save:', imageUrl);
+        console.log('- Caption:', caption);
+        console.log('- Goal:', userGoal);
+        
         // Ensure analysis is valid JSON
         let validAnalysis;
         try {
           validAnalysis = typeof analysis === 'string' ? JSON.parse(analysis) : analysis;
           JSON.stringify(validAnalysis); // Test serialization
         } catch (e) {
+          console.error('Error with analysis data:', e);
           validAnalysis = {
             calories: 0,
             macronutrients: [],
@@ -427,6 +453,14 @@ export async function POST(request: NextRequest) {
           ingredients: ingredients || []
         };
         
+        console.log('Saving meal data to database:', JSON.stringify({
+          user_id: mealData.user_id,
+          goal: mealData.goal,
+          caption: mealData.caption,
+          image_url: mealData.image_url,
+          created_at: mealData.created_at,
+        }));
+        
         // Insert into database
         const { data, error } = await supabase
           .from('meals')
@@ -434,8 +468,13 @@ export async function POST(request: NextRequest) {
           .select();
           
         if (error) {
-          console.error('Database error:', error);
+          console.error('Database insertion error:', error);
+          console.error('Error code:', error.code);
+          console.error('Error message:', error.message);
+          console.error('Error details:', error.details);
+          
           // Try simplified version
+          console.log('Attempting simplified insertion without analysis data');
           const simpleData = {
             user_id: userId,
             goal: userGoal,
