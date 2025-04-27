@@ -275,9 +275,22 @@ export async function POST(request: NextRequest) {
         console.log('Saving meal to database with image URL:', imageUrl);
         console.log('User ID:', userId);
         
+        // Validate required fields
+        if (!userId) {
+          throw new Error('User ID is required to save meal record');
+        }
+        
+        if (!imageUrl) {
+          throw new Error('Image URL is required to save meal record');
+        }
+        
         // Ensure the meals table exists
         const tableExists = await ensureMealsTableExists();
         console.log('Meals table exists check result:', tableExists);
+        
+        if (!tableExists) {
+          throw new Error('Meals table does not exist and could not be created');
+        }
         
         // Use a consistent timestamp for the record
         // Ensure we have a valid date
@@ -303,15 +316,38 @@ export async function POST(request: NextRequest) {
           timestamp = new Date().toISOString(); // Fallback
         }
         
+        // Ensure we have at least a default caption
+        const finalCaption = caption || "My meal";
+        
+        // Ensure goals are standardized
+        const validGoals = ['Weight Loss', 'Muscle Gain', 'Heart Health', 'Diabetes Management', 'General Wellness'];
+        const finalGoal = validGoals.includes(userGoal) ? userGoal : 'General Wellness';
+        
+        // Ensure validatedAnalysis has all required fields
+        if (!validatedAnalysis.calories) {
+          console.warn('Missing calories in analysis, setting default value');
+          validatedAnalysis.calories = 0;
+        }
+        
+        if (!validatedAnalysis.macronutrients || !Array.isArray(validatedAnalysis.macronutrients)) {
+          console.warn('Missing macronutrients in analysis, setting default empty array');
+          validatedAnalysis.macronutrients = [];
+        }
+        
+        if (!validatedAnalysis.micronutrients || !Array.isArray(validatedAnalysis.micronutrients)) {
+          console.warn('Missing micronutrients in analysis, setting default empty array');
+          validatedAnalysis.micronutrients = [];
+        }
+        
         // Create meal data with or without AI analysis
         const mealData = {
           user_id: userId,
-          goal: userGoal,
-          caption: caption || "My meal",
+          goal: finalGoal,
+          caption: finalCaption,
           analysis: validatedAnalysis,
           image_url: imageUrl,
           created_at: timestamp, // Explicitly set creation timestamp
-          ingredients: ingredients // Save ingredients list separately for easier access
+          ingredients: ingredients || [] // Save ingredients list separately for easier access, ensure it's an array
         };
         
         console.log('Inserting meal record:', JSON.stringify(mealData, null, 2));
@@ -337,6 +373,8 @@ export async function POST(request: NextRequest) {
               'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
               'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`
             };
+          } else {
+            throw new Error('Missing Supabase ANON key for API fallback');
           }
           
           const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/meals`, {
@@ -357,22 +395,56 @@ export async function POST(request: NextRequest) {
             if (responseData && responseData.length > 0) {
               savedMealId = responseData[0].id;
               console.log('Meal inserted with ID:', savedMealId);
+            } else {
+              console.warn('Response data missing from successful insert');
             }
           } else {
-            const errorData = await response.json();
-            console.error('Failed to insert meal via REST API:', errorData);
-            throw new Error(`Database insertion failed: ${JSON.stringify(errorData)}`);
+            let errorMessage = 'Failed to insert meal via REST API';
+            try {
+              const errorData = await response.json();
+              console.error('REST API error details:', errorData);
+              errorMessage = `Database insertion failed: ${JSON.stringify(errorData)}`;
+            } catch (parseError) {
+              console.error('Error parsing REST API error response');
+            }
+            throw new Error(errorMessage);
           }
         } else {
           // Successfully inserted with Supabase client
           if (insertedMeal && insertedMeal.length > 0) {
             savedMealId = insertedMeal[0].id;
             console.log('Meal inserted with ID:', savedMealId);
+          } else {
+            console.warn('Inserted meal data missing from successful insert');
           }
         }
       } catch (dbError: any) {
         console.error('Database error:', dbError);
-        // Continue even if database storage fails
+        // Return specific error information rather than continuing silently
+        return NextResponse.json(
+          {
+            error: 'Failed to save meal record to database',
+            errorType: 'database_error',
+            details: dbError.message || 'Unknown database error',
+            partialSuccess: true,
+            caption,
+            ingredients: ingredients || [],
+            analysis: validatedAnalysis,
+            imageUrl,
+            goal: userGoal,
+            timestamp: new Date().toISOString(),
+            aiAnalysis: !!openaiApiKey
+          },
+          { status: 500 }
+        );
+      }
+    } else {
+      // Log why we're not saving to the database
+      if (!userId) {
+        console.warn('Not saving to database: Missing user ID');
+      }
+      if (!imageUrl) {
+        console.warn('Not saving to database: Missing image URL');
       }
     }
 

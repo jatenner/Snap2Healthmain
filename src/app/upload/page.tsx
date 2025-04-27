@@ -12,6 +12,7 @@ interface ApiErrorResponse {
   error: string;
   errorType?: string;
   details?: string;
+  partialSuccess?: boolean;
 }
 
 export default function UploadPage() {
@@ -162,6 +163,19 @@ export default function UploadPage() {
           setErrorDetails(errorData.details);
         }
         
+        // Handle partial success cases (e.g., AI analysis worked but DB save failed)
+        if (errorData.partialSuccess) {
+          setAnalysisResult(errorData);
+          debugData.push('Partial success - AI analysis completed but DB save failed');
+          
+          // Confirm with user if they want to continue with partial result
+          if (window.confirm('The image was analyzed successfully, but there was an error saving to your history. Would you like to view the analysis anyway?')) {
+            const encodedData = encodeURIComponent(JSON.stringify(errorData));
+            router.push(`/meal-analysis?data=${encodedData}`);
+            return;
+          }
+        }
+        
         setDebugInfo(debugData.join('\n'));
         setIsLoading(false);
         return;
@@ -176,10 +190,21 @@ export default function UploadPage() {
       
       // Redirect to meal-analysis page with result
       if (data.savedToDatabase && data.mealId) {
-        // If saved to database, use the meal ID
-        router.push(`/meal-analysis?id=${encodeURIComponent(data.mealId || '')}`);
+        // If saved to database, use the meal ID for a cleaner URL
+        debugData.push(`Redirecting to analysis with meal ID: ${data.mealId}`);
+        router.push(`/meal-analysis?id=${encodeURIComponent(data.mealId)}`);
       } else {
-        // If database save failed, encode the data in the URL
+        // If database save failed, encode the data in the URL and show a warning
+        debugData.push('Database save failed, using URL parameters');
+        
+        // Show warning about not being saved to history
+        if (!data.savedToDatabase && data.analysis) {
+          console.warn('Meal was not saved to database. Using URL parameters instead.');
+          const warningMsg = 'Note: This meal analysis could not be saved to your history.';
+          setErrorDetails(warningMsg);
+          // Continue with the analysis anyway
+        }
+        
         const encodedData = encodeURIComponent(JSON.stringify(data));
         router.push(`/meal-analysis?data=${encodedData}`);
       }
