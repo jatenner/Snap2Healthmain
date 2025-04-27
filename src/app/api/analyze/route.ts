@@ -161,27 +161,40 @@ const createErrorResponse = (error: any) => {
   }
 };
 
-// Interface for sanitized analysis data
+// Updated interface for sanitized analysis data with optional fields
 interface SanitizedAnalysis {
   calories: number;
   macronutrients: Array<{
     name: string;
     amount: number;
     unit: string;
-    percentDailyValue: number | null;
-    description: string;
+    percentDailyValue?: number | null;
+    description?: string;
   }>;
   micronutrients: Array<{
     name: string;
     amount: number;
     unit: string;
-    percentDailyValue: number | null;
-    description: string;
+    percentDailyValue?: number | null;
+    description?: string;
   }>;
   benefits?: string[];
   concerns?: string[];
   suggestions?: string[];
+  error?: string;
+  validationError?: string;
   [key: string]: any; // Allow additional properties
+}
+
+// Helper function to create a default nutrient object
+function createDefaultNutrient(name: string = ''): any {
+  return {
+    name: String(name || ''),
+    amount: 0,
+    unit: 'g',
+    percentDailyValue: null,
+    description: ''
+  };
 }
 
 // Helper function to sanitize analysis data for database storage
@@ -229,6 +242,15 @@ function sanitizeAnalysisData(analysis: any): SanitizedAnalysis {
       sanitized.suggestions = analysis.suggestions.map(s => String(s || '')).slice(0, 10);
     }
     
+    // Add error fields if they exist
+    if (analysis.error) {
+      sanitized.error = String(analysis.error);
+    }
+    
+    if (analysis.validationError) {
+      sanitized.validationError = String(analysis.validationError);
+    }
+    
     // Test JSON stringify to ensure serialization works
     JSON.stringify(sanitized);
     
@@ -254,6 +276,13 @@ export async function POST(request: NextRequest) {
     const userId = formData.get('userId') as string | null;
     const imageUrl = formData.get('imageUrl') as string | null;
 
+    // Log what we received for debugging
+    console.log('Analyze request received with:');
+    console.log('- Image file:', imageFile ? `${imageFile.name} (${imageFile.size} bytes)` : 'None');
+    console.log('- Image URL:', imageUrl || 'None');
+    console.log('- User ID:', userId || 'None');
+    console.log('- Goal ID:', goalId || 'None');
+
     // Ensure we have an image
     if (!imageFile && !imageUrl) {
       return NextResponse.json(
@@ -265,13 +294,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Ensure we have a user ID for storing the record
+    if (!userId) {
+      console.warn('No user ID provided for meal analysis');
+      // We'll still analyze but won't store the record
+    }
+
     // Ensure we have a goal (default to General Wellness if missing)
     const userGoal = goalId || 'General Wellness';
     
     let visionResponse;
     let caption = "My meal";
     let ingredients = [];
-    let validatedAnalysis = {
+    let validatedAnalysis: SanitizedAnalysis = {
       calories: 0,
       macronutrients: [],
       micronutrients: []
@@ -280,73 +315,162 @@ export async function POST(request: NextRequest) {
     // Only attempt AI analysis if OpenAI API key is available
     if (openaiApiKey) {
       try {
-        // Convert image to base64
-        const arrayBuffer = await imageFile?.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        const base64Image = buffer.toString('base64');
+        // Handle image input - either file or URL
+        let imageInput;
+        
+        if (imageFile) {
+          // Convert image file to base64
+          try {
+            const arrayBuffer = await imageFile.arrayBuffer();
+            if (!arrayBuffer) {
+              throw new Error('Failed to get array buffer from image file');
+            }
+            const buffer = Buffer.from(arrayBuffer);
+            const base64Image = buffer.toString('base64');
+            
+            if (!base64Image || base64Image.length === 0) {
+              throw new Error('Failed to convert image to base64');
+            }
+            
+            imageInput = {
+              type: 'image_url',
+              image_url: {
+                url: `data:image/jpeg;base64,${base64Image}`,
+              },
+            };
+          } catch (conversionError) {
+            console.error('Error converting image to base64:', conversionError);
+            throw new Error(`Image conversion error: ${conversionError.message}`);
+          }
+        } else if (imageUrl) {
+          // Use the provided image URL
+          if (!imageUrl.startsWith('http')) {
+            throw new Error('Invalid image URL format. URL must start with http:// or https://');
+          }
+          
+          imageInput = {
+            type: 'image_url',
+            image_url: {
+              url: imageUrl,
+            },
+          };
+        } else {
+          throw new Error('No image file or URL provided');
+        }
 
         // Call GPT-4o Vision to analyze the image
-        visionResponse = await openai.chat.completions.create({
-          model: process.env.OPENAI_MODEL_GPT_VISION || 'gpt-4o',
-          messages: [
-            {
-              role: 'user',
-              content: [
-                { type: 'text', text: generateVisionPrompt(userGoal) },
-                {
-                  type: 'image_url',
-                  image_url: {
-                    url: `data:image/jpeg;base64,${base64Image}`,
-                  },
-                },
-              ],
-            },
-          ],
-          response_format: { type: 'json_object' },
-        });
+        try {
+          console.log('Calling OpenAI Vision API...');
+          visionResponse = await openai.chat.completions.create({
+            model: process.env.OPENAI_MODEL_GPT_VISION || 'gpt-4o',
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  { type: 'text', text: generateVisionPrompt(userGoal) },
+                  imageInput,
+                ],
+              },
+            ],
+            response_format: { type: 'json_object' },
+          });
+        } catch (visionError: any) {
+          console.error('OpenAI Vision API error:', visionError);
+          throw new Error(`Vision API error: ${visionError.message || 'Unknown vision API error'}`);
+        }
 
         // Parse Vision API response
-        const visionContent = JSON.parse(visionResponse.choices[0].message.content || '{}');
+        let visionContent;
+        try {
+          if (!visionResponse?.choices?.[0]?.message?.content) {
+            throw new Error('Empty response from Vision API');
+          }
+          visionContent = JSON.parse(visionResponse.choices[0].message.content);
+          
+          if (!visionContent) {
+            throw new Error('Failed to parse Vision API response');
+          }
+        } catch (parseError) {
+          console.error('Error parsing Vision API response:', parseError);
+          visionContent = { 
+            caption: caption || "My meal", 
+            ingredients: []
+          };
+        }
+        
         caption = visionContent.caption || "My meal";
         ingredients = visionContent.ingredients || [];
 
         // Call GPT-4o for nutrition analysis
-        const nutritionResponse = await openai.chat.completions.create({
-          model: process.env.OPENAI_MODEL_GPT_TEXT || 'gpt-4o',
-          messages: [
-            {
-              role: 'user',
-              content: generateNutritionPrompt(caption, ingredients, userGoal),
-            },
-          ],
-          response_format: { type: 'json_object' },
-          temperature: 0.2, // Lower temperature for more factual responses
-        });
-
-        // Parse and validate nutrition analysis
-        const nutritionContent = JSON.parse(nutritionResponse.choices[0].message.content || '{}');
-        
         try {
-          // Validate the core analysis
-          const parsedAnalysis = NutritionAnalysisSchema.parse(nutritionContent);
+          console.log('Calling OpenAI for nutrition analysis...');
+          const nutritionResponse = await openai.chat.completions.create({
+            model: process.env.OPENAI_MODEL_GPT_TEXT || 'gpt-4o',
+            messages: [
+              {
+                role: 'user',
+                content: generateNutritionPrompt(caption, ingredients, userGoal),
+              },
+            ],
+            response_format: { type: 'json_object' },
+            temperature: 0.2, // Lower temperature for more factual responses
+          });
           
-          // Ensure required fields exist even if validation passes
+          // Parse and validate nutrition analysis
+          if (!nutritionResponse?.choices?.[0]?.message?.content) {
+            throw new Error('Empty response from Nutrition API');
+          }
+          
+          const nutritionContent = JSON.parse(nutritionResponse.choices[0].message.content);
+          
+          try {
+            // Validate the core analysis
+            const parsedAnalysis = NutritionAnalysisSchema.parse(nutritionContent);
+            
+            // Ensure required fields exist even if validation passes
+            validatedAnalysis = {
+              calories: parsedAnalysis.calories || 0,
+              macronutrients: parsedAnalysis.macronutrients || [],
+              micronutrients: parsedAnalysis.micronutrients || [],
+              ...parsedAnalysis
+            };
+          } catch (validationError) {
+            console.error('Validation error:', validationError);
+            // Continue with default values and capture details
+            validatedAnalysis = {
+              calories: nutritionContent.calories || 0,
+              macronutrients: Array.isArray(nutritionContent.macronutrients) ? nutritionContent.macronutrients : [],
+              micronutrients: Array.isArray(nutritionContent.micronutrients) ? nutritionContent.micronutrients : [],
+              validationError: String(validationError)
+            };
+          }
+        } catch (nutritionError) {
+          console.error('OpenAI Nutrition API error:', nutritionError);
           validatedAnalysis = {
-            calories: parsedAnalysis.calories || 0,
-            macronutrients: parsedAnalysis.macronutrients || [],
-            micronutrients: parsedAnalysis.micronutrients || [],
-            ...parsedAnalysis
+            calories: 0,
+            macronutrients: [],
+            micronutrients: [],
+            error: `Nutrition analysis error: ${nutritionError.message}`
           };
-        } catch (validationError) {
-          console.error('Validation error:', validationError);
-          // Continue with default values
         }
       } catch (aiError: any) {
         console.error('AI analysis error:', aiError);
         // Continue with default values if AI analysis fails
+        validatedAnalysis = {
+          calories: 0,
+          macronutrients: [],
+          micronutrients: [],
+          error: `AI analysis error: ${aiError.message}`
+        };
       }
     } else {
       console.log('Skipping AI analysis - OPENAI_API_KEY not provided');
+      validatedAnalysis = {
+        calories: 0,
+        macronutrients: [],
+        micronutrients: [],
+        error: 'OpenAI API key not provided'
+      };
     }
 
     // Store in Supabase if we have a user ID and image URL
