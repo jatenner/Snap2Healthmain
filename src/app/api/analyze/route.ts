@@ -423,7 +423,7 @@ async function saveMealToDatabase({
 }
 
 // Function to analyze a meal and save the results
-export async function analyzeMealAndSave({
+async function analyzeMealAndSave({
   userId,
   file,
   imageUrl,
