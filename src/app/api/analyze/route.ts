@@ -266,61 +266,190 @@ function sanitizeAnalysisData(analysis: any): SanitizedAnalysis {
   }
 }
 
-export async function POST(request: NextRequest) {
+// Function to save meal data to the database
+async function saveMealToDatabase({
+  userId,
+  goal,
+  caption,
+  ingredients,
+  analysis,
+  imageUrl,
+  formattedAnalysis,
+}: {
+  userId: string;
+  goal: string;
+  caption: string;
+  ingredients: string[];
+  analysis: any;
+  imageUrl: string;
+  formattedAnalysis?: string;
+}): Promise<{ mealId: string; success: boolean }> {
+  let mealId = '';
+  let success = false;
+
   try {
-    // Get form data with image and goal
-    const formData = await request.formData();
-    const imageFile = formData.get('image') as File | null;
-    const textDescription = formData.get('description') as string | null;
-    const goalId = formData.get('goalId') as string | null;
-    const userId = formData.get('userId') as string | null;
-    const imageUrl = formData.get('imageUrl') as string | null;
-
-    // Log what we received for debugging
-    console.log('Analyze request received with:');
-    console.log('- Image file:', imageFile ? `${imageFile.name} (${imageFile.size} bytes)` : 'None');
-    console.log('- Image URL:', imageUrl || 'None');
-    console.log('- Image URL type:', imageUrl ? typeof imageUrl : 'N/A');
-    console.log('- Image URL length:', imageUrl ? imageUrl.length : 0);
-    console.log('- User ID:', userId || 'None');
-    console.log('- Goal ID:', goalId || 'None');
-
-    // Validate imageUrl format
-    if (imageUrl) {
-      console.log('Validating image URL format...');
+    console.log(`[saveMealToDatabase] Attempting to save meal data for user ${userId}`);
+    
+    // Ensure we have a properly formatted analysis for storage
+    // If we have a formattedAnalysis string, use that directly
+    // Otherwise, prepare the analysis object for database storage
+    let analysisToStore;
+    
+    if (formattedAnalysis) {
+      // If we already have a formatted analysis string, use it directly
+      analysisToStore = formattedAnalysis;
+    } else if (typeof analysis === 'string') {
+      // If analysis is already a string, validate that it's valid JSON
       try {
-        // Check if it's a valid URL
-        if (!imageUrl.startsWith('http')) {
-          console.warn('Image URL does not start with http:', imageUrl);
-        }
-        
-        // Try parsing as URL
-        const url = new URL(imageUrl);
-        console.log('Image URL is valid. Host:', url.hostname);
+        JSON.parse(analysis); // Just to validate
+        analysisToStore = analysis;
       } catch (e) {
-        console.error('Invalid image URL format:', e);
+        // If not valid JSON, create a new JSON string
+        analysisToStore = JSON.stringify({
+          caption,
+          ingredients,
+          analysis: {
+            calories: 0,
+            macronutrients: [],
+            micronutrients: []
+          },
+          success: false,
+          error: "Invalid analysis JSON string"
+        });
       }
+    } else {
+      // Otherwise convert the analysis object to JSON string
+      analysisToStore = JSON.stringify({
+        caption,
+        ingredients,
+        analysis,
+        success: true
+      });
+    }
+    
+    console.log(`[saveMealToDatabase] Saving to database with analysis length: ${analysisToStore.length}`);
+
+    // Insert the meal into the database
+    const { data, error } = await supabase
+      .from('meals')
+      .insert({
+        user_id: userId,
+        goal: goal || 'General Wellness',
+        image_url: imageUrl,
+        caption: caption || '',
+        analysis: analysisToStore,
+        created_at: new Date().toISOString(),
+      })
+      .select('id');
+
+    if (error) {
+      console.error('[saveMealToDatabase] Error saving meal to database:', error);
+      
+      // If the analysis is too large, try saving with a truncated version
+      if (analysisToStore.length > 10000) {
+        console.log('[saveMealToDatabase] Analysis may be too large, trying with truncated version');
+        
+        const truncatedAnalysis = JSON.stringify({
+          caption,
+          ingredients: ingredients.slice(0, 20), // Limit ingredients
+          analysis: {
+            summary: analysis.summary || "Analysis summary unavailable",
+            // Include only essential parts of the analysis
+            nutrition: analysis.nutrition || {},
+            healthScore: analysis.healthScore || 0,
+            recommendations: (analysis.recommendations || []).slice(0, 5),
+          },
+          success: true,
+          truncated: true
+        });
+        
+        const { data: retryData, error: retryError } = await supabase
+          .from('meals')
+          .insert({
+            user_id: userId,
+            goal: goal || 'General Wellness',
+            image_url: imageUrl,
+            caption: caption || '',
+            analysis: truncatedAnalysis,
+            created_at: new Date().toISOString(),
+          })
+          .select('id');
+        
+        if (retryError) {
+          console.error('[saveMealToDatabase] Error saving meal with truncated analysis:', retryError);
+        } else {
+          mealId = retryData?.[0]?.id || '';
+          success = true;
+          console.log(`[saveMealToDatabase] Successfully saved meal with truncated analysis. Meal ID: ${mealId}`);
+        }
+      }
+    } else {
+      mealId = data?.[0]?.id || '';
+      success = true;
+      console.log(`[saveMealToDatabase] Successfully saved meal to database. Meal ID: ${mealId}`);
+    }
+  } catch (error) {
+    console.error('[saveMealToDatabase] Unexpected error saving meal:', error);
+    
+    // Last resort - save minimal data
+    try {
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('meals')
+        .insert({
+          user_id: userId,
+          goal: goal || 'General Wellness',
+          image_url: imageUrl,
+          caption: caption || '',
+          analysis: JSON.stringify({ 
+            caption, 
+            error: "Failed to save complete analysis",
+            success: false
+          }),
+          created_at: new Date().toISOString(),
+        })
+        .select('id');
+      
+      if (!fallbackError) {
+        mealId = fallbackData?.[0]?.id || '';
+        success = true;
+        console.log(`[saveMealToDatabase] Saved minimal meal data as fallback. Meal ID: ${mealId}`);
+      }
+    } catch (finalError) {
+      console.error('[saveMealToDatabase] Final attempt to save meal failed:', finalError);
+    }
+  }
+
+  return { mealId, success };
+}
+
+// Function to analyze a meal and save the results
+export async function analyzeMealAndSave({
+  userId,
+  file,
+  imageUrl,
+  goal = "General Wellness",
+}: {
+  userId: string;
+  file?: File;
+  imageUrl?: string;
+  goal?: string;
+}) {
+  try {
+    console.log('[analyzeMealAndSave] Starting meal analysis');
+    console.log('- User ID:', userId || 'None');
+    console.log('- Image file:', file ? `File object (${file.size} bytes)` : 'None');
+    console.log('- Image URL:', imageUrl || 'None');
+    console.log('- Goal:', goal);
+
+    // Validate inputs
+    if (!file && !imageUrl) {
+      console.error('[analyzeMealAndSave] No image source provided');
+      throw new Error('Please provide a food image file or URL');
     }
 
-    // Ensure we have an image
-    if (!imageFile && !imageUrl) {
-      return NextResponse.json(
-        { 
-          error: 'Please provide a food image.',
-          errorType: 'missing_input'
-        },
-        { status: 400 }
-      );
-    }
-
-    // Ensure we have a user ID for storing the record
     if (!userId) {
-      console.warn('No user ID provided for meal analysis');
-      // We'll still analyze but won't store the record
+      console.warn('[analyzeMealAndSave] No user ID provided - analysis will be performed but not saved');
     }
-
-    // Ensure we have a goal (default to General Wellness if missing)
-    const userGoal = goalId || 'General Wellness';
     
     let caption = "My meal";
     let ingredients: any[] = [];
@@ -335,9 +464,9 @@ export async function POST(request: NextRequest) {
       try {
         // Convert image for Vision API
         let imageContent;
-        if (imageFile) {
+        if (file) {
           try {
-            const arrayBuffer = await imageFile.arrayBuffer();
+            const arrayBuffer = await file.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
             const base64Image = buffer.toString('base64');
             imageContent = {
@@ -346,31 +475,40 @@ export async function POST(request: NextRequest) {
                 url: `data:image/jpeg;base64,${base64Image}`,
               },
             };
+            console.log('[analyzeMealAndSave] Successfully converted file to base64 for analysis');
           } catch (e) {
-            console.error('Error converting image:', e);
+            console.error('[analyzeMealAndSave] Error converting image file:', e);
             throw new Error('Failed to process image file');
           }
         } else if (imageUrl) {
-          imageContent = {
-            type: 'image_url',
-            image_url: {
-              url: imageUrl,
-            },
-          };
+          // Validate URL format
+          try {
+            new URL(imageUrl);
+            imageContent = {
+              type: 'image_url',
+              image_url: {
+                url: imageUrl,
+              },
+            };
+            console.log('[analyzeMealAndSave] Using image URL for analysis');
+          } catch (e) {
+            console.error('[analyzeMealAndSave] Invalid image URL format:', e);
+            throw new Error('Invalid image URL format');
+          }
         } else {
           throw new Error('No image source available');
         }
 
         // Call Vision API
         try {
-          console.log('Calling Vision API...');
+          console.log('[analyzeMealAndSave] Calling Vision API...');
           const visionResponse = await openai.chat.completions.create({
             model: process.env.OPENAI_MODEL_GPT_VISION || 'gpt-4o',
             messages: [
               {
                 role: 'user',
                 content: [
-                  { type: 'text', text: generateVisionPrompt(userGoal) },
+                  { type: 'text', text: generateVisionPrompt(goal) },
                   imageContent,
                 ],
               },
@@ -383,15 +521,17 @@ export async function POST(request: NextRequest) {
               const visionData = JSON.parse(visionResponse.choices[0].message.content);
               caption = visionData.caption || caption;
               ingredients = visionData.ingredients || [];
+              console.log('[analyzeMealAndSave] Vision API identified:', caption);
+              console.log('[analyzeMealAndSave] Ingredients found:', ingredients.length);
               
               // Get nutrition data
-              console.log('Getting nutrition data...');
+              console.log('[analyzeMealAndSave] Getting nutrition data...');
               const nutritionResponse = await openai.chat.completions.create({
                 model: process.env.OPENAI_MODEL_GPT_TEXT || 'gpt-4o',
                 messages: [
                   {
                     role: 'user',
-                    content: generateNutritionPrompt(caption, ingredients, userGoal),
+                    content: generateNutritionPrompt(caption, ingredients, goal),
                   },
                 ],
                 response_format: { type: 'json_object' },
@@ -402,115 +542,112 @@ export async function POST(request: NextRequest) {
                 try {
                   const nutritionData = JSON.parse(nutritionResponse.choices[0].message.content);
                   analysis = nutritionData;
+                  console.log('[analyzeMealAndSave] Successfully parsed nutrition data');
                 } catch (e) {
-                  console.error('Error parsing nutrition response:', e);
+                  console.error('[analyzeMealAndSave] Error parsing nutrition response:', e);
                 }
               }
             } catch (e) {
-              console.error('Error parsing vision response:', e);
+              console.error('[analyzeMealAndSave] Error parsing vision response:', e);
             }
           }
         } catch (e) {
-          console.error('OpenAI API error:', e);
+          console.error('[analyzeMealAndSave] OpenAI API error:', e);
         }
       } catch (e) {
-        console.error('Analysis error:', e);
+        console.error('[analyzeMealAndSave] Analysis error:', e);
       }
     }
 
-    // Save to database
-    let mealId = null;
-    if (userId && imageUrl) {
-      try {
-        console.log('Preparing to save meal to database');
-        console.log('- User ID:', userId);
-        console.log('- Image URL to save:', imageUrl);
-        console.log('- Caption:', caption);
-        console.log('- Goal:', userGoal);
-        
-        // Ensure analysis is valid JSON
-        let validAnalysis;
-        try {
-          validAnalysis = typeof analysis === 'string' ? JSON.parse(analysis) : analysis;
-          JSON.stringify(validAnalysis); // Test serialization
-        } catch (e) {
-          console.error('Error with analysis data:', e);
-          validAnalysis = {
-            calories: 0,
-            macronutrients: [],
-            micronutrients: []
-          };
-        }
-        
-        // Create record
-        const mealData = {
-          user_id: userId,
-          goal: userGoal,
-          caption: caption,
-          analysis: validAnalysis,
-          image_url: imageUrl,
-          created_at: new Date().toISOString(),
-          ingredients: ingredients || []
-        };
-        
-        console.log('Saving meal data to database:', JSON.stringify({
-          user_id: mealData.user_id,
-          goal: mealData.goal,
-          caption: mealData.caption,
-          image_url: mealData.image_url,
-          created_at: mealData.created_at,
-        }));
-        
-        // Insert into database
-        const { data, error } = await supabase
-          .from('meals')
-          .insert(mealData)
-          .select();
-          
-        if (error) {
-          console.error('Database insertion error:', error);
-          console.error('Error code:', error.code);
-          console.error('Error message:', error.message);
-          console.error('Error details:', error.details);
-          
-          // Try simplified version
-          console.log('Attempting simplified insertion without analysis data');
-          const simpleData = {
-            user_id: userId,
-            goal: userGoal,
-            caption: caption,
-            image_url: imageUrl,
-            created_at: new Date().toISOString()
-          };
-          
-          const { data: simpleMealData, error: simpleError } = await supabase
-            .from('meals')
-            .insert(simpleData)
-            .select();
-            
-          if (!simpleError && simpleMealData && Array.isArray(simpleMealData) && simpleMealData.length > 0) {
-            mealId = simpleMealData[0].id;
-          }
-        } else if (data && data.length > 0) {
-          mealId = data[0].id;
-        }
-      } catch (e) {
-        console.error('Error saving meal:', e);
-      }
+    // Save to database if we have a user ID
+    let mealId = '';
+    let savedToDb = false;
+    
+    if (userId) {
+      // If we have an image URL, use it directly
+      // Otherwise, we'd need to upload the file first (not done in this code segment)
+      const finalImageUrl = imageUrl || '';
+      
+      const saveResult = await saveMealToDatabase({
+        userId,
+        goal,
+        caption,
+        ingredients,
+        analysis: analysis,
+        imageUrl: finalImageUrl,
+        formattedAnalysis: JSON.stringify({
+          caption,
+          ingredients,
+          analysis: analysis,
+          success: true,
+          timestamp: new Date().toISOString()
+        })
+      });
+      
+      mealId = saveResult.mealId;
+      savedToDb = saveResult.success;
+      console.log(`[analyzeMealAndSave] Meal saved to database: ${savedToDb}, Meal ID: ${mealId}`);
+    } else {
+      console.log('[analyzeMealAndSave] Skipping database save - no user ID provided');
     }
 
-    // Return results
-    return NextResponse.json({
+    return {
       caption,
       ingredients,
-      analysis,
-      imageUrl,
-      goal: userGoal,
+      analysis: analysis,
+      imageUrl: imageUrl || '',
+      goal,
       mealId,
-      savedToDatabase: !!mealId,
       timestamp: new Date().toISOString(),
+      savedToDatabase: savedToDb,
       aiAnalysis: !!openaiApiKey
-    }, { status: 200 });
+    };
+  } catch (error: any) {
+    console.error('[analyzeMealAndSave] Error:', error);
+    throw error;
+  }
+}
+
+// Restore the POST function
+export async function POST(request: NextRequest) {
+  try {
+    // Get form data with image and goal
+    const formData = await request.formData();
+    const file = formData.get('image') as File;
+    const userGoal = formData.get('goal') as string || 'General Wellness';
+    
+    // Get user ID from cookies/headers
+    let userId: string | null = null;
+    
+    try {
+      // Get user ID from Supabase client
+      const { data: { session } } = await supabase.auth.getSession();
+      userId = session?.user?.id || null;
+      
+      if (!userId) {
+        console.error('User not authenticated');
+        return NextResponse.json(
+          { error: 'User not authenticated', errorType: 'auth_error' },
+          { status: 401 }
+        );
+      }
+    } catch (authError) {
+      console.error('Authentication error:', authError);
+      return NextResponse.json(
+        { error: 'Authentication error', errorType: 'auth_error' },
+        { status: 401 }
+      );
+    }
+    
+    // Analyze the meal and save the results
+    const result = await analyzeMealAndSave({
+      userId,
+      file,
+      goal: userGoal,
+    });
+    
+    // Return the results
+    return NextResponse.json(result, { status: 200 });
   } catch (error: any) {
     return createErrorResponse(error);
   }

@@ -165,11 +165,32 @@ export default function MealHistoryPage() {
       if (data) {
         console.log(`Found ${data.length} meal records`);
         
-        // Process the data to ensure image URLs are valid
-        const processedData = data.map(meal => ({
-          ...meal,
-          image_url: getValidImageUrl(meal.image_url)
-        }));
+        // Process the data to ensure image URLs are valid and parse analysis if needed
+        const processedData = data.map(meal => {
+          // Parse analysis field if it's a string
+          let parsedAnalysis = meal.analysis;
+          if (typeof meal.analysis === 'string') {
+            try {
+              const parsed = JSON.parse(meal.analysis);
+              // If the JSON contains an 'analysis' field, extract it
+              parsedAnalysis = parsed.analysis || parsed;
+            } catch (err) {
+              console.error(`Error parsing analysis for meal ${meal.id}:`, err);
+              // Default to an empty analysis object
+              parsedAnalysis = {
+                calories: 0,
+                macronutrients: [],
+                micronutrients: []
+              };
+            }
+          }
+          
+          return {
+            ...meal,
+            image_url: getValidImageUrl(meal.image_url),
+            analysis: parsedAnalysis
+          };
+        });
         
         // Log image URLs for debugging
         processedData.forEach((meal, index) => {

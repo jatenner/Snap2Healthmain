@@ -107,11 +107,31 @@ export default function MealAnalysisPage() {
           } else if (data) {
             debugData.push('Successfully fetched meal data');
             debugData.push(`Meal data: ${JSON.stringify(data).substring(0, 150)}...`);
+            
+            // Parse analysis field if it's a string
+            let parsedAnalysis = data.analysis;
+            if (typeof data.analysis === 'string') {
+              try {
+                const parsed = JSON.parse(data.analysis);
+                // If the JSON contains an 'analysis' field, extract it
+                parsedAnalysis = parsed.analysis || parsed;
+              } catch (err) {
+                debugData.push(`Error parsing analysis: ${err}`);
+                console.error('Error parsing analysis:', err);
+                // Default to an empty analysis object
+                parsedAnalysis = {
+                  calories: 0,
+                  macronutrients: [],
+                  micronutrients: []
+                };
+              }
+            }
+            
             // Format the data for display
             setAnalysisData({
               caption: data.caption,
               imageUrl: data.image_url,
-              analysis: data.analysis,
+              analysis: parsedAnalysis,
               goal: data.goal,
               mealId: data.id,
               createdAt: data.created_at
