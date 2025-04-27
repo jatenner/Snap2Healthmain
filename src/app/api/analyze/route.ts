@@ -4,6 +4,26 @@ import { generateVisionPrompt } from '../../../lib/gpt/visionPrompt';
 import { generateNutritionPrompt } from '../../../lib/gpt/nutritionPrompt';
 import { NutritionAnalysisSchema } from '../../../lib/gpt/validator';
 import { supabase } from '../../../lib/supabaseClient';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
+
+// Function to get the user ID from the session
+async function getUserIdFromSession(request: NextRequest) {
+  try {
+    // Create a Supabase client for server-side authentication
+    const cookieStore = cookies();
+    const supabaseServer = createRouteHandlerClient({ cookies: () => cookieStore });
+    
+    // Get the session
+    const { data: { session } } = await supabaseServer.auth.getSession();
+    
+    // Return the user ID if available
+    return { userId: session?.user?.id || null };
+  } catch (error) {
+    console.error('[getUserIdFromSession] Error:', error);
+    return { userId: null };
+  }
+}
 
 // Check for OpenAI API key
 const openaiApiKey = process.env.OPENAI_API_KEY;
@@ -616,28 +636,18 @@ export async function POST(request: NextRequest) {
     const file = formData.get('image') as File;
     const userGoal = formData.get('goal') as string || 'General Wellness';
     
-    // Get user ID from cookies/headers
-    let userId: string | null = null;
+    // Get user ID from session
+    const { userId } = await getUserIdFromSession(request);
     
-    try {
-      // Get user ID from Supabase client
-      const { data: { session } } = await supabase.auth.getSession();
-      userId = session?.user?.id || null;
-      
-      if (!userId) {
-        console.error('User not authenticated');
-        return NextResponse.json(
-          { error: 'User not authenticated', errorType: 'auth_error' },
-          { status: 401 }
-        );
-      }
-    } catch (authError) {
-      console.error('Authentication error:', authError);
+    if (!userId) {
+      console.error('[API] User not authenticated');
       return NextResponse.json(
-        { error: 'Authentication error', errorType: 'auth_error' },
+        { error: 'User not authenticated. Please log in and try again.', errorType: 'auth_error' },
         { status: 401 }
       );
     }
+    
+    console.log('[API] Authenticated user ID:', userId);
     
     // Analyze the meal and save the results
     const result = await analyzeMealAndSave({
