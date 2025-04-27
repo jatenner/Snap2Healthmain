@@ -161,6 +161,89 @@ const createErrorResponse = (error: any) => {
   }
 };
 
+// Interface for sanitized analysis data
+interface SanitizedAnalysis {
+  calories: number;
+  macronutrients: Array<{
+    name: string;
+    amount: number;
+    unit: string;
+    percentDailyValue: number | null;
+    description: string;
+  }>;
+  micronutrients: Array<{
+    name: string;
+    amount: number;
+    unit: string;
+    percentDailyValue: number | null;
+    description: string;
+  }>;
+  benefits?: string[];
+  concerns?: string[];
+  suggestions?: string[];
+  [key: string]: any; // Allow additional properties
+}
+
+// Helper function to sanitize analysis data for database storage
+function sanitizeAnalysisData(analysis: any): SanitizedAnalysis {
+  if (!analysis || typeof analysis !== 'object') {
+    return {
+      calories: 0,
+      macronutrients: [],
+      micronutrients: []
+    };
+  }
+  
+  try {
+    // Create a clean copy with only the fields we know are safe
+    const sanitized: SanitizedAnalysis = {
+      calories: typeof analysis.calories === 'number' ? analysis.calories : 0,
+      macronutrients: Array.isArray(analysis.macronutrients) ? 
+        analysis.macronutrients.map(m => ({
+          name: String(m.name || ''),
+          amount: typeof m.amount === 'number' ? m.amount : 0,
+          unit: String(m.unit || ''),
+          percentDailyValue: typeof m.percentDailyValue === 'number' ? m.percentDailyValue : null,
+          description: String(m.description || '')
+        })) : [],
+      micronutrients: Array.isArray(analysis.micronutrients) ? 
+        analysis.micronutrients.map(m => ({
+          name: String(m.name || ''),
+          amount: typeof m.amount === 'number' ? m.amount : 0,
+          unit: String(m.unit || ''),
+          percentDailyValue: typeof m.percentDailyValue === 'number' ? m.percentDailyValue : null,
+          description: String(m.description || '')
+        })) : []
+    };
+    
+    // Optionally add other safe fields if they exist
+    if (Array.isArray(analysis.benefits)) {
+      sanitized.benefits = analysis.benefits.map(b => String(b || '')).slice(0, 10);
+    }
+    
+    if (Array.isArray(analysis.concerns)) {
+      sanitized.concerns = analysis.concerns.map(c => String(c || '')).slice(0, 10);
+    }
+    
+    if (Array.isArray(analysis.suggestions)) {
+      sanitized.suggestions = analysis.suggestions.map(s => String(s || '')).slice(0, 10);
+    }
+    
+    // Test JSON stringify to ensure serialization works
+    JSON.stringify(sanitized);
+    
+    return sanitized;
+  } catch (error) {
+    console.error('Error sanitizing analysis data:', error);
+    // Return a minimal valid object
+    return {
+      calories: 0,
+      macronutrients: [],
+      micronutrients: []
+    };
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Get form data with image and goal
@@ -349,8 +432,11 @@ export async function POST(request: NextRequest) {
         // Make sure we have valid JSON for the analysis field
         let analysisJson = validatedAnalysis;
         try {
+          // Sanitize the analysis data
+          analysisJson = sanitizeAnalysisData(validatedAnalysis);
+          
           // Test that the analysis data is valid JSON by stringifying and parsing it
-          const testJson = JSON.stringify(validatedAnalysis);
+          const testJson = JSON.stringify(analysisJson);
           JSON.parse(testJson);
         } catch (jsonError) {
           console.error('Invalid JSON in analysis data:', jsonError);
@@ -385,52 +471,90 @@ export async function POST(request: NextRequest) {
           console.error('Error inserting meal:', insertError.message);
           console.error('Error code:', insertError.code);
           console.error('Error details:', insertError.details || 'No details available');
+          console.error('Meal data that failed:', JSON.stringify(mealData, null, 2));
           
-          // If direct insertion fails, try the REST API approach
-          console.log('Attempting direct REST API insert as fallback');
-          
-          // Get session for proper authorization
-          let authHeaders = {};
-          if (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-            authHeaders = {
-              'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-              'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`
-            };
-          } else {
-            throw new Error('Missing Supabase ANON key for API fallback');
-          }
-          
-          const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/meals`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...authHeaders,
-              'Prefer': 'return=representation'
-            },
-            body: JSON.stringify(mealData)
-          });
-          
-          if (response.ok) {
-            const responseData = await response.json();
-            console.log('Successfully inserted meal via REST API:', responseData);
+          // Check specifically for JSON validation errors which can happen with complex analysis data
+          if (insertError.message?.includes('invalid input syntax for type json') || 
+              insertError.message?.includes('malformed JSON')) {
+            console.error('JSON validation error detected. Simplifying analysis data...');
             
-            // Set the saved meal ID if available
-            if (responseData && responseData.length > 0) {
-              savedMealId = responseData[0].id;
-              console.log('Meal inserted with ID:', savedMealId);
-            } else {
-              console.warn('Response data missing from successful insert');
+            // Create a simplified version of the meal data with minimal validated analysis
+            const simplifiedMealData = {
+              ...mealData,
+              analysis: {
+                calories: typeof mealData.analysis.calories === 'number' ? mealData.analysis.calories : 0,
+                macronutrients: Array.isArray(mealData.analysis.macronutrients) ? 
+                  mealData.analysis.macronutrients.slice(0, 3) : [],
+                micronutrients: Array.isArray(mealData.analysis.micronutrients) ? 
+                  mealData.analysis.micronutrients.slice(0, 3) : []
+              }
+            };
+            
+            console.log('Attempting insertion with simplified data...');
+            const { data: simplifiedInsertedMeal, error: simplifiedInsertError } = await supabase
+              .from('meals')
+              .insert(simplifiedMealData)
+              .select();
+              
+            if (simplifiedInsertError) {
+              console.error('Still failed with simplified data:', simplifiedInsertError);
+              throw new Error(`Database error: ${simplifiedInsertError.message}`);
+            } else if (simplifiedInsertedMeal && simplifiedInsertedMeal.length > 0) {
+              savedMealId = simplifiedInsertedMeal[0].id;
+              console.log('Successfully inserted meal with simplified data, ID:', savedMealId);
             }
           } else {
-            let errorMessage = 'Failed to insert meal via REST API';
-            try {
-              const errorData = await response.json();
-              console.error('REST API error details:', errorData);
-              errorMessage = `Database insertion failed: ${JSON.stringify(errorData)}`;
-            } catch (parseError) {
-              console.error('Error parsing REST API error response');
+            // If direct insertion fails, try the REST API approach
+            console.log('Attempting direct REST API insert as fallback');
+            
+            // Get session for proper authorization
+            let authHeaders = {};
+            if (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+              authHeaders = {
+                'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`
+              };
+            } else {
+              throw new Error('Missing Supabase ANON key for API fallback');
             }
-            throw new Error(errorMessage);
+            
+            try {
+              const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/meals`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...authHeaders,
+                  'Prefer': 'return=representation'
+                },
+                body: JSON.stringify(mealData)
+              });
+              
+              if (response.ok) {
+                const responseData = await response.json();
+                console.log('Successfully inserted meal via REST API:', responseData);
+                
+                // Set the saved meal ID if available
+                if (responseData && responseData.length > 0) {
+                  savedMealId = responseData[0].id;
+                  console.log('Meal inserted with ID:', savedMealId);
+                } else {
+                  console.warn('Response data missing from successful insert');
+                }
+              } else {
+                let errorMessage = 'Failed to insert meal via REST API';
+                try {
+                  const errorData = await response.json();
+                  console.error('REST API error details:', errorData);
+                  errorMessage = `Database insertion failed: ${JSON.stringify(errorData)}`;
+                } catch (parseError) {
+                  console.error('Error parsing REST API error response');
+                }
+                throw new Error(errorMessage);
+              }
+            } catch (restApiError) {
+              console.error('REST API insertion failed:', restApiError);
+              throw restApiError;
+            }
           }
         } else {
           // Successfully inserted with Supabase client
