@@ -101,7 +101,7 @@ export default function UploadPage() {
       const formData = new FormData();
       
       // Use appropriate goal
-      formData.append('goalId', finalGoal);
+      formData.append('goal', finalGoal);
       
       // Handle file upload and get image URL
       let imageUrl = '';
