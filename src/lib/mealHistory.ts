@@ -188,8 +188,17 @@ export const groupMealsByDate = (meals: MealRecord[]): GroupedMeals => {
     }
     
     try {
-      // Format the date using our improved utility
-      const dateKey = formatMealDate(meal.created_at);
+      // Skip formatting if the date is already a formatted string like 'Today' or 'Yesterday'
+      const preFormattedStrings = ['Today', 'Yesterday', 'Date error', 'Invalid date', 'No date'];
+      let dateKey;
+      
+      if (typeof meal.created_at === 'string' && preFormattedStrings.includes(meal.created_at)) {
+        console.log(`Using pre-formatted date string: ${meal.created_at}`);
+        dateKey = meal.created_at;
+      } else {
+        // Format the date using our improved utility
+        dateKey = formatMealDate(meal.created_at);
+      }
       
       // Create an array for this date if it doesn't exist
       if (!grouped[dateKey]) {

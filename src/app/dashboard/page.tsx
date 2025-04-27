@@ -172,6 +172,12 @@ export default function DashboardPage() {
 
   // Format date header showing Today, Yesterday, or date
   const formatDateHeader = (dateKey: string) => {
+    // Check if the dateKey is already a formatted string like 'Today' or 'Yesterday'
+    const preFormattedStrings = ['Today', 'Yesterday', 'Date error', 'Invalid date', 'No date', 'Unknown date'];
+    if (preFormattedStrings.includes(dateKey)) {
+      return dateKey;
+    }
+    
     // Use our improved utility function for consistent date formatting
     return formatMealDate(dateKey);
   };
