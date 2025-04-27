@@ -11,7 +11,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import MealImageGallery from '../../components/MealImageGallery';
 import { fetchMealHistory, groupMealsByDate, GroupedMeals } from '../../lib/mealHistory';
 import { supabase } from '../../lib/supabaseClient';
-import { formatMealTime } from '../../utils/formatMealTime';
+import { formatMealTime, formatMealDate } from '../../utils/formatMealTime';
 
 // Enhanced MealRecord interface with detailed analysis properties
 interface MealRecord {
@@ -170,49 +170,10 @@ export default function DashboardPage() {
     setGroupedMeals(groupMealsByDate(refreshedMeals));
   };
 
-  // Format date as header (Today, Yesterday, or date)
-  const formatDateHeader = (dateString: string) => {
-    try {
-      // Handle ISO strings that might have invalid format
-      if (!dateString) return 'No date';
-      
-      // Try to create a valid date object
-      const date = new Date(dateString);
-      
-      // Check if date is valid
-      if (isNaN(date.getTime())) {
-        console.warn(`Invalid date string: ${dateString}`);
-        return 'Invalid date';
-      }
-      
-      const today = new Date();
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      
-      // Normalize dates to compare just the date portion
-      const normalizeDate = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-      
-      const normalizedDate = normalizeDate(date);
-      const normalizedToday = normalizeDate(today);
-      const normalizedYesterday = normalizeDate(yesterday);
-      
-      if (normalizedDate.getTime() === normalizedToday.getTime()) {
-        return 'Today';
-      }
-      
-      if (normalizedDate.getTime() === normalizedYesterday.getTime()) {
-        return 'Yesterday';
-      }
-      
-      return new Intl.DateTimeFormat('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric'
-      }).format(date);
-    } catch (error) {
-      console.error('Error formatting date header:', error, 'Date string:', dateString);
-      return 'Date error';
-    }
+  // Format date header showing Today, Yesterday, or date
+  const formatDateHeader = (dateKey: string) => {
+    // Use our improved utility function for consistent date formatting
+    return formatMealDate(dateKey);
   };
 
   // Toggle expanded state for a day

@@ -296,24 +296,31 @@ export async function POST(request: NextRequest) {
         // Ensure we have a valid date
         let timestamp;
         try {
+          // Use ISO string with proper timezone handling
           const now = new Date();
-          // Validate that the date is valid
+          
+          // Ensure date is valid before converting to ISO string
           if (isNaN(now.getTime())) {
-            console.warn('Generated an invalid date, using ISO string workaround');
-            timestamp = new Date().toISOString();
+            console.warn('Generated an invalid date, using fallback mechanism');
+            // Fallback to explicit ISO string creation
+            const d = new Date();
+            timestamp = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}T${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}:${String(d.getUTCSeconds()).padStart(2, '0')}.${String(d.getUTCMilliseconds()).padStart(3, '0')}Z`;
           } else {
             timestamp = now.toISOString();
           }
-          // Double-check the timestamp is valid
+          
+          // Double-check the timestamp is valid by creating a new Date from it
           const testDate = new Date(timestamp);
           if (isNaN(testDate.getTime())) {
-            console.warn(`Generated invalid ISO string: ${timestamp}, using fallback`);
-            timestamp = new Date().toUTCString();
+            console.warn(`Generated invalid ISO string: ${timestamp}, using Unix timestamp approach`);
+            // Ultimate fallback: use Unix timestamp and convert to ISO
+            timestamp = new Date(Date.now()).toISOString();
           }
           console.log('Using timestamp:', timestamp);
         } catch (dateError) {
           console.error('Error generating timestamp:', dateError);
-          timestamp = new Date().toISOString(); // Fallback
+          // Last resort fallback
+          timestamp = new Date(Date.now()).toISOString();
         }
         
         // Ensure we have at least a default caption
@@ -339,12 +346,28 @@ export async function POST(request: NextRequest) {
           validatedAnalysis.micronutrients = [];
         }
         
+        // Make sure we have valid JSON for the analysis field
+        let analysisJson = validatedAnalysis;
+        try {
+          // Test that the analysis data is valid JSON by stringifying and parsing it
+          const testJson = JSON.stringify(validatedAnalysis);
+          JSON.parse(testJson);
+        } catch (jsonError) {
+          console.error('Invalid JSON in analysis data:', jsonError);
+          // Provide a simplified valid structure if the analysis is invalid
+          analysisJson = {
+            calories: validatedAnalysis.calories || 0,
+            macronutrients: Array.isArray(validatedAnalysis.macronutrients) ? validatedAnalysis.macronutrients : [],
+            micronutrients: Array.isArray(validatedAnalysis.micronutrients) ? validatedAnalysis.micronutrients : []
+          };
+        }
+        
         // Create meal data with or without AI analysis
         const mealData = {
           user_id: userId,
           goal: finalGoal,
           caption: finalCaption,
-          analysis: validatedAnalysis,
+          analysis: analysisJson,
           image_url: imageUrl,
           created_at: timestamp, // Explicitly set creation timestamp
           ingredients: ingredients || [] // Save ingredients list separately for easier access, ensure it's an array

@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { supabase } from '../lib/supabaseClient';
 import LoadingSpinner from './LoadingSpinner';
 import { useAuth } from '../context/AuthContext';
+import { formatMealDate } from '../utils/formatMealTime';
 
 interface MealImage {
   publicUrl: string;
@@ -136,12 +137,7 @@ export default function MealImageGallery() {
   
   // Format date to a short readable format
   function formatDate(dateString: string) {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    }).format(date);
+    return formatMealDate(dateString);
   }
 
   // Placeholder SVG for failed images
@@ -183,11 +179,34 @@ export default function MealImageGallery() {
     const groupedImages: {[key: string]: MealImage[]} = {};
     
     images.forEach(image => {
-      const date = new Date(image.createdAt).toISOString().split('T')[0];
-      if (!groupedImages[date]) {
-        groupedImages[date] = [];
+      try {
+        // Create date object and validate
+        const date = new Date(image.createdAt);
+        if (isNaN(date.getTime())) {
+          // Handle invalid date
+          const fallbackKey = 'Invalid date';
+          if (!groupedImages[fallbackKey]) {
+            groupedImages[fallbackKey] = [];
+          }
+          groupedImages[fallbackKey].push(image);
+          return;
+        }
+        
+        // Format as YYYY-MM-DD for grouping
+        const dateKey = date.toISOString().split('T')[0];
+        if (!groupedImages[dateKey]) {
+          groupedImages[dateKey] = [];
+        }
+        groupedImages[dateKey].push(image);
+      } catch (error) {
+        console.error(`Error processing image date:`, error, image);
+        // Add to error group
+        const errorKey = 'Date error';
+        if (!groupedImages[errorKey]) {
+          groupedImages[errorKey] = [];
+        }
+        groupedImages[errorKey].push(image);
       }
-      groupedImages[date].push(image);
     });
     
     return groupedImages;

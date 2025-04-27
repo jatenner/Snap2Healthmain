@@ -1,17 +1,56 @@
-import { format, isToday, isYesterday } from 'date-fns';
+import { format, isToday, isYesterday, parseISO } from 'date-fns';
+
+/**
+ * Safely creates a Date object from various input formats
+ * @param timestamp ISO string timestamp or Date object
+ * @returns Valid Date object or null if invalid
+ */
+function safelyCreateDate(timestamp: string | Date | null | undefined): Date | null {
+  if (!timestamp) return null;
+  
+  try {
+    // If it's already a Date object
+    if (timestamp instanceof Date) {
+      return isNaN(timestamp.getTime()) ? null : timestamp;
+    }
+    
+    // Try parsing as ISO string first (most reliable)
+    try {
+      const date = parseISO(timestamp);
+      if (!isNaN(date.getTime())) return date;
+    } catch (e) {
+      // Parsing as ISO failed, continue to other methods
+    }
+    
+    // Try creating a normal Date object
+    const date = new Date(timestamp);
+    if (!isNaN(date.getTime())) return date;
+    
+    // Try parsing numeric timestamp (milliseconds since epoch)
+    if (!isNaN(Number(timestamp))) {
+      const date = new Date(Number(timestamp));
+      if (!isNaN(date.getTime())) return date;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error creating date from:', timestamp, error);
+    return null;
+  }
+}
 
 /**
  * Formats a meal timestamp in a user-friendly way
  * @param timestamp ISO string timestamp
  * @returns Formatted time string (Today at 3:45 PM, Yesterday at 9:15 AM, or Jun 12 at 8:30 PM)
  */
-export function formatMealTime(timestamp: string): string {
+export function formatMealTime(timestamp: string | Date | null | undefined): string {
   try {
     if (!timestamp) return 'No time';
     
     // Create date object and validate
-    const date = new Date(timestamp);
-    if (isNaN(date.getTime())) {
+    const date = safelyCreateDate(timestamp);
+    if (!date) {
       console.warn(`Invalid timestamp for formatMealTime: ${timestamp}`);
       return 'Invalid time';
     }
@@ -36,13 +75,13 @@ export function formatMealTime(timestamp: string): string {
  * @param timestamp ISO string timestamp
  * @returns Formatted date string (Today, Yesterday, or Jun 12, 2023)
  */
-export function formatMealDate(timestamp: string): string {
+export function formatMealDate(timestamp: string | Date | null | undefined): string {
   try {
     if (!timestamp) return 'No date';
     
     // Create date object and validate
-    const date = new Date(timestamp);
-    if (isNaN(date.getTime())) {
+    const date = safelyCreateDate(timestamp);
+    if (!date) {
       console.warn(`Invalid timestamp for formatMealDate: ${timestamp}`);
       return 'Invalid date';
     }

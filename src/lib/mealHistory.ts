@@ -178,24 +178,17 @@ export const groupMealsByDate = (meals: MealRecord[]): GroupedMeals => {
     // Ensure created_at is a valid date
     if (!meal.created_at) {
       console.warn('Meal missing created_at timestamp:', meal.id);
+      // Add to an "Unknown date" group
+      const dateKey = 'Unknown date';
+      if (!grouped[dateKey]) {
+        grouped[dateKey] = [];
+      }
+      grouped[dateKey].push(meal);
       return;
     }
     
     try {
-      // Validate the date before formatting
-      const date = new Date(meal.created_at);
-      if (isNaN(date.getTime())) {
-        console.warn(`Invalid date string for meal ${meal.id}: ${meal.created_at}`);
-        // Use a fallback date key for invalid dates
-        const dateKey = 'Invalid date';
-        if (!grouped[dateKey]) {
-          grouped[dateKey] = [];
-        }
-        grouped[dateKey].push(meal);
-        return;
-      }
-      
-      // Format the date as YYYY-MM-DD for grouping
+      // Format the date using our improved utility
       const dateKey = formatMealDate(meal.created_at);
       
       // Create an array for this date if it doesn't exist

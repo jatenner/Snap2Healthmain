@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabaseClient';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import { formatMealDate } from '../../utils/formatMealTime';
 
 interface MealRecord {
   id: string;
@@ -188,57 +189,10 @@ export default function MealHistoryPage() {
     }
   };
 
-  // Format date
+  // Format date for display
   const formatDate = (dateString: string) => {
-    try {
-      // Handle ISO strings that might have invalid format
-      if (!dateString) return 'No date';
-      
-      // Special case for handling literal strings like "Today"
-      if (dateString === 'Today' || dateString === 'Yesterday' || dateString === 'Invalid date') {
-        return dateString;
-      }
-      
-      // Handle literal string dates that might be in the data
-      if (typeof dateString === 'string' && 
-          (dateString.includes('at') || dateString.includes('AM') || dateString.includes('PM'))) {
-        console.warn(`Date string appears to be pre-formatted: ${dateString}`);
-        return dateString;
-      }
-      
-      // Try to create a valid date object
-      const date = new Date(dateString);
-      
-      // Check if date is valid
-      if (isNaN(date.getTime())) {
-        console.warn(`Invalid date string: ${dateString}`);
-        return 'Invalid date';
-      }
-      
-      // Check for future dates and use current date instead
-      const now = new Date();
-      if (date.getFullYear() > now.getFullYear()) {
-        console.warn(`Future date detected: ${dateString}, using current date instead`);
-        return new Intl.DateTimeFormat('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit',
-        }).format(now);
-      }
-      
-      return new Intl.DateTimeFormat('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      }).format(date);
-    } catch (error) {
-      console.error('Error formatting date:', error, 'Date string:', dateString);
-      return 'Date error';
-    }
+    // Use our improved utility function for consistent date formatting
+    return formatMealDate(dateString);
   };
 
   // Handle image loading error
