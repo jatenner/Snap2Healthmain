@@ -57,9 +57,17 @@ export function formatMealTime(timestamp: string | Date | null | undefined): str
     
     const timeFormatted = format(date, 'h:mm a');
     
-    if (isToday(date)) {
+    // Normalize dates for comparison to avoid timezone issues
+    const now = new Date();
+    const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterdayDate = new Date(todayDate);
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    
+    const inputDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    
+    if (inputDate.getTime() === todayDate.getTime()) {
       return `Today at ${timeFormatted}`;
-    } else if (isYesterday(date)) {
+    } else if (inputDate.getTime() === yesterdayDate.getTime()) {
       return `Yesterday at ${timeFormatted}`;
     } else {
       return `${format(date, 'MMM d')} at ${timeFormatted}`;
@@ -86,9 +94,17 @@ export function formatMealDate(timestamp: string | Date | null | undefined): str
       return 'Invalid date';
     }
     
-    if (isToday(date)) {
+    // Normalize dates for proper comparison
+    const now = new Date();
+    const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterdayDate = new Date(todayDate);
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    
+    const inputDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    
+    if (inputDate.getTime() === todayDate.getTime()) {
       return 'Today';
-    } else if (isYesterday(date)) {
+    } else if (inputDate.getTime() === yesterdayDate.getTime()) {
       return 'Yesterday';
     } else {
       return format(date, 'MMM d, yyyy');
