@@ -6,36 +6,65 @@ import { NutritionAnalysisSchema } from '../../../lib/gpt/validator';
 import { supabase } from '../../../lib/supabaseClient';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
+import { createClient } from '@supabase/supabase-js';
 
-// Function to get the user ID from the session
+// Set up OpenAI client if API key is available
+const openaiApiKey = process.env.OPENAI_API_KEY;
+const openai = openaiApiKey ? new OpenAI({ apiKey: openaiApiKey }) : null;
+
+// Get Supabase credentials
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
 async function getUserIdFromSession(request: NextRequest) {
   try {
-    // Create a Supabase client for server-side authentication
+    // Create Supabase client with cookies for browser sessions
     const cookieStore = cookies();
-    const supabaseServer = createRouteHandlerClient({ cookies: () => cookieStore });
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
     
-    // Get the session
-    const { data: { session } } = await supabaseServer.auth.getSession();
+    // Get session from cookies
+    const { data: { session }, error } = await supabase.auth.getSession();
     
-    // Return the user ID if available
-    return { userId: session?.user?.id || null };
-  } catch (error) {
-    console.error('[getUserIdFromSession] Error:', error);
-    return { userId: null };
+    // Debug session information
+    console.log('[getUserIdFromSession] Session found:', !!session);
+    
+    if (error) {
+      console.error('[getUserIdFromSession] Error getting session:', error.message);
+      return { userId: null, error: error.message };
+    }
+    
+    // If we have a session with user ID, return it
+    if (session?.user?.id) {
+      console.log('[getUserIdFromSession] User authenticated via cookie session:', session.user.id);
+      return { userId: session.user.id, error: null };
+    }
+    
+    // Fallback to Authorization header (for mobile/app clients)
+    const authHeader = request.headers.get('authorization');
+    if (authHeader?.startsWith('Bearer ') && supabaseUrl && supabaseKey) {
+      const token = authHeader.substring(7);
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      
+      const { data: { user }, error: jwtError } = await supabase.auth.getUser(token);
+      
+      if (jwtError) {
+        console.error('[getUserIdFromSession] JWT validation error:', jwtError.message);
+        return { userId: null, error: jwtError.message };
+      }
+      
+      if (user?.id) {
+        console.log('[getUserIdFromSession] User authenticated via Bearer token:', user.id);
+        return { userId: user.id, error: null };
+      }
+    }
+    
+    console.warn('[getUserIdFromSession] No valid session or token found');
+    return { userId: null, error: 'No valid session or token found' };
+  } catch (err: any) {
+    console.error('[getUserIdFromSession] Exception:', err.message);
+    return { userId: null, error: err.message };
   }
 }
-
-// Check for OpenAI API key
-const openaiApiKey = process.env.OPENAI_API_KEY;
-if (!openaiApiKey) {
-  console.error('OPENAI_API_KEY is missing in .env.local');
-  throw new Error('Missing OpenAI API Key environment variable');
-}
-
-// Initialize OpenAI client with proper error handling
-const openai = new OpenAI({
-  apiKey: openaiApiKey,
-});
 
 // Function to ensure the meals table exists
 async function ensureMealsTableExists() {
@@ -637,12 +666,12 @@ export async function POST(request: NextRequest) {
     const userGoal = formData.get('goal') as string || 'General Wellness';
     
     // Get user ID from session
-    const { userId } = await getUserIdFromSession(request);
+    const { userId, error } = await getUserIdFromSession(request);
     
     if (!userId) {
-      console.error('[API] User not authenticated');
+      console.error('[API] User not authenticated:', error || 'No session found');
       return NextResponse.json(
-        { error: 'User not authenticated. Please log in and try again.', errorType: 'auth_error' },
+        { error: 'User not authenticated. Please log in and try again.', errorType: 'auth_error', details: error },
         { status: 401 }
       );
     }
