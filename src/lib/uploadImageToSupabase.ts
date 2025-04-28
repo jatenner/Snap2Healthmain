@@ -1,4 +1,9 @@
 import { supabase } from './supabaseClient';
+import { createClient } from '@supabase/supabase-js';
+
+// Get Supabase credentials
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 /**
  * Uploads a meal image to Supabase storage and returns the public URL
@@ -17,15 +22,23 @@ export const uploadMealImage = async (file: File, userId: string): Promise<strin
       throw new Error('No user ID provided for upload');
     }
     
-    // Validate user session is active to ensure auth.uid matches
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !sessionData.session) {
-      throw new Error('Authentication required. Please log in again.');
-    }
+    // Check if we're in auth bypass mode
+    const isAuthBypass = process.env.NEXT_PUBLIC_AUTH_BYPASS === 'true';
     
-    // Confirm the userId matches the current authenticated user
-    if (sessionData.session.user.id !== userId) {
-      throw new Error('User ID mismatch. Cannot upload files for another user.');
+    // Only validate user session if not in auth bypass mode
+    if (!isAuthBypass) {
+      // Validate user session is active to ensure auth.uid matches
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData.session) {
+        throw new Error('Authentication required. Please log in again.');
+      }
+      
+      // Confirm the userId matches the current authenticated user
+      if (sessionData.session.user.id !== userId) {
+        throw new Error('User ID mismatch. Cannot upload files for another user.');
+      }
+    } else {
+      console.log('[uploadMealImage] Auth bypass mode - skipping user ID validation');
     }
     
     // Check file size (10MB limit)
@@ -40,17 +53,20 @@ export const uploadMealImage = async (file: File, userId: string): Promise<strin
       throw new Error(`Invalid file type. Allowed types are: ${allowedTypes.join(', ')}`);
     }
 
-    // Generate a unique filename with timestamp and user ID to ensure uniqueness
-    const timestamp = new Date().getTime();
-    const extension = file.name.substring(file.name.lastIndexOf('.')) || '';
-    const baseFileName = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9._-]/g, '_');
+    const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+    const fileExt = file.name.split('.').pop() || 'jpg';
+    const timestamp = Date.now();
+    const randomId = Math.random().toString(36).substring(2, 9);
     
-    // Format: timestamp-filename-userId.extension
-    const fileName = `${timestamp}-${baseFileName}-${userId}${extension}`;
-    
-    // CRITICAL: Match exact path format from the RLS policy
-    // Format: users/[userId]/[filename]
-    const filePath = `users/${userId}/${fileName}`;
+    // Create different path structure for bypass mode to avoid RLS issues
+    let filePath;
+    if (isAuthBypass) {
+      // For auth bypass mode, use a test folder instead of user folders
+      filePath = `test/${timestamp}-${randomId}.${fileExt}`;
+    } else {
+      // Regular user path with proper RLS checks
+      filePath = `users/${userId}/${timestamp}-${randomId}.${fileExt}`;
+    }
 
     console.log(`Preparing to upload image to Supabase: ${filePath}`);
     console.log(`File type: ${file.type}, size: ${(file.size / 1024).toFixed(2)}KB`);
@@ -87,12 +103,18 @@ export const uploadMealImage = async (file: File, userId: string): Promise<strin
             cacheControl: '3600',
             upsert: true, // Overwrite if exists
             contentType: file.type,
-            // CRITICAL: Use 'user_id' key to match RLS policy requiring auth.uid() = metadata->>'user_id'
-            metadata: {
-              user_id: userId,
-              timestamp: timestamp.toString(),
-              filename: file.name
-            }
+            // Add appropriate metadata based on mode
+            metadata: isAuthBypass 
+              ? {
+                  test_mode: 'true',
+                  timestamp: timestamp.toString(),
+                  filename: file.name
+                }
+              : {
+                  user_id: userId,
+                  timestamp: timestamp.toString(),
+                  filename: file.name
+                }
           });
           
         data = result.data;

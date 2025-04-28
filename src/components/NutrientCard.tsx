@@ -34,6 +34,9 @@ export function NutrientCard({ nutrient, className }: NutrientCardProps) {
           </span>
         )}
       </div>
+      {nutrient.description && (
+        <p className="text-sm text-gray-700">{nutrient.description}</p>
+      )}
     </div>
   );
 } 

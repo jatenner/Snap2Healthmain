@@ -7,6 +7,9 @@ import { supabase } from '../../../lib/supabaseClient';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
+import { v4 as uuidv4 } from 'uuid';
+import { getUserIdFromSession } from '../../../lib/auth';
+import { analyzeMealImage } from '../../../lib/openai';
 
 // Set up OpenAI client if API key is available
 const openaiApiKey = process.env.OPENAI_API_KEY;
@@ -16,677 +19,311 @@ const openai = openaiApiKey ? new OpenAI({ apiKey: openaiApiKey }) : null;
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-async function getUserIdFromSession(request: NextRequest) {
-  try {
-    // Create Supabase client with cookies for browser sessions
-    const cookieStore = cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
-    
-    // Get session from cookies
-    const { data: { session }, error } = await supabase.auth.getSession();
-    
-    // Debug session information
-    console.log('[getUserIdFromSession] Session found:', !!session);
-    
-    if (error) {
-      console.error('[getUserIdFromSession] Error getting session:', error.message);
-      return { userId: null, error: error.message };
-    }
-    
-    // If we have a session with user ID, return it
-    if (session?.user?.id) {
-      console.log('[getUserIdFromSession] User authenticated via cookie session:', session.user.id);
-      return { userId: session.user.id, error: null };
-    }
-    
-    // Fallback to Authorization header (for mobile/app clients)
-    const authHeader = request.headers.get('authorization');
-    if (authHeader?.startsWith('Bearer ') && supabaseUrl && supabaseKey) {
-      const token = authHeader.substring(7);
-      const supabase = createClient(supabaseUrl, supabaseKey);
-      
-      const { data: { user }, error: jwtError } = await supabase.auth.getUser(token);
-      
-      if (jwtError) {
-        console.error('[getUserIdFromSession] JWT validation error:', jwtError.message);
-        return { userId: null, error: jwtError.message };
-      }
-      
-      if (user?.id) {
-        console.log('[getUserIdFromSession] User authenticated via Bearer token:', user.id);
-        return { userId: user.id, error: null };
-      }
-    }
-    
-    console.warn('[getUserIdFromSession] No valid session or token found');
-    return { userId: null, error: 'No valid session or token found' };
-  } catch (err: any) {
-    console.error('[getUserIdFromSession] Exception:', err.message);
-    return { userId: null, error: err.message };
+// Process and optionally upload image to storage
+async function processImage({ file, imageUrl, userId }: { file: File | null, imageUrl: string | null, userId: string | null }) {
+  if (!file && !imageUrl) {
+    throw new Error('Either file or imageUrl must be provided');
   }
-}
-
-// Function to ensure the meals table exists
-async function ensureMealsTableExists() {
-  console.log("Checking and creating meals table if needed");
-  try {
-    // First check if the table exists
-    const { error: checkError } = await supabase
-      .from('meals')
-      .select('id')
-      .limit(1);
-      
-    if (checkError && checkError.message.includes('does not exist')) {
-      console.log("Meals table does not exist. You'll need to create it in the Supabase dashboard");
-      console.log("Required table structure:");
-      console.log(`
-        CREATE TABLE public.meals (
-          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-          user_id UUID REFERENCES auth.users(id),
-          goal TEXT,
-          image_url TEXT,
-          caption TEXT,
-          analysis JSONB,
-          created_at TIMESTAMPTZ DEFAULT now()
-        );
-        
-        -- Enable row level security
-        ALTER TABLE public.meals ENABLE ROW LEVEL SECURITY;
-        
-        -- Create access policies
-        CREATE POLICY "Users can view their own meals"
-          ON public.meals
-          FOR SELECT
-          USING (auth.uid() = user_id);
-        
-        CREATE POLICY "Users can insert their own meals"
-          ON public.meals
-          FOR INSERT
-          WITH CHECK (auth.uid() = user_id);
-      `);
-      
-      // As a fallback, try creating a simplified version of the table using the REST API
-      try {
-        console.log("Attempting to create a basic version of the meals table");
-        // We can't directly run SQL using the JavaScript client, so we'll try with a REST POST
-        const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/meals`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-            'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''}`,
-            'Prefer': 'return=representation'
-          },
-          body: JSON.stringify({
-            table_name: 'meals',
-            definition: {
-              id: 'uuid primary key default uuid_generate_v4()',
-              user_id: 'uuid',
-              goal: 'text',
-              image_url: 'text',
-              caption: 'text',
-              analysis: 'jsonb',
-              created_at: 'timestamptz default now()'
-            }
-          })
-        });
-        
-        if (response.ok) {
-          console.log("Successfully created meals table via REST API");
-          return true;
-        } else {
-          const errorData = await response.json();
-          console.error("Failed to create meals table via REST API:", errorData);
-          return false;
-        }
-      } catch (apiError) {
-        console.error("Error creating table via API:", apiError);
-        return false;
-      }
-    } else if (checkError) {
-      console.error("Error checking for meals table:", checkError);
-      return false;
-    } else {
-      console.log("Meals table already exists");
-      return true;
-    }
-  } catch (error) {
-    console.error("Error in ensureMealsTableExists:", error);
-    return false;
-  }
-}
-
-// Helper function to create user-friendly error responses
-const createErrorResponse = (error: any) => {
-  console.error('Analysis error:', error);
   
-  // Determine the type of error and return an appropriate response
-  if (error.code === 'invalid_api_key') {
-    return NextResponse.json(
-      { 
-        error: 'OpenAI API key is invalid or expired. Please contact support.',
-        errorType: 'api_key',
-        details: 'The application cannot connect to the AI service due to authentication issues. Please contact support@snap2health.com for assistance.'
-      },
-      { status: 401 }
-    );
-  } else if (error.type === 'invalid_request_error') {
-    return NextResponse.json(
-      { 
-        error: 'There was a problem with the request to the AI service.',
-        errorType: 'request_error',
-        details: error.message
-      },
-      { status: 400 }
-    );
-  } else if (error.type === 'rate_limit_error') {
-    return NextResponse.json(
-      { 
-        error: 'You\'ve reached the limit of AI requests. Please try again in a few minutes.',
-        errorType: 'rate_limit',
-        details: 'Too many requests in a short period of time. This is temporary and will resolve itself shortly.'
-      },
-      { status: 429 }
-    );
-  } else if (error.code === 'model_not_found') {
-    return NextResponse.json(
-      { 
-        error: 'The AI model is currently unavailable. Please try again later.',
-        errorType: 'model_error',
-        details: 'The requested AI model could not be accessed. This may be a temporary issue.'
-      },
-      { status: 503 }
-    );
-  } else {
-    // Default error response for unexpected errors
-    return NextResponse.json(
-      { 
-        error: 'An unexpected error occurred while analyzing your meal.',
-        errorType: 'server_error',
-        details: error.message || 'Unknown error'
-      },
-      { status: 500 }
-    );
-  }
-};
-
-// Updated interface for sanitized analysis data with optional fields
-interface SanitizedAnalysis {
-  calories: number;
-  macronutrients: Array<{
-    name: string;
-    amount: number;
-    unit: string;
-    percentDailyValue?: number | null;
-    description?: string;
-  }>;
-  micronutrients: Array<{
-    name: string;
-    amount: number;
-    unit: string;
-    percentDailyValue?: number | null;
-    description?: string;
-  }>;
-  benefits?: string[];
-  concerns?: string[];
-  suggestions?: string[];
-  error?: string;
-  validationError?: string;
-  [key: string]: any; // Allow additional properties
-}
-
-// Helper function to create a default nutrient object
-function createDefaultNutrient(name: string = ''): any {
-  return {
-    name: String(name || ''),
-    amount: 0,
-    unit: 'g',
-    percentDailyValue: null,
-    description: ''
-  };
-}
-
-// Helper function to sanitize analysis data for database storage
-function sanitizeAnalysisData(analysis: any): SanitizedAnalysis {
-  if (!analysis || typeof analysis !== 'object') {
+  // If we have a direct image URL, use it without uploading
+  if (imageUrl) {
     return {
-      calories: 0,
-      macronutrients: [],
-      micronutrients: []
+      uploadedImageUrl: imageUrl,
+      imageSize: 0 // Size unknown for external URLs
     };
   }
   
-  try {
-    // Create a clean copy with only the fields we know are safe
-    const sanitized: SanitizedAnalysis = {
-      calories: typeof analysis.calories === 'number' ? analysis.calories : 0,
-      macronutrients: Array.isArray(analysis.macronutrients) ? 
-        analysis.macronutrients.map(m => ({
-          name: String(m.name || ''),
-          amount: typeof m.amount === 'number' ? m.amount : 0,
-          unit: String(m.unit || ''),
-          percentDailyValue: typeof m.percentDailyValue === 'number' ? m.percentDailyValue : null,
-          description: String(m.description || '')
-        })) : [],
-      micronutrients: Array.isArray(analysis.micronutrients) ? 
-        analysis.micronutrients.map(m => ({
-          name: String(m.name || ''),
-          amount: typeof m.amount === 'number' ? m.amount : 0,
-          unit: String(m.unit || ''),
-          percentDailyValue: typeof m.percentDailyValue === 'number' ? m.percentDailyValue : null,
-          description: String(m.description || '')
-        })) : []
-    };
-    
-    // Optionally add other safe fields if they exist
-    if (Array.isArray(analysis.benefits)) {
-      sanitized.benefits = analysis.benefits.map(b => String(b || '')).slice(0, 10);
-    }
-    
-    if (Array.isArray(analysis.concerns)) {
-      sanitized.concerns = analysis.concerns.map(c => String(c || '')).slice(0, 10);
-    }
-    
-    if (Array.isArray(analysis.suggestions)) {
-      sanitized.suggestions = analysis.suggestions.map(s => String(s || '')).slice(0, 10);
-    }
-    
-    // Add error fields if they exist
-    if (analysis.error) {
-      sanitized.error = String(analysis.error);
-    }
-    
-    if (analysis.validationError) {
-      sanitized.validationError = String(analysis.validationError);
-    }
-    
-    // Test JSON stringify to ensure serialization works
-    JSON.stringify(sanitized);
-    
-    return sanitized;
-  } catch (error) {
-    console.error('Error sanitizing analysis data:', error);
-    // Return a minimal valid object
-    return {
-      calories: 0,
-      macronutrients: [],
-      micronutrients: []
-    };
-  }
-}
-
-// Function to save meal data to the database
-async function saveMealToDatabase({
-  userId,
-  goal,
-  caption,
-  ingredients,
-  analysis,
-  imageUrl,
-  formattedAnalysis,
-}: {
-  userId: string;
-  goal: string;
-  caption: string;
-  ingredients: string[];
-  analysis: any;
-  imageUrl: string;
-  formattedAnalysis?: string;
-}): Promise<{ mealId: string; success: boolean }> {
-  let mealId = '';
-  let success = false;
-
-  try {
-    console.log(`[saveMealToDatabase] Attempting to save meal data for user ${userId}`);
-    
-    // Ensure we have a properly formatted analysis for storage
-    // If we have a formattedAnalysis string, use that directly
-    // Otherwise, prepare the analysis object for database storage
-    let analysisToStore;
-    
-    if (formattedAnalysis) {
-      // If we already have a formatted analysis string, use it directly
-      analysisToStore = formattedAnalysis;
-    } else if (typeof analysis === 'string') {
-      // If analysis is already a string, validate that it's valid JSON
-      try {
-        JSON.parse(analysis); // Just to validate
-        analysisToStore = analysis;
-      } catch (e) {
-        // If not valid JSON, create a new JSON string
-        analysisToStore = JSON.stringify({
-          caption,
-          ingredients,
-          analysis: {
-            calories: 0,
-            macronutrients: [],
-            micronutrients: []
-          },
-          success: false,
-          error: "Invalid analysis JSON string"
-        });
-      }
-    } else {
-      // Otherwise convert the analysis object to JSON string
-      analysisToStore = JSON.stringify({
-        caption,
-        ingredients,
-        analysis,
-        success: true
-      });
-    }
-    
-    console.log(`[saveMealToDatabase] Saving to database with analysis length: ${analysisToStore.length}`);
-
-    // Insert the meal into the database
-    const { data, error } = await supabase
-      .from('meals')
-      .insert({
-        user_id: userId,
-        goal: goal || 'General Wellness',
-        image_url: imageUrl,
-        caption: caption || '',
-        analysis: analysisToStore,
-        created_at: new Date().toISOString(),
-      })
-      .select('id');
-
-    if (error) {
-      console.error('[saveMealToDatabase] Error saving meal to database:', error);
-      
-      // If the analysis is too large, try saving with a truncated version
-      if (analysisToStore.length > 10000) {
-        console.log('[saveMealToDatabase] Analysis may be too large, trying with truncated version');
-        
-        const truncatedAnalysis = JSON.stringify({
-          caption,
-          ingredients: ingredients.slice(0, 20), // Limit ingredients
-          analysis: {
-            summary: analysis.summary || "Analysis summary unavailable",
-            // Include only essential parts of the analysis
-            nutrition: analysis.nutrition || {},
-            healthScore: analysis.healthScore || 0,
-            recommendations: (analysis.recommendations || []).slice(0, 5),
-          },
-          success: true,
-          truncated: true
-        });
-        
-        const { data: retryData, error: retryError } = await supabase
-          .from('meals')
-          .insert({
-            user_id: userId,
-            goal: goal || 'General Wellness',
-            image_url: imageUrl,
-            caption: caption || '',
-            analysis: truncatedAnalysis,
-            created_at: new Date().toISOString(),
-          })
-          .select('id');
-        
-        if (retryError) {
-          console.error('[saveMealToDatabase] Error saving meal with truncated analysis:', retryError);
-        } else {
-          mealId = retryData?.[0]?.id || '';
-          success = true;
-          console.log(`[saveMealToDatabase] Successfully saved meal with truncated analysis. Meal ID: ${mealId}`);
-        }
-      }
-    } else {
-      mealId = data?.[0]?.id || '';
-      success = true;
-      console.log(`[saveMealToDatabase] Successfully saved meal to database. Meal ID: ${mealId}`);
-    }
-  } catch (error) {
-    console.error('[saveMealToDatabase] Unexpected error saving meal:', error);
-    
-    // Last resort - save minimal data
+  // If we have a file, upload it to Supabase storage
+  if (file) {
     try {
-      const { data: fallbackData, error: fallbackError } = await supabase
-        .from('meals')
-        .insert({
-          user_id: userId,
-          goal: goal || 'General Wellness',
-          image_url: imageUrl,
-          caption: caption || '',
-          analysis: JSON.stringify({ 
-            caption, 
-            error: "Failed to save complete analysis",
-            success: false
-          }),
-          created_at: new Date().toISOString(),
-        })
-        .select('id');
-      
-      if (!fallbackError) {
-        mealId = fallbackData?.[0]?.id || '';
-        success = true;
-        console.log(`[saveMealToDatabase] Saved minimal meal data as fallback. Meal ID: ${mealId}`);
+      if (!supabaseUrl || !supabaseKey) {
+        throw new Error('Supabase configuration missing');
       }
-    } catch (finalError) {
-      console.error('[saveMealToDatabase] Final attempt to save meal failed:', finalError);
+      
+      if (!userId) {
+        throw new Error('User ID is required for file uploads');
+      }
+      
+      const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+      const fileExt = file.name.split('.').pop() || 'jpg';
+      const timestamp = Date.now();
+      const randomId = Math.random().toString(36).substring(2, 9);
+      
+      // CRITICAL: Match exact path format from the RLS policy
+      // Format: users/[userId]/[filename]
+      const filePath = `users/${userId}/${timestamp}-${randomId}.${fileExt}`;
+      
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      
+      const { data, error } = await supabaseAdmin.storage
+        .from('meal-images')
+        .upload(filePath, buffer, {
+          contentType: file.type,
+          cacheControl: '3600',
+          // CRITICAL: Include metadata that matches RLS policy expectations
+          metadata: {
+            user_id: userId,
+            timestamp: timestamp.toString(),
+            filename: file.name
+          }
+        });
+      
+      if (error) {
+        console.error('[processImage] Error uploading to Supabase:', error);
+        throw new Error(`Failed to upload image: ${error.message}`);
+      }
+      
+      // Get the public URL
+      const { data: publicUrlData } = supabaseAdmin.storage
+        .from('meal-images')
+        .getPublicUrl(data.path);
+        
+      return {
+        uploadedImageUrl: publicUrlData.publicUrl,
+        imageSize: file.size
+      };
+    } catch (error: any) {
+      console.error('[processImage] Error processing file:', error);
+      throw new Error(`Failed to process image: ${error.message}`);
     }
   }
-
-  return { mealId, success };
+  
+  throw new Error('Image processing failed - no valid source');
 }
 
-// Function to analyze a meal and save the results
-async function analyzeMealAndSave({
-  userId,
-  file,
-  imageUrl,
-  goal = "General Wellness",
-}: {
-  userId: string;
-  file?: File;
-  imageUrl?: string;
-  goal?: string;
-}) {
+// Analyze the image using OpenAI Vision and get nutritional data
+async function analyzeImageWithOpenAI(imageUrl: string, goal: string) {
+  if (!openai) {
+    throw new Error('OpenAI API key is missing or invalid');
+  }
+
   try {
-    console.log('[analyzeMealAndSave] Starting meal analysis');
-    console.log('- User ID:', userId || 'None');
-    console.log('- Image file:', file ? `File object (${file.size} bytes)` : 'None');
-    console.log('- Image URL:', imageUrl || 'None');
-    console.log('- Goal:', goal);
-
-    // Validate inputs
-    if (!file && !imageUrl) {
-      console.error('[analyzeMealAndSave] No image source provided');
-      throw new Error('Please provide a food image file or URL');
-    }
-
-    if (!userId) {
-      console.warn('[analyzeMealAndSave] No user ID provided - analysis will be performed but not saved');
-    }
-    
-    let caption = "My meal";
-    let ingredients: any[] = [];
-    let analysis: any = {
-      calories: 0,
-      macronutrients: [],
-      micronutrients: []
-    };
-    
-    // Only attempt AI analysis if OpenAI API key is available
-    if (openaiApiKey) {
-      try {
-        // Convert image for Vision API
-        let imageContent;
-        if (file) {
-          try {
-            const arrayBuffer = await file.arrayBuffer();
-            const buffer = Buffer.from(arrayBuffer);
-            const base64Image = buffer.toString('base64');
-            imageContent = {
+    // Call Vision API to identify the food
+    console.log('[analyzeImageWithOpenAI] Calling Vision API...');
+    const visionResponse = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL_GPT_VISION || 'gpt-4o',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: generateVisionPrompt(goal) },
+            { 
               type: 'image_url',
-              image_url: {
-                url: `data:image/jpeg;base64,${base64Image}`,
-              },
-            };
-            console.log('[analyzeMealAndSave] Successfully converted file to base64 for analysis');
-          } catch (e) {
-            console.error('[analyzeMealAndSave] Error converting image file:', e);
-            throw new Error('Failed to process image file');
-          }
-        } else if (imageUrl) {
-          // Validate URL format
-          try {
-            new URL(imageUrl);
-            imageContent = {
-              type: 'image_url',
-              image_url: {
-                url: imageUrl,
-              },
-            };
-            console.log('[analyzeMealAndSave] Using image URL for analysis');
-          } catch (e) {
-            console.error('[analyzeMealAndSave] Invalid image URL format:', e);
-            throw new Error('Invalid image URL format');
-          }
-        } else {
-          throw new Error('No image source available');
-        }
-
-        // Call Vision API
-        try {
-          console.log('[analyzeMealAndSave] Calling Vision API...');
-          const visionResponse = await openai.chat.completions.create({
-            model: process.env.OPENAI_MODEL_GPT_VISION || 'gpt-4o',
-            messages: [
-              {
-                role: 'user',
-                content: [
-                  { type: 'text', text: generateVisionPrompt(goal) },
-                  imageContent,
-                ],
-              },
-            ],
-            response_format: { type: 'json_object' },
-          });
-          
-          if (visionResponse?.choices?.[0]?.message?.content) {
-            try {
-              const visionData = JSON.parse(visionResponse.choices[0].message.content);
-              caption = visionData.caption || caption;
-              ingredients = visionData.ingredients || [];
-              console.log('[analyzeMealAndSave] Vision API identified:', caption);
-              console.log('[analyzeMealAndSave] Ingredients found:', ingredients.length);
-              
-              // Get nutrition data
-              console.log('[analyzeMealAndSave] Getting nutrition data...');
-              const nutritionResponse = await openai.chat.completions.create({
-                model: process.env.OPENAI_MODEL_GPT_TEXT || 'gpt-4o',
-                messages: [
-                  {
-                    role: 'user',
-                    content: generateNutritionPrompt(caption, ingredients, goal),
-                  },
-                ],
-                response_format: { type: 'json_object' },
-                temperature: 0.2,
-              });
-              
-              if (nutritionResponse?.choices?.[0]?.message?.content) {
-                try {
-                  const nutritionData = JSON.parse(nutritionResponse.choices[0].message.content);
-                  analysis = nutritionData;
-                  console.log('[analyzeMealAndSave] Successfully parsed nutrition data');
-                } catch (e) {
-                  console.error('[analyzeMealAndSave] Error parsing nutrition response:', e);
-                }
-              }
-            } catch (e) {
-              console.error('[analyzeMealAndSave] Error parsing vision response:', e);
-            }
-          }
-        } catch (e) {
-          console.error('[analyzeMealAndSave] OpenAI API error:', e);
-        }
-      } catch (e) {
-        console.error('[analyzeMealAndSave] Analysis error:', e);
-      }
-    }
-
-    // Save to database if we have a user ID
-    let mealId = '';
-    let savedToDb = false;
+              image_url: { url: imageUrl }
+            },
+          ],
+        },
+      ],
+      response_format: { type: 'json_object' },
+    });
     
-    if (userId) {
-      // If we have an image URL, use it directly
-      // Otherwise, we'd need to upload the file first (not done in this code segment)
-      const finalImageUrl = imageUrl || '';
-      
-      const saveResult = await saveMealToDatabase({
-        userId,
-        goal,
-        caption,
-        ingredients,
-        analysis: analysis,
-        imageUrl: finalImageUrl,
-        formattedAnalysis: JSON.stringify({
-          caption,
-          ingredients,
-          analysis: analysis,
-          success: true,
-          timestamp: new Date().toISOString()
-        })
-      });
-      
-      mealId = saveResult.mealId;
-      savedToDb = saveResult.success;
-      console.log(`[analyzeMealAndSave] Meal saved to database: ${savedToDb}, Meal ID: ${mealId}`);
-    } else {
-      console.log('[analyzeMealAndSave] Skipping database save - no user ID provided');
+    if (!visionResponse?.choices?.[0]?.message?.content) {
+      throw new Error('Vision API returned no content');
     }
-
-    return {
+    
+    const visionData = JSON.parse(visionResponse.choices[0].message.content);
+    const caption = visionData.caption || 'Food image';
+    const ingredients = visionData.ingredients || [];
+    
+    console.log('[analyzeImageWithOpenAI] Vision API identified:', caption);
+    console.log('[analyzeImageWithOpenAI] Ingredients found:', ingredients.length);
+    
+    // Get nutrition data using the identified food and ingredients
+    console.log('[analyzeImageWithOpenAI] Getting nutrition data...');
+    const nutritionResponse = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL_GPT_TEXT || 'gpt-4o',
+      messages: [
+        {
+          role: 'user',
+          content: generateNutritionPrompt(caption, ingredients, goal),
+        },
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.2,
+    });
+    
+    if (!nutritionResponse?.choices?.[0]?.message?.content) {
+      throw new Error('Nutrition API returned no content');
+    }
+    
+    const analysis = JSON.parse(nutritionResponse.choices[0].message.content);
+    
+    // Format the analysis data for display
+    const formattedAnalysis = JSON.stringify({
       caption,
       ingredients,
       analysis: analysis,
-      imageUrl: imageUrl || '',
-      goal,
-      mealId,
-      timestamp: new Date().toISOString(),
-      savedToDatabase: savedToDb,
-      aiAnalysis: !!openaiApiKey
-    };
+      success: true,
+      timestamp: new Date().toISOString()
+    });
+    
+    return { analysis, formattedAnalysis };
   } catch (error: any) {
-    console.error('[analyzeMealAndSave] Error:', error);
-    throw error;
+    console.error('[analyzeImageWithOpenAI] Analysis error:', error);
+    throw new Error(`Failed to analyze image: ${error.message}`);
   }
 }
 
-// Restore the POST function
-export async function POST(request: NextRequest) {
+// Helper function to create an error response
+function createErrorResponse(error: any) {
+  console.error('[api/analyze] Error:', error);
+  
+  const status = error.status || 500;
+  const message = error.message || 'An unexpected error occurred';
+  
+  return NextResponse.json(
+    { error: message, success: false },
+    { status }
+  );
+}
+
+// Interface for the analyze function parameters
+interface AnalyzeMealParams {
+  userId: string;
+  imageSource: File | string;
+  goal: string;
+  skipDatabaseSave?: boolean;
+}
+
+// Function to analyze a meal and save it to the database
+async function analyzeMealAndSave({
+  userId,
+  imageSource,
+  goal = 'balanced',
+  skipDatabaseSave = false
+}: AnalyzeMealParams) {
+  // Generate a unique ID for this meal
+  const mealId = uuidv4();
+  
+  // Generate the analysis using OpenAI
+  const analysisResult = await analyzeMealImage(
+    imageSource,
+    goal
+  );
+  
+  // If we should skip database saving (for auth bypass mode)
+  if (skipDatabaseSave) {
+    return {
+      mealId,
+      caption: analysisResult.caption || 'Analyzed meal',
+      analysis: analysisResult.analysis,
+      ingredients: analysisResult.ingredients || [],
+      savedToDatabase: false
+    };
+  }
+  
+  // Otherwise save to the database
   try {
-    // Get form data with image and goal
-    const formData = await request.formData();
-    const file = formData.get('image') as File;
-    const userGoal = formData.get('goal') as string || 'General Wellness';
+    // Insert the meal into the database
+    const { data, error } = await supabase
+      .from('meals')
+      .insert([
+        {
+          id: mealId,
+          user_id: userId,
+          image_url: imageSource,
+          caption: analysisResult.caption || 'Analyzed meal',
+          analysis: analysisResult.analysis,
+          ingredients: analysisResult.ingredients || [],
+          goal
+        }
+      ])
+      .select()
+      .single();
     
-    // Get user ID from session
-    const { userId, error } = await getUserIdFromSession(request);
-    
-    if (!userId) {
-      console.error('[API] User not authenticated:', error || 'No session found');
-      return NextResponse.json(
-        { error: 'User not authenticated. Please log in and try again.', errorType: 'auth_error', details: error },
-        { status: 401 }
-      );
+    if (error) {
+      console.error('[api/analyze] Database error:', error);
+      throw new Error('Failed to save meal to database');
     }
     
-    console.log('[API] Authenticated user ID:', userId);
+    return {
+      mealId,
+      caption: analysisResult.caption || 'Analyzed meal',
+      analysis: analysisResult.analysis,
+      ingredients: analysisResult.ingredients || [],
+      savedToDatabase: true
+    };
+  } catch (error) {
+    console.error('[api/analyze] Error saving to database:', error);
     
-    // Analyze the meal and save the results
+    // Even if database save fails, return the analysis
+    return {
+      mealId,
+      caption: analysisResult.caption || 'Analyzed meal',
+      analysis: analysisResult.analysis,
+      ingredients: analysisResult.ingredients || [],
+      savedToDatabase: false,
+      error: 'Failed to save to database, but analysis was successful'
+    };
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const formData = await request.formData();
+    const imageFile = formData.get('image') as File;
+    const imageUrl = formData.get('imageUrl') as string || null;
+    const goal = formData.get('goal') as string || 'balanced';
+    
+    if (!imageFile && !imageUrl) {
+      return createErrorResponse(new Error('No image provided'));
+    }
+    
+    // Log what we received for debugging
+    console.log('[analyze] Image file received:', !!imageFile, imageFile ? `(${imageFile.name}, ${imageFile.size} bytes)` : '');
+    console.log('[analyze] Image URL received:', !!imageUrl, imageUrl ? `(${imageUrl.substring(0, 50)}...)` : '');
+    
+    // Check if we're in auth bypass mode
+    const isAuthBypass = process.env.NEXT_PUBLIC_AUTH_BYPASS === 'true';
+    let userId: string | null = null;
+    
+    // If not in auth bypass mode, get the real user ID
+    if (!isAuthBypass) {
+      const { userId: resolvedUserId } = await getUserIdFromSession(request);
+      
+      if (!resolvedUserId) {
+        return NextResponse.json({ message: 'Unauthorized - User not found' }, { status: 401 });
+      }
+      
+      userId = resolvedUserId;
+    } else {
+      // For auth bypass, we'll use a test user ID
+      userId = 'test-user-bypass';
+      console.log('[analyze] Using bypass auth mode with test user ID');
+    }
+    
+    // Only use one source of image data - prioritize file over URL
+    const imageSource = imageFile || imageUrl;
+    
+    if (!imageSource) {
+      return createErrorResponse(new Error('Invalid image data'));
+    }
+    
+    if (typeof imageUrl === 'string' && imageUrl.startsWith('blob:')) {
+      return createErrorResponse(new Error('Blob URLs cannot be processed by the server. Please use a file upload.'));
+    }
+    
     const result = await analyzeMealAndSave({
       userId,
-      file,
-      goal: userGoal,
+      imageSource,
+      goal,
+      skipDatabaseSave: isAuthBypass // Skip DB save in bypass mode
     });
     
-    // Return the results
-    return NextResponse.json(result, { status: 200 });
+    // Create a unique ID for the meal - we'll use this for localStorage in bypass mode
+    // and for database reference in normal mode
+    const mealId = result.mealId || uuidv4();
+    
+    // Return comprehensive data for the frontend
+    return NextResponse.json({
+      mealId,
+      mealContents: result.caption,
+      analysisResult: result.analysis,
+      ingredients: result.ingredients || [],
+      success: true,
+      message: 'Analysis completed successfully'
+    });
   } catch (error: any) {
     return createErrorResponse(error);
   }

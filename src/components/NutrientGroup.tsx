@@ -1,35 +1,31 @@
 import React from 'react';
-import { Nutrient } from '../lib/gpt/validator';
-import { NutrientCard } from './NutrientCard';
+
+interface Nutrient {
+  name: string;
+  amount: string | number;
+}
 
 interface NutrientGroupProps {
   title: string;
   nutrients: Nutrient[];
-  className?: string;
 }
 
-const NutrientGroup: React.FC<NutrientGroupProps> = ({ 
-  title, 
-  nutrients, 
-  className = '',
-}) => {
+export default function NutrientGroup({ title, nutrients }: NutrientGroupProps) {
   if (!nutrients || nutrients.length === 0) {
     return null;
   }
-  
+
   return (
-    <div className={`${className} p-4 rounded-lg`}>
-      <h3 className="font-semibold text-lg mb-3">{title}</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+    <div className="bg-white p-6 rounded-lg shadow">
+      <h3 className="text-xl font-semibold mb-4">{title}</h3>
+      <div className="space-y-3">
         {nutrients.map((nutrient, index) => (
-          <NutrientCard 
-            key={`${nutrient.name}-${index}`}
-            nutrient={nutrient}
-          />
+          <div key={index} className="flex justify-between items-center py-2 border-b">
+            <span className="font-medium">{nutrient.name}</span>
+            <span>{nutrient.amount}</span>
+          </div>
         ))}
       </div>
     </div>
   );
-};
-
-export default NutrientGroup; 
+} 

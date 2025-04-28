@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from '../../context/AuthContext';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { uploadMealImage } from '../../lib/uploadImageToSupabase';
+import { saveLocalMeal, shouldUseLocalStorage } from '../../utils/localStorageMeals';
+import { v4 as uuidv4 } from 'uuid';
 
 // Define error response types
 interface ApiErrorResponse {
@@ -66,135 +68,82 @@ export default function UploadPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Debug collection
-    const debugData: string[] = [];
-    debugData.push(`Submit time: ${new Date().toISOString()}`);
-    debugData.push(`User: ${user ? user.id : 'Not logged in'}`);
-    
-    // Validate input
-    if (!file) {
-      setError('Please upload an image of your meal');
-      debugData.push('Error: No file selected');
-      setDebugInfo(debugData.join('\n'));
+    if (!file && !previewUrl) {
+      setError('Please select a food image or enter an image URL.');
       return;
     }
-    
-    debugData.push(`File: ${file.name}, ${file.type}, ${Math.round(file.size/1024)}KB`);
-    
-    // Validate goal
-    const finalGoal = useCustomGoal ? customGoal.trim() : goal;
-    if (useCustomGoal && !customGoal.trim()) {
-      setError('Please enter your health goal');
-      debugData.push('Error: No goal specified');
-      setDebugInfo(debugData.join('\n'));
-      return;
-    }
-    
-    debugData.push(`Goal: ${finalGoal}`);
     
     setIsLoading(true);
     setError(null);
     setErrorDetails(null);
+    setDebugInfo('');
+    setAnalysisResult(null);
+    
+    const debugData: string[] = [];
+    debugData.push(`Starting analysis at ${new Date().toISOString()}`);
     
     try {
-      // Create form data
+      // Generate a test user ID if we're in auth bypass mode
+      const testUserId = shouldUseLocalStorage() ? 'test-user-bypass' : (user?.id || null);
+      
+      if (!testUserId) {
+        throw new Error('User not authenticated');
+      }
+
+      // Create form data for the API request
       const formData = new FormData();
       
-      // Use appropriate goal
-      formData.append('goal', finalGoal);
-      
-      // Handle file upload and get image URL
-      let imageUrl = '';
-      if (file && user) {
-        console.log('Uploading image for user:', user.id);
-        debugData.push(`Starting upload for user: ${user.id}`);
-        try {
-          // Upload to Supabase storage and get public URL
-          imageUrl = await uploadMealImage(file, user.id);
-          console.log('Image uploaded successfully:', imageUrl);
-          debugData.push(`Image uploaded: ${imageUrl}`);
-          
-          // Make sure imageUrl is properly added to the form data
-          formData.append('imageUrl', imageUrl);
-        } catch (uploadError: any) {
-          debugData.push(`Upload error: ${uploadError.message}`);
-          console.error('Error uploading to Supabase:', uploadError);
-          throw new Error(`Failed to upload image: ${uploadError.message}`);
-        }
-      } else {
-        console.warn('Missing user or file:', { hasUser: !!user, hasFile: !!file });
-        debugData.push(`Missing: user=${!!user}, file=${!!file}`);
-        if (!user) {
-          setError('You must be logged in to upload images');
-          setIsLoading(false);
-          setDebugInfo(debugData.join('\n'));
-          return;
-        }
-      }
-      
-      // Add file for AI processing
       if (file) {
+        // Use the actual File object, not a blob URL
         formData.append('image', file);
-      }
-      
-      // Add user ID if logged in
-      if (user) {
-        console.log('Adding user ID to form data:', user.id);
-        formData.append('userId', user.id);
+        debugData.push(`Using file upload: ${file.name} (${file.size} bytes)`);
         
-        // Log the contents of FormData to debug
-        console.log('FormData contents:');
-        for (const pair of formData.entries()) {
-          console.log(`- ${pair[0]}: ${typeof pair[1] === 'string' ? pair[1] : 'File/Blob object'}`);
-        }
+        // Use the original file instead of blob URL
+        const imageUrl = await uploadMealImage(file, testUserId);
+        formData.append('imageUrl', imageUrl);
       }
       
-      // Submit to API
-      console.log('Submitting to API...');
-      debugData.push('Submitting to API...');
+      formData.append('goal', useCustomGoal ? customGoal : goal);
+      debugData.push(`Health goal: ${useCustomGoal ? customGoal : goal}`);
+      
+      // Make the API request
+      debugData.push('Sending API request to /api/analyze');
       const response = await fetch('/api/analyze', {
         method: 'POST',
         body: formData,
       });
       
-      debugData.push(`API response status: ${response.status}`);
-      
       if (!response.ok) {
-        const errorData = await response.json() as ApiErrorResponse;
-        debugData.push(`API error: ${JSON.stringify(errorData)}`);
-        
-        // Set main error message
-        setError(errorData.error || 'Failed to analyze food');
-        
-        // Set additional details if available
-        if (errorData.details) {
-          setErrorDetails(errorData.details);
+        // Handle different error status codes
+        if (response.status === 413) {
+          throw new Error('Image file is too large. Please upload a smaller image (max 10MB).');
         }
         
-        // Handle partial success cases (e.g., AI analysis worked but DB save failed)
-        if (errorData.partialSuccess) {
-          setAnalysisResult(errorData);
-          debugData.push('Partial success - AI analysis completed but DB save failed');
-          
-          // Confirm with user if they want to continue with partial result
-          if (window.confirm('The image was analyzed successfully, but there was an error saving to your history. Would you like to view the analysis anyway?')) {
-            const encodedData = encodeURIComponent(JSON.stringify(errorData));
-            router.push(`/meal-analysis?data=${encodedData}`);
-            return;
-          }
+        if (response.status === 401) {
+          throw new Error('You need to be logged in to analyze meals.');
         }
         
-        setDebugInfo(debugData.join('\n'));
-        setIsLoading(false);
-        return;
+        const errorText = await response.text();
+        throw new Error(`Server error: ${response.status} ${response.statusText}\n${errorText}`);
       }
       
+      // Parse the response
       const data = await response.json();
-      debugData.push(`API success - savedToDatabase: ${data.savedToDatabase}`);
-      debugData.push(`Caption: ${data.caption}`);
+      debugData.push(`API response received: ${JSON.stringify(data, null, 2).substring(0, 200)}...`);
       
-      // Store successful result
+      // Set the analysis result
       setAnalysisResult(data);
+      
+      // If we're in auth bypass mode, save the meal to localStorage
+      if (shouldUseLocalStorage()) {
+        saveLocalMeal({
+          id: data.mealId,
+          created_at: new Date().toISOString(),
+          image_url: URL.createObjectURL(file || new Blob()),
+          caption: data.mealContents || 'Analyzed meal',
+          analysis: data
+        });
+      }
       
       // Redirect to meal-analysis page with result
       if (data.savedToDatabase && data.mealId) {
@@ -236,6 +185,69 @@ export default function UploadPage() {
       return 'Our service is experiencing high demand. Please wait a few minutes and try again.';
     }
     return null;
+  };
+
+  const handleImageUpload = async (file: File) => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      // Generate a test user ID if we're in auth bypass mode
+      const testUserId = shouldUseLocalStorage() ? 'test-user-bypass' : (user?.id || null);
+      
+      if (!testUserId) {
+        throw new Error('User not authenticated');
+      }
+      
+      // Upload the image to Supabase or another storage
+      const imageUrl = await uploadMealImage(file, testUserId);
+      
+      // Create form data for the analysis API
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('imageUrl', imageUrl);
+      formData.append('goal', goal);
+      
+      // Call the analysis API
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to analyze meal');
+      }
+      
+      const result = await response.json();
+      
+      // If in auth bypass mode, store in localStorage
+      if (shouldUseLocalStorage()) {
+        // Get the current date and time
+        const now = new Date().toISOString();
+        
+        // Create a meal object for localStorage
+        const localMeal = {
+          id: result.mealId,
+          created_at: now,
+          image_url: imageUrl,
+          caption: result.mealContents,
+          analysis: JSON.stringify(result.analysisResult),
+          ingredients: result.ingredients || [],
+        };
+        
+        // Save to localStorage
+        saveLocalMeal(localMeal);
+      }
+      
+      // Navigate to meal analysis page
+      router.push(`/meal/${result.mealId}`);
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      setError(error.message || 'Failed to upload and analyze meal');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

@@ -2,28 +2,46 @@ import React, { ReactNode } from 'react';
 
 interface AnalysisSectionProps {
   title: string;
-  icon?: ReactNode;
+  items: string[];
+  icon: string;
+  className?: string;
+}
+
+export function AnalysisSection({ title, items, icon, className = '' }: AnalysisSectionProps) {
+  if (!items || items.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className={`p-6 rounded-lg shadow ${className}`}>
+      <h3 className="text-xl font-semibold mb-4">{icon} {title}</h3>
+      <ul className="space-y-2">
+        {items.map((item, index) => (
+          <li key={index} className="pl-2">{item}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+interface AnalysisSectionProps {
+  title: string;
+  description?: string;
   children: ReactNode;
   className?: string;
 }
 
 export const AnalysisSection: React.FC<AnalysisSectionProps> = ({
   title,
-  icon,
+  description,
   children,
-  className = ''
+  className = '',
 }) => {
   return (
-    <section className={`mb-8 ${className}`}>
-      <div className="flex items-center mb-4">
-        {icon && (
-          <div className="mr-3">
-            {icon}
-          </div>
-        )}
-        <h2 className="text-xl font-bold text-gray-800">{title}</h2>
-      </div>
-      {children}
-    </section>
+    <div className={`mb-8 ${className}`}>
+      <h2 className="text-xl font-semibold mb-2 text-gray-800">{title}</h2>
+      {description && <p className="text-gray-600 mb-4">{description}</p>}
+      <div>{children}</div>
+    </div>
   );
 }; 

@@ -2,12 +2,19 @@ import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function middleware(req: NextRequest) {
-  // TEMPORARY: Bypass all authentication checks to allow testing without database
-  console.log("TEMP FIX: Bypassing all authentication checks");
+  // 🚨 EMERGENCY FIX: COMPLETELY DISABLE ALL AUTH CHECKS 🚨
+  // This code should be removed after testing is complete
+  // It allows unrestricted access to all pages without authentication
+  console.log("⚠️ AUTH COMPLETELY DISABLED FOR TESTING - REMOVE BEFORE PRODUCTION ⚠️");
   return NextResponse.next();
   
-  // Original middleware code below - commented out temporarily
-  /*
+  // TEMPORARY BYPASS: Allow bypassing authentication checks in any environment
+  // This will work in both development and production
+  if (process.env.NEXT_PUBLIC_AUTH_BYPASS === 'true') {
+    console.log("TEMP FIX: Bypassing all authentication checks");
+    return NextResponse.next();
+  }
+  
   // Create a response object that will be modified with the session
   const res = NextResponse.next();
   
@@ -74,7 +81,6 @@ export async function middleware(req: NextRequest) {
     console.error('Middleware error:', error);
     return res;
   }
-  */
 }
 
 // Only run middleware on specific routes

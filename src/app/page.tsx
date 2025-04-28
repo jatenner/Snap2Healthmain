@@ -1,116 +1,195 @@
-import React from 'react';
+'use client';
+
+import React, { useState, ChangeEvent, FormEvent } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 
-export default function HomePage() {
+export default function Home() {
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [imageSrc, setImageSrc] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [formData, setFormData] = useState({
+    mealName: '',
+    goal: '',
+  });
+
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setError(null);
+    const file = e.target.files?.[0];
+    
+    if (!file) return;
+    
+    // Check file type
+    if (!file.type.startsWith('image/')) {
+      setError('Please upload an image file.');
+      return;
+    }
+    
+    // Read the file as a data URL
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setImageSrc(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+    setImageFile(file);
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    
+    if (!imageFile) {
+      setError('Please upload an image of your meal.');
+      return;
+    }
+    
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const formDataToSend = new FormData();
+      formDataToSend.append('image', imageFile);
+      formDataToSend.append('mealName', formData.mealName);
+      formDataToSend.append('goal', formData.goal);
+      
+      const response = await fetch('/api/analyze-meal', {
+        method: 'POST',
+        body: formDataToSend,
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to analyze meal');
+      }
+      
+      // Redirect to analysis page
+      router.push('/meal-analysis');
+    } catch (err) {
+      console.error('Error submitting form:', err);
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <div className="container mx-auto px-4 py-12">
-      <div className="max-w-6xl mx-auto">
-        {/* Hero Section */}
-        <section className="flex flex-col-reverse md:flex-row items-center justify-between gap-8 mb-16">
-          <div className="md:w-1/2">
-            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-              Understand Your Food with AI
-            </h1>
-            <p className="text-xl text-gray-600 mb-8">
-              Upload a food photo or describe your meal to get instant nutrition analysis and personalized health insights powered by GPT-4o.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Link
-                href="/upload"
-                className="px-6 py-3 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 text-center"
-              >
-                Analyze Your Food
-              </Link>
-              <Link
-                href="/signup"
-                className="px-6 py-3 bg-white text-indigo-600 font-medium rounded-md border border-indigo-600 hover:bg-indigo-50 text-center"
-              >
-                Create Account
-              </Link>
-            </div>
-          </div>
-          <div className="md:w-1/2 relative h-64 md:h-96 w-full rounded-lg overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-r from-purple-50 to-indigo-100 z-0" />
-            <div className="absolute inset-0 z-10 flex items-center justify-center">
-              <div className="text-center p-6">
-                <div className="text-6xl mb-2">🥗</div>
-                <p className="text-lg font-medium text-indigo-700">Snap a photo of your meal</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Features Section */}
-        <section className="mb-16">
-          <h2 className="text-3xl font-bold text-center mb-10">How it Works</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <div className="text-indigo-600 text-4xl mb-4">📸</div>
-              <h3 className="text-xl font-semibold mb-2">Snap or Describe</h3>
-              <p className="text-gray-600">
-                Take a photo of your meal or simply describe what you're eating.
-              </p>
-            </div>
-
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <div className="text-indigo-600 text-4xl mb-4">🧠</div>
-              <h3 className="text-xl font-semibold mb-2">AI Analysis</h3>
-              <p className="text-gray-600">
-                Our GPT-4o powered AI identifies ingredients and calculates nutrition.
-              </p>
-            </div>
-
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <div className="text-indigo-600 text-4xl mb-4">💡</div>
-              <h3 className="text-xl font-semibold mb-2">Personal Insights</h3>
-              <p className="text-gray-600">
-                Get personalized nutrition insights based on your health goals.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* Health Goals Section */}
-        <section className="mb-16 bg-gray-50 p-8 rounded-lg">
-          <h2 className="text-3xl font-bold text-center mb-6">Tailored to Your Health Goals</h2>
-          <p className="text-xl text-center text-gray-600 mb-10 max-w-3xl mx-auto">
-            Choose your health goal and receive personalized nutrition insights and recommendations.
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {['Weight Loss', 'Muscle Gain', 'Heart Health', 'Diabetes Management', 'General Wellness'].map((goal) => (
-              <div key={goal} className="bg-white p-5 rounded-md shadow-sm flex items-center">
-                <div className="mr-4 text-2xl">
-                  {goal === 'Weight Loss' && '⚖️'}
-                  {goal === 'Muscle Gain' && '💪'}
-                  {goal === 'Heart Health' && '❤️'}
-                  {goal === 'Diabetes Management' && '🩸'}
-                  {goal === 'General Wellness' && '🌱'}
+    <main className="flex min-h-screen flex-col items-center justify-between p-4 md:p-24">
+      <div className="w-full max-w-xl bg-white rounded-lg shadow-lg p-6 md:p-8">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold">Snap2Health</h1>
+          <p className="text-gray-600 mt-2">Take a photo of your meal and get instant nutritional analysis</p>
+        </div>
+        
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Image Upload */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Upload a meal photo
+            </label>
+            <div 
+              className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:bg-gray-50"
+              onClick={() => document.getElementById('mealImage')?.click()}
+            >
+              {imageSrc ? (
+                <div className="relative w-full aspect-square max-h-64 mx-auto">
+                  <Image 
+                    src={imageSrc} 
+                    alt="Meal preview" 
+                    fill
+                    className="object-contain" 
+                  />
                 </div>
-                <div>
-                  <h3 className="font-medium">{goal}</h3>
-                  <p className="text-sm text-gray-500">Personalized analysis</p>
+              ) : (
+                <div className="py-8">
+                  <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <p className="mt-2 text-sm text-gray-600">Click to upload a photo of your meal</p>
                 </div>
-              </div>
-            ))}
+              )}
+              <input
+                id="mealImage"
+                name="mealImage" 
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageChange}
+              />
+            </div>
           </div>
-        </section>
-
-        {/* CTA Section */}
-        <section className="text-center">
-          <h2 className="text-3xl font-bold mb-6">Ready to understand your food better?</h2>
-          <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-            Get started for free and discover the nutritional profile of your meals.
-          </p>
-          <Link
-            href="/upload"
-            className="px-8 py-4 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 inline-block"
+          
+          {/* Meal Name */}
+          <div>
+            <label htmlFor="mealName" className="block text-sm font-medium text-gray-700 mb-1">
+              Meal Name (optional)
+            </label>
+            <input
+              type="text"
+              id="mealName"
+              name="mealName"
+              value={formData.mealName}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              placeholder="E.g., Breakfast, Chicken Salad, etc."
+            />
+          </div>
+          
+          {/* Dietary Goal */}
+          <div>
+            <label htmlFor="goal" className="block text-sm font-medium text-gray-700 mb-1">
+              Your Dietary Goal (optional)
+            </label>
+            <select
+              id="goal"
+              name="goal"
+              value={formData.goal}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">Select a goal (optional)</option>
+              <option value="Weight Loss">Weight Loss</option>
+              <option value="Muscle Gain">Muscle Gain</option>
+              <option value="Maintenance">Maintenance</option>
+              <option value="Overall Health">Overall Health</option>
+            </select>
+          </div>
+          
+          {/* Error message */}
+          {error && (
+            <div className="text-red-500 text-sm">{error}</div>
+          )}
+          
+          {/* Submit button */}
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
           >
-            Try Snap2Health Now
-          </Link>
-        </section>
+            {isLoading ? (
+              <div className="flex items-center justify-center">
+                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Analyzing your meal...
+              </div>
+            ) : (
+              'Analyze My Meal'
+            )}
+          </button>
+        </form>
       </div>
-    </div>
+    </main>
   );
 } 
