@@ -64,18 +64,39 @@ const mockMealData = {
   }
 };
 
+// Add this function to try retrieving data from localStorage as a fallback
+const getDataFromLocalStorage = () => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const data = localStorage.getItem('mealData');
+    return data ? JSON.parse(data) : null;
+  } catch (error) {
+    console.error('Error reading from localStorage:', error);
+    return null;
+  }
+};
+
 export default async function MealAnalysisPage() {
   // Retrieve data from session
   let mealData = await retrieveFromSession('mealData');
   
+  console.log("Session data retrieved:", !!mealData);
+  
   // Use mock data in development if session data is not available
   if (!mealData && process.env.NODE_ENV === 'development') {
+    console.log("Using mock data in development environment");
     mealData = mockMealData;
   }
   
+  // Handle case where we need to attempt localStorage fallback
+  const needsClientFallback = !mealData;
+  
   if (!mealData) {
-    // If no data is found, redirect to the home page
-    redirect('/');
+    // If no data is found, redirect to the home page with error
+    console.error('No meal data found in the session');
+    return (
+      <ClientFallback />
+    );
   }
   
   // Process the data safely
@@ -215,6 +236,80 @@ export default async function MealAnalysisPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Client component to try localStorage fallback
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+
+function ClientFallback() {
+  const router = useRouter();
+  const [isChecking, setIsChecking] = useState(true);
+  
+  useEffect(() => {
+    try {
+      const localData = localStorage.getItem('mealData');
+      
+      if (localData) {
+        console.log("Found data in localStorage, using it for analysis");
+        // We found data in localStorage!
+        // Store it in the session from client side and reload
+        fetch('/api/session/store', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            key: 'mealData', 
+            value: JSON.parse(localData) 
+          }),
+        })
+        .then(response => {
+          if (response.ok) {
+            window.location.reload();
+          } else {
+            router.push('/?error=session-storage-failed');
+          }
+        })
+        .catch(error => {
+          console.error('Error storing session data:', error);
+          router.push('/');
+        });
+      } else {
+        console.log("No meal data found in localStorage");
+        setIsChecking(false);
+        router.push('/');
+      }
+    } catch (error) {
+      console.error("Error accessing localStorage:", error);
+      setIsChecking(false);
+      router.push('/');
+    }
+  }, [router]);
+  
+  if (isChecking) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
+        <p className="text-gray-600">Looking for your meal data...</p>
+      </div>
+    );
+  }
+  
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen p-4">
+      <h1 className="text-2xl font-bold mb-4">Session Data Not Found</h1>
+      <p className="text-gray-600 mb-6">We couldn't find your meal analysis data.</p>
+      <Link 
+        href="/"
+        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+      >
+        Back to Home
+      </Link>
     </div>
   );
 } 

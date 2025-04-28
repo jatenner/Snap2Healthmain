@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
         };
       }
 
-      // Store data in session
+      // Create meal data object
       const mealData = {
         imageUrl: dataURI,
         mealName,
@@ -108,9 +108,22 @@ export async function POST(request: NextRequest) {
         analysis
       };
       
+      // Store data in session
       console.log("Storing data in session...");
-      await storeInSession('mealData', mealData);
-      console.log("Data stored in session successfully");
+      try {
+        await storeInSession('mealData', mealData);
+        console.log("Data stored in session successfully");
+      } catch (sessionError) {
+        console.error("Error storing in session:", sessionError);
+        console.log("Will return localStorage instructions in response");
+        
+        // Session storage failed, but we can still return the data and have the client handle it
+        return NextResponse.json({ 
+          success: true, 
+          useLocalStorage: true,
+          mealData
+        });
+      }
       
       // Return successful response
       return NextResponse.json({ success: true });

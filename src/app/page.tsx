@@ -11,6 +11,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [apiResponse, setApiResponse] = useState<any>(null);
   const [formData, setFormData] = useState({
     mealName: '',
     goal: '',
@@ -55,26 +56,59 @@ export default function Home() {
     
     setIsLoading(true);
     setError(null);
+    setApiResponse(null);
     
     try {
+      console.log("Starting meal analysis...");
+      console.log("Image file:", {
+        name: imageFile.name,
+        type: imageFile.type,
+        size: `${(imageFile.size / 1024).toFixed(2)} KB`,
+      });
+      
       const formDataToSend = new FormData();
       formDataToSend.append('image', imageFile);
       formDataToSend.append('mealName', formData.mealName);
       formDataToSend.append('goal', formData.goal);
+      
+      console.log("Sending data to API...", {
+        mealName: formData.mealName || '(None provided)',
+        goal: formData.goal || '(None provided)'
+      });
       
       const response = await fetch('/api/analyze-meal', {
         method: 'POST',
         body: formDataToSend,
       });
       
+      console.log("API response status:", response.status);
+      
       const data = await response.json();
+      console.log("API response data:", data);
+      
+      setApiResponse(data);
       
       if (!response.ok) {
         throw new Error(data.error || 'Failed to analyze meal');
       }
       
-      // Redirect to analysis page
-      router.push('/meal-analysis');
+      // Check if we need to use localStorage as a fallback
+      if (data.useLocalStorage && data.mealData) {
+        console.log("Using localStorage fallback as directed by the API");
+        
+        // Store the data in localStorage for the client-side component to retrieve
+        localStorage.setItem('mealData', JSON.stringify(data.mealData));
+        console.log("Meal data saved to localStorage");
+      }
+      
+      // Explicitly log before redirect
+      console.log("Analysis successful, redirecting to results page...");
+      
+      // Add a small delay before redirect to ensure logs are visible
+      setTimeout(() => {
+        router.push('/meal-analysis');
+      }, 500);
+      
     } catch (err) {
       console.error('Error submitting form:', err);
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -167,7 +201,14 @@ export default function Home() {
           
           {/* Error message */}
           {error && (
-            <div className="text-red-500 text-sm">{error}</div>
+            <div className="text-red-500 text-sm">
+              <p className="font-bold">Error: {error}</p>
+              {apiResponse && (
+                <pre className="mt-2 bg-red-50 p-2 text-xs overflow-auto max-h-32 rounded">
+                  {JSON.stringify(apiResponse, null, 2)}
+                </pre>
+              )}
+            </div>
           )}
           
           {/* Submit button */}

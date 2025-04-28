@@ -23,25 +23,3 @@ export function AnalysisSection({ title, items, icon, className = '' }: Analysis
     </div>
   );
 }
-
-interface AnalysisSectionProps {
-  title: string;
-  description?: string;
-  children: ReactNode;
-  className?: string;
-}
-
-export const AnalysisSection: React.FC<AnalysisSectionProps> = ({
-  title,
-  description,
-  children,
-  className = '',
-}) => {
-  return (
-    <div className={`mb-8 ${className}`}>
-      <h2 className="text-xl font-semibold mb-2 text-gray-800">{title}</h2>
-      {description && <p className="text-gray-600 mb-4">{description}</p>}
-      <div>{children}</div>
-    </div>
-  );
-}; 
