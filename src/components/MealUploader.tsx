@@ -1,13 +1,15 @@
 'use client';
-import { useState, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import Image from 'next/image';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, Upload, Camera, ImageIcon } from 'lucide-react';
-import { FoodAnalysis } from './FoodAnalysis';
+import FoodAnalysis from './FoodAnalysis';
 import { uploadImageToSupabase } from '@/lib/uploadImageToSupabase';
 import { analyzeImage } from '@/lib/analyzeImage';
+import type { AnalysisResult } from '@/types/types';
 
 export function MealUploader() {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
@@ -73,13 +75,12 @@ export function MealUploader() {
       const result = await analyzeImage(imageUrl);
       
       if (!result.success) {
-        throw new Error(result.error || 'Analysis failed');
+        throw new Error('Analysis failed');
       }
       
       setAnalysisResult({
-        mealId: result.mealId,
-        mealContent: result.mealContents,
-        analysis: result.mealAnalysis
+        analysis: result.mealAnalysis,
+        mealName: mealName || 'My Meal'
       });
     } catch (err) {
       console.error('Error during analysis:', err);
@@ -110,12 +111,8 @@ export function MealUploader() {
       <FoodAnalysis 
         imageUrl={uploadedUrl}
         mealName={mealName || 'My Meal'}
-        mealContent={analysisResult.mealContent}
         analysis={analysisResult.analysis}
         onReset={handleReset}
-        onSave={() => {
-          // Could add success notification here
-        }}
       />
     );
   }
