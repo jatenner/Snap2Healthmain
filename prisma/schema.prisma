@@ -17,6 +17,8 @@ model User {
   password      String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  
+  accounts      Account[]
 }
 
 // Necessary for Next auth
