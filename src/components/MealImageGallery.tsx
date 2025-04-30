@@ -2,9 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
+import { Card, CardContent } from './ui/card';
+import { Button } from './ui/button';
 import { supabase } from '../lib/supabaseClient';
 import LoadingSpinner from './LoadingSpinner';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/auth';
 import { formatMealDate } from '../utils/formatMealTime';
 
 interface MealImage {
@@ -145,12 +147,12 @@ export default function MealImageGallery() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center py-12">
-        <LoadingSpinner size="large" />
+      <div className="flex justify-center items-center h-56">
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
-
+  
   if (error) {
     return (
       <div className="bg-red-50 text-red-700 p-4 rounded-lg my-4">
@@ -165,7 +167,7 @@ export default function MealImageGallery() {
       </div>
     );
   }
-
+  
   if (images.length === 0) {
     return (
       <div className="bg-blue-50 text-blue-700 p-4 rounded-lg my-4">

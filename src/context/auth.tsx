@@ -1,8 +1,9 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, createClient, SupabaseClient } from '@supabase/supabase-js';
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createClient, SupabaseClient, type User as SupabaseUser } from '@supabase/supabase-js';
 import { getCookie, setCookie, deleteCookie } from 'cookies-next';
+import { useRouter } from 'next/navigation';
 
 // Add TypeScript declaration for window.ENV
 declare global {
@@ -17,18 +18,17 @@ declare global {
   }
 }
 
-// Always enable mock auth in production
-const FORCE_MOCK_AUTH = true;
-
-// Check if we're in mock mode
-const mockAuth = FORCE_MOCK_AUTH || 
+// Check if we're in mock mode - only enable if explicitly set to 'true'
+const mockAuth = 
   typeof window !== 'undefined' && 
   (window.ENV?.NEXT_PUBLIC_MOCK_AUTH === 'true' || 
    window.localStorage.getItem('MOCK_AUTH') === 'true' || 
    process.env.NEXT_PUBLIC_MOCK_AUTH === 'true' || 
    process.env.NEXT_PUBLIC_AUTH_BYPASS === 'true');
 
-console.log('Auth bypass enabled, skipping auth check');
+if (mockAuth) {
+  console.log('Auth bypass enabled, skipping auth check');
+}
 
 // Create a Supabase client (or a mock one if in mock mode)
 let supabase: SupabaseClient;
@@ -109,18 +109,33 @@ try {
   } as unknown as SupabaseClient;
 }
 
-// Define the type for the AuthContext
-interface AuthContextType {
-  user: User | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: any } | undefined>;
-  signUp: (email: string, password: string, username: string) => Promise<{ error: any } | undefined>;
-  signOut: () => Promise<void>;
-  setMockUser: () => void; // For testing purposes
+interface User {
+  id: string;
+  email: string;
+  name: string;
+  avatar?: string;
+  user_metadata?: {
+    username?: string;
+    defaultGoal?: string;
+    height?: string;
+    weight?: string;
+    age?: string;
+    gender?: string;
+    avatar_url?: string;
+  };
 }
 
-// Create the AuthContext
+interface AuthContextType {
+  user: User | null;
+  loading: boolean;
+  isLoading?: boolean; // For backwards compatibility
+  signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signUp: (email: string, password: string, name: string) => Promise<{ success: boolean; error?: string }>;
+  signOut: () => Promise<void>;
+  isAuthenticated: boolean;
+  setMockUser?: () => void;
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Create a default mock user
@@ -139,168 +154,218 @@ const createMockUser = () => ({
   factors: [],
 } as unknown as User);
 
-// Create the AuthProvider component
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  
+  // Configure Supabase client
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  
+  // Only use mock in development if explicitly enabled
+  const useMockAuth = process.env.NEXT_PUBLIC_AUTH_BYPASS === 'true';
+  
+  // Initialize Supabase client if credentials are available
+  const supabase = supabaseUrl && supabaseAnonKey ? 
+    createClient(supabaseUrl, supabaseAnonKey) : 
+    null;
+  
+  if (!supabase && !useMockAuth) {
+    console.warn('Supabase client not initialized and mock auth not enabled');
+  } else if (!supabase) {
+    console.log('Using mock Supabase client');
+  }
 
-  // Initialize user from cookie on first load or create mock user
+  // Initialize user session on load
   useEffect(() => {
-    if (mockAuth) {
-      // Just create a mock user immediately
-      const mockUser = createMockUser();
-      setUser(mockUser);
-      setCookie('user', JSON.stringify(mockUser));
-      setIsLoading(false);
-      console.log('Mock user created automatically');
-      return;
-    }
-
-    const cookieUser = getCookie('user');
-    
-    if (cookieUser) {
+    const initializeAuth = async () => {
+      setLoading(true);
+      
       try {
-        const parsedUser = JSON.parse(cookieUser as string);
-        setUser(parsedUser);
-        setIsLoading(false);
-        return;
-      } catch (error) {
-        console.error('Error parsing user cookie:', error);
-      }
-    }
-
-    // Check for existing session
-    const getUser = async () => {
-      setIsLoading(true);
-      try {
-        const { data, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          throw error;
+        if (useMockAuth) {
+          // Use mock user in development if auth bypass is enabled
+          console.log('Auth bypass enabled, using demo user');
+          setUser({
+            id: 'mock-user-id',
+            email: 'demo@snap2health.com',
+            name: 'Demo User',
+            avatar: '/avatar-placeholder.png'
+          });
+        } else if (supabase) {
+          // Check for existing session with Supabase
+          const { data: { session } } = await supabase.auth.getSession();
+          
+          if (session) {
+            const { user: supabaseUser } = session;
+            
+            if (supabaseUser) {
+              // Get user profile data
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', supabaseUser.id)
+                .single();
+              
+              setUser({
+                id: supabaseUser.id,
+                email: supabaseUser.email || '',
+                name: profile?.name || 'User',
+                avatar: profile?.avatar_url
+              });
+            }
+          }
         }
-        
-        if (data && data.session) {
-          setUser(data.session.user);
-          // Also set the cookie
-          setCookie('user', JSON.stringify(data.session.user));
-        }
       } catch (error) {
-        console.error('Error checking authentication:', error);
+        console.error('Error initializing auth:', error);
       } finally {
-        setIsLoading(false);
+        setLoading(false);
       }
     };
 
-    getUser();
+    initializeAuth();
+  }, [supabase, useMockAuth]);
 
-    // Listen for auth changes
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setUser(session.user);
-        setCookie('user', JSON.stringify(session.user));
-      } else {
-        setUser(null);
-        deleteCookie('user');
-      }
-      setIsLoading(false);
-    });
-
-    return () => {
-      data.subscription.unsubscribe();
-    };
-  }, []);
-
-  // Sign up function
-  const signUp = async (email: string, password: string, username: string) => {
-    // Check if using mock auth
-    if (mockAuth) {
-      const mockUser = createMockUser();
-      // We don't want to automatically sign in after signup as we'd expect email verification
-      // Just return success
-      return undefined;
-    }
-    
+  // Authentication functions
+  const signIn = async (email: string, password: string) => {
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            username,
-          },
-        },
-      });
-
-      if (error) {
-        console.error('Error signing up:', error.message);
-        return { error };
+      if (useMockAuth) {
+        // Simulate successful login in development
+        setUser({
+          id: 'mock-user-id',
+          email: email || 'demo@snap2health.com',
+          name: 'Demo User',
+          avatar: '/avatar-placeholder.png',
+          user_metadata: {
+            username: 'Demo User',
+            defaultGoal: 'General Wellness'
+          }
+        });
+        return { success: true };
       }
       
-      // We'll let the user confirm their email before signing them in
-      return undefined;
-    } catch (error) {
-      console.error('Error in signUp function:', error);
-      return { error };
-    }
-  };
+      if (!supabase) {
+        return { success: false, error: 'Authentication service unavailable' };
+      }
 
-  // Sign in function
-  const signIn = async (email: string, password: string) => {
-    // Check if using mock auth
-    if (mockAuth) {
-      const mockUser = createMockUser();
-      setUser(mockUser as unknown as User);
-      setCookie('user', JSON.stringify(mockUser));
-      return undefined;
-    }
-    
-    try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
-        console.error('Error signing in:', error.message);
-        return { error };
+        return { success: false, error: error.message };
       }
 
-      if (data && data.user) {
-        setUser(data.user);
-        setCookie('user', JSON.stringify(data.user));
+      if (data.user) {
+        // Get user profile data
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+        
+        setUser({
+          id: data.user.id,
+          email: data.user.email || '',
+          name: profile?.name || 'User',
+          avatar: profile?.avatar_url
+        });
+        
+        return { success: true };
       }
       
-      return undefined;
+      return { success: false, error: 'Something went wrong' };
     } catch (error) {
-      console.error('Error in signIn function:', error);
-      return { error };
+      console.error('Sign in error:', error);
+      return { success: false, error: 'Failed to sign in' };
     }
   };
 
-  // Sign out function
+  const signUp = async (email: string, password: string, name: string) => {
+    try {
+      if (useMockAuth) {
+        // Simulate successful signup in development
+        setUser({
+          id: 'mock-user-id',
+          email,
+          name,
+          avatar: '/avatar-placeholder.png',
+          user_metadata: {
+            username: name,
+            defaultGoal: 'General Wellness'
+          }
+        });
+        return { success: true };
+      }
+      
+      if (!supabase) {
+        return { success: false, error: 'Authentication service unavailable' };
+      }
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      if (data.user) {
+        // Create user profile
+        await supabase
+          .from('profiles')
+          .insert([{ 
+            id: data.user.id, 
+            name,
+            email,
+            created_at: new Date().toISOString() 
+          }]);
+        
+        setUser({
+          id: data.user.id,
+          email: data.user.email || '',
+          name,
+        });
+        
+        return { success: true };
+      }
+      
+      return { success: false, error: 'Something went wrong' };
+    } catch (error) {
+      console.error('Sign up error:', error);
+      return { success: false, error: 'Failed to sign up' };
+    }
+  };
+
   const signOut = async () => {
-    // Check if using mock auth
-    if (mockAuth) {
+    if (useMockAuth) {
+      // Just clear the user in development
       setUser(null);
-      deleteCookie('user');
+      router.push('/login');
       return;
     }
     
-    try {
+    if (supabase) {
       await supabase.auth.signOut();
       setUser(null);
-      deleteCookie('user');
-    } catch (error) {
-      console.error('Error signing out:', error);
+      router.push('/login');
     }
   };
 
-  // For testing purposes
   const setMockUser = () => {
-    if (mockAuth) {
-      const mockUser = createMockUser();
-      setUser(mockUser as unknown as User);
-      setCookie('user', JSON.stringify(mockUser));
+    if (useMockAuth) {
+      setUser({
+        id: 'mock-user-id',
+        email: 'demo@snap2health.com',
+        name: 'Demo User',
+        avatar: '/avatar-placeholder.png',
+        user_metadata: {
+          username: 'Demo User',
+          defaultGoal: 'General Wellness'
+        }
+      });
     }
   };
 
@@ -308,11 +373,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider
       value={{
         user,
-        isAuthenticated: !!user,
-        isLoading,
+        loading,
+        isLoading: loading,
         signIn,
         signUp,
         signOut,
+        isAuthenticated: !!user,
         setMockUser,
       }}
     >
@@ -321,7 +387,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 };
 
-// Hook to use the auth context
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {

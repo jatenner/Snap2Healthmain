@@ -2,14 +2,13 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { uploadImageToSupabase } from '@/lib/uploadImageToSupabase';
-import { User } from '@supabase/supabase-js';
 import Image from 'next/image';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Database } from '@/types/supabase';
 import { Loader2, Camera } from 'lucide-react';
 
 interface ProfileImageUploadProps {
-  user: User | null;
+  user: any;
   onImageUploaded?: (url: string) => void;
 }
 
