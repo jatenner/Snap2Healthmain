@@ -17,14 +17,18 @@ declare global {
   }
 }
 
+// Always enable mock auth in production
+const FORCE_MOCK_AUTH = true;
+
 // Check if we're in mock mode
-const mockAuth = typeof window !== 'undefined' 
-  ? (window.ENV?.NEXT_PUBLIC_MOCK_AUTH === 'true' || 
-     window.localStorage.getItem('MOCK_AUTH') === 'true' || 
-     process.env.NEXT_PUBLIC_MOCK_AUTH === 'true' || 
-     process.env.NEXT_PUBLIC_AUTH_BYPASS === 'true')
-  : (process.env.NEXT_PUBLIC_MOCK_AUTH === 'true' || 
-     process.env.NEXT_PUBLIC_AUTH_BYPASS === 'true');
+const mockAuth = FORCE_MOCK_AUTH || 
+  typeof window !== 'undefined' && 
+  (window.ENV?.NEXT_PUBLIC_MOCK_AUTH === 'true' || 
+   window.localStorage.getItem('MOCK_AUTH') === 'true' || 
+   process.env.NEXT_PUBLIC_MOCK_AUTH === 'true' || 
+   process.env.NEXT_PUBLIC_AUTH_BYPASS === 'true');
+
+console.log('Auth bypass enabled, skipping auth check');
 
 // Create a Supabase client (or a mock one if in mock mode)
 let supabase: SupabaseClient;
@@ -119,16 +123,42 @@ interface AuthContextType {
 // Create the AuthContext
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Create a default mock user
+const createMockUser = () => ({
+  id: 'mock-user-id',
+  email: 'user@example.com',
+  user_metadata: { username: 'Demo User' },
+  role: 'authenticated',
+  aud: 'authenticated',
+  app_metadata: {},
+  created_at: new Date().toISOString(),
+  confirmed_at: new Date().toISOString(),
+  last_sign_in_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+  identities: [],
+  factors: [],
+} as unknown as User);
+
 // Create the AuthProvider component
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Initialize user from cookie on first load
+  // Initialize user from cookie on first load or create mock user
   useEffect(() => {
+    if (mockAuth) {
+      // Just create a mock user immediately
+      const mockUser = createMockUser();
+      setUser(mockUser);
+      setCookie('user', JSON.stringify(mockUser));
+      setIsLoading(false);
+      console.log('Mock user created automatically');
+      return;
+    }
+
     const cookieUser = getCookie('user');
     
-    if (mockAuth && cookieUser) {
+    if (cookieUser) {
       try {
         const parsedUser = JSON.parse(cookieUser as string);
         setUser(parsedUser);
@@ -184,12 +214,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signUp = async (email: string, password: string, username: string) => {
     // Check if using mock auth
     if (mockAuth) {
-      const mockUser = {
-        id: 'mock-user-id',
-        email: email,
-        user_metadata: { username },
-        role: 'authenticated',
-      };
+      const mockUser = createMockUser();
       // We don't want to automatically sign in after signup as we'd expect email verification
       // Just return success
       return undefined;
@@ -223,11 +248,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signIn = async (email: string, password: string) => {
     // Check if using mock auth
     if (mockAuth) {
-      const mockUser = {
-        id: 'mock-user-id',
-        email: email,
-        role: 'authenticated',
-      };
+      const mockUser = createMockUser();
       setUser(mockUser as unknown as User);
       setCookie('user', JSON.stringify(mockUser));
       return undefined;
@@ -258,12 +279,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Sign out function
   const signOut = async () => {
+    // Check if using mock auth
     if (mockAuth) {
       setUser(null);
       deleteCookie('user');
       return;
     }
-
+    
     try {
       await supabase.auth.signOut();
       setUser(null);
@@ -273,15 +295,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Set a mock user for testing
+  // For testing purposes
   const setMockUser = () => {
-    const mockUser = {
-      id: 'mock-user-id',
-      email: 'test@example.com',
-      role: 'authenticated',
-    };
-    setUser(mockUser as unknown as User);
-    setCookie('user', JSON.stringify(mockUser));
+    if (mockAuth) {
+      const mockUser = createMockUser();
+      setUser(mockUser as unknown as User);
+      setCookie('user', JSON.stringify(mockUser));
+    }
   };
 
   return (
@@ -301,7 +321,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 };
 
-// Custom hook to use the AuthContext
+// Hook to use the auth context
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
