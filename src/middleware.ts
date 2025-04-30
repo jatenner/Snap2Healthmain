@@ -2,21 +2,17 @@ import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function middleware(req: NextRequest) {
-  // 🚨 EMERGENCY FIX: COMPLETELY DISABLE ALL AUTH CHECKS 🚨
-  // This code should be removed after testing is complete
-  // It allows unrestricted access to all pages without authentication
-  console.log("⚠️ AUTH COMPLETELY DISABLED FOR TESTING - REMOVE BEFORE PRODUCTION ⚠️");
-  return NextResponse.next();
-  
-  // TEMPORARY BYPASS: Allow bypassing authentication checks in any environment
-  // This will work in both development and production
-  if (process.env.NEXT_PUBLIC_AUTH_BYPASS === 'true') {
-    console.log("TEMP FIX: Bypassing all authentication checks");
-    return NextResponse.next();
-  }
-  
   // Create a response object that will be modified with the session
   const res = NextResponse.next();
+  
+  // Check if auth bypass is enabled
+  const authBypass = process.env.NEXT_PUBLIC_AUTH_BYPASS === 'true';
+  
+  // If auth bypass is enabled and not in production, skip auth check
+  if (authBypass && process.env.NEXT_PUBLIC_APP_ENV !== 'production') {
+    console.log('Auth bypass enabled, skipping auth check');
+    return res;
+  }
   
   // Explicitly set Supabase URL and key from environment variables
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -47,13 +43,14 @@ export async function middleware(req: NextRequest) {
     console.log(`Middleware processing route: ${pathname}, authenticated: ${!!session}`);
 
     // Check if the route should be protected
-    const isProtectedRoute = pathname.startsWith('/dashboard') || 
+    const isProtectedRoute = pathname === '/' || 
+                            pathname.startsWith('/dashboard') || 
                             pathname.startsWith('/profile') ||
                             pathname.startsWith('/meal-history') ||
                             pathname.startsWith('/upload') ||
                             pathname.startsWith('/meal-analysis');
 
-    // Auth routes that should redirect to upload page if already authenticated
+    // Auth routes that should redirect to home page if already authenticated
     const isAuthRoute = pathname === '/login' || pathname === '/signup';
     
     // If the route is protected and there's no session, redirect to login
@@ -66,11 +63,11 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(redirectUrl);
     }
     
-    // If trying to access an auth route with a valid session, redirect to upload page
+    // If trying to access an auth route with a valid session, redirect to home page
     if (isAuthRoute && session) {
-      console.log(`Auth route ${pathname} with valid session, redirecting to upload page`);
+      console.log(`Auth route ${pathname} with valid session, redirecting to home page`);
       const redirectUrl = req.nextUrl.clone();
-      redirectUrl.pathname = '/upload';
+      redirectUrl.pathname = '/';
       return NextResponse.redirect(redirectUrl);
     }
 
@@ -83,9 +80,10 @@ export async function middleware(req: NextRequest) {
   }
 }
 
-// Only run middleware on specific routes
+// Run middleware on all routes, including the root path
 export const config = {
   matcher: [
+    '/',
     '/dashboard/:path*',
     '/profile/:path*',
     '/meal-history/:path*',
