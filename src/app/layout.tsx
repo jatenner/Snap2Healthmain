@@ -5,6 +5,7 @@ import './globals.css';
 import Link from 'next/link';
 import { AuthProvider } from '@/context/auth';
 import { NavBar } from '@/components/NavBar';
+import EnvLoader from '@/components/EnvLoader';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -20,6 +21,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <EnvLoader />
+      </head>
       <body className={inter.className}>
         <AuthProvider>
           <div className="flex flex-col min-h-screen relative z-10">
