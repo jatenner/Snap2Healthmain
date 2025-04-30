@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
@@ -33,162 +34,162 @@ interface AuthContextType {
 }
 
 export default function LoginPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
-  
-  // Use a try/catch wrapper to handle server-side rendering gracefully
-  let auth: AuthContextType | undefined;
-  let isMockAuth = false;
-  
-  try {
-    auth = useAuth();
-    
-    // Check if we're in mock/test mode
-    isMockAuth = 
-      typeof window !== 'undefined' && 
-      (window.ENV?.NEXT_PUBLIC_MOCK_AUTH === 'true' || 
-       window.localStorage.getItem('MOCK_AUTH') === 'true' || 
-       process.env.NEXT_PUBLIC_MOCK_AUTH === 'true' || 
-       process.env.NEXT_PUBLIC_AUTH_BYPASS === 'true');
-  } catch (error) {
-    console.error('Auth context not available yet');
-  }
+  const [authBypass, setAuthBypass] = useState(false);
 
-  // Handle form submission
+  // Check if authentication bypass is enabled
+  useEffect(() => {
+    const bypass = process.env.NEXT_PUBLIC_AUTH_BYPASS === 'true' || 
+                  window?.ENV?.NEXT_PUBLIC_AUTH_BYPASS === 'true';
+    
+    console.log('Login page - AUTH_BYPASS:', bypass ? 'enabled' : 'disabled');
+    setAuthBypass(bypass);
+  }, []);
+
+  const handleDevLogin = () => {
+    console.log('Using development login');
+    // Store a flag in localStorage to enable mock auth
+    window.localStorage.setItem('MOCK_AUTH', 'true');
+    // Redirect to home page
+    window.location.href = '/';
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Basic form validation
+    if (!email || !password) {
+      setError('Please enter both email and password');
+      return;
+    }
+    
     setIsLoading(true);
     setError(null);
     
     try {
-      if (!auth) {
-        throw new Error('Authentication not initialized');
+      console.log('Attempting sign in with:', email);
+      
+      // Test login shortcut for demo purposes
+      if (email === 'test@example.com' && password === 'password') {
+        console.log('Using test credentials, bypassing auth');
+        window.localStorage.setItem('MOCK_AUTH', 'true');
+        router.push('/');
+        return;
       }
       
-      const result = await auth.signIn(email, password);
+      // Attempt to sign in using auth context
+      const result = await signIn(email, password);
+      
       if (result?.error) {
-        setError(result.error.message);
-      } else {
-        router.push('/');
+        throw result.error;
       }
+      
+      // Get redirect path from search params, default to home page
+      const redirectPath = searchParams.get('redirect') || '/';
+      console.log('Login successful, redirecting to:', redirectPath);
+      
+      // Use window.location for a full page refresh
+      window.location.href = redirectPath;
     } catch (err: any) {
-      setError(err.message || 'Failed to sign in');
+      console.error('Sign in error:', err);
+      setError(err.message || 'Failed to sign in. Please check your credentials.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // If auth bypass is enabled, show simplified test mode UI
-  if (isMockAuth || process.env.NEXT_PUBLIC_AUTH_BYPASS === 'true') {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-gray-900 text-white p-4">
-        <div className="w-full max-w-md space-y-8 rounded-lg bg-gray-800 p-6 shadow-md">
-          <div className="text-center">
-            <h1 className="text-3xl font-bold">Snap2Health</h1>
-            <h2 className="mt-2 text-xl font-semibold text-green-400">Test Mode</h2>
-            <p className="mt-2 text-sm text-gray-400">
-              Authentication is disabled for development
-            </p>
-          </div>
-          
-          <div className="mt-8">
-            <Link
-              href="/"
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-            >
-              Go to Home Page
-            </Link>
-            
-            <div className="mt-6 bg-gray-700 p-4 rounded-md text-sm">
-              <p className="font-semibold text-green-400">Authentication Bypassed</p>
-              <p className="mt-2 text-gray-300">
-                For local testing, authentication is automatically bypassed.
-                You can navigate freely through the application.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Regular login form
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-900 text-white p-4">
-      <div className="w-full max-w-md space-y-8 rounded-lg bg-gray-800 p-6 shadow-md">
+    <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-darkBlue-secondary">
+      <div className="w-full max-w-md p-8 space-y-8 bg-darkBlue-accent/10 backdrop-blur-sm rounded-xl border border-darkBlue-accent/30">
         <div className="text-center">
-          <h1 className="text-3xl font-bold">Snap2Health</h1>
-          <h2 className="mt-2 text-xl">Sign In</h2>
+          <h1 className="text-3xl font-bold text-cyan-accent">Snap2Health</h1>
+          <h2 className="mt-6 text-xl text-blue-100">Sign in to your account</h2>
         </div>
         
+        {authBypass && (
+          <div className="pt-2">
+            <Button
+              onClick={handleDevLogin}
+              className="w-full bg-green-600 hover:bg-green-700"
+            >
+              Development Login (No Auth)
+            </Button>
+            <p className="mt-2 text-xs text-center text-blue-100/70">
+              Auth bypass is enabled. Click above to skip authentication.
+            </p>
+          </div>
+        )}
+        
         <form className="mt-8 space-y-6" onSubmit={handleLogin}>
-          {error && (
-            <div className="bg-red-900/50 border border-red-500 text-white p-3 rounded-md text-sm">
-              {error}
-            </div>
-          )}
-          
           <div className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium mb-1">
-                Email Address
+              <label htmlFor="email" className="block text-sm font-medium text-blue-100 mb-1">
+                Email
               </label>
               <Input
                 id="email"
-                name="email"
                 type="email"
-                required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-gray-700 border-gray-600"
-                placeholder="Enter your email"
+                className="w-full bg-darkBlue-secondary/60 border-darkBlue-accent/40 text-blue-100"
+                placeholder="your@email.com"
                 disabled={isLoading}
               />
             </div>
             
             <div>
-              <label htmlFor="password" className="block text-sm font-medium mb-1">
+              <label htmlFor="password" className="block text-sm font-medium text-blue-100 mb-1">
                 Password
               </label>
               <Input
                 id="password"
-                name="password"
                 type="password"
-                required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-gray-700 border-gray-600"
-                placeholder="Enter your password"
+                className="w-full bg-darkBlue-secondary/60 border-darkBlue-accent/40 text-blue-100"
+                placeholder="••••••••"
                 disabled={isLoading}
               />
             </div>
           </div>
           
+          {error && (
+            <div className="p-3 text-sm bg-red-900/30 border border-red-800/50 text-red-200 rounded">
+              {error}
+            </div>
+          )}
+          
           <Button
             type="submit"
-            className="w-full bg-blue-600 hover:bg-blue-700"
+            className="w-full"
             disabled={isLoading}
           >
-            {isLoading ? <Spinner size="sm" className="mr-2" /> : null}
-            {isLoading ? 'Signing In...' : 'Sign In'}
+            {isLoading ? <Spinner className="mr-2" size="sm" /> : null}
+            {isLoading ? 'Signing in...' : 'Sign in'}
           </Button>
           
-          <div className="text-center text-sm">
-            <p>
-              Don't have an account?{' '}
-              <Link href="/signup" className="text-blue-400 hover:underline">
-                Sign up
+          <div className="flex items-center justify-between">
+            <div className="text-sm">
+              <Link 
+                href="/signup" 
+                className="text-cyan-accent hover:text-cyan-accent/80"
+              >
+                Create account
               </Link>
-            </p>
-            
-            {/* Test credentials for demonstration */}
-            <div className="mt-4 p-2 bg-gray-700 rounded-md">
-              <p className="font-medium">Test Account:</p>
-              <p>Email: test@example.com</p>
-              <p>Password: password123</p>
+            </div>
+            <div className="text-sm">
+              <Link 
+                href="/" 
+                className="text-cyan-accent hover:text-cyan-accent/80"
+              >
+                Back to home
+              </Link>
             </div>
           </div>
         </form>
