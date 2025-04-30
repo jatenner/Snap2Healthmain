@@ -5,14 +5,25 @@ import { Loader2, Camera, Upload } from 'lucide-react';
 import Image from 'next/image';
 import NutritionResults from './NutritionResults';
 
-type AnalysisResults = {
-  foodItems: string[];
+interface Nutrition {
   calories: number;
   protein: number;
-  carbohydrates: number;
+  carbs: number;
   fat: number;
-  nutritionalScore: number;
-  recommendations: string;
+  fiber: number;
+  sugar: number;
+}
+
+interface FoodItem {
+  name: string;
+  quantity: string;
+  nutrition: Nutrition;
+}
+
+type AnalysisResults = {
+  foods: FoodItem[];
+  totalNutrition: Nutrition;
+  healthInsights: string[];
 };
 
 export default function MealAnalyzer() {
