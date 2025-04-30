@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import type { AnalysisResult } from '@/types/types';
+import type { AnalysisResult, MealContents, MealAnalysis } from '@/types/types';
 
 /**
  * Analyzes a food image to extract nutrition information
@@ -11,7 +11,9 @@ export async function analyzeImage(imageUrl: string): Promise<AnalysisResult> {
     if (!imageUrl) {
       return {
         success: false,
-        error: 'No image URL provided'
+        error: 'No image URL provided',
+        mealContents: { proteins: '', carbs: '', vegetables: '', fats: '' },
+        mealAnalysis: { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0, nutritionScore: 0, healthRating: '', recommendations: [] }
       };
     }
 
@@ -36,7 +38,9 @@ export async function analyzeImage(imageUrl: string): Promise<AnalysisResult> {
     if (!data.success) {
       return {
         success: false,
-        error: data.error || 'Failed to analyze image'
+        error: data.error || 'Failed to analyze image',
+        mealContents: { proteins: '', carbs: '', vegetables: '', fats: '' },
+        mealAnalysis: { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0, nutritionScore: 0, healthRating: '', recommendations: [] }
       };
     }
 
@@ -50,7 +54,9 @@ export async function analyzeImage(imageUrl: string): Promise<AnalysisResult> {
     console.error('Error analyzing image:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred'
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      mealContents: { proteins: '', carbs: '', vegetables: '', fats: '' },
+      mealAnalysis: { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0, nutritionScore: 0, healthRating: '', recommendations: [] }
     };
   }
 }

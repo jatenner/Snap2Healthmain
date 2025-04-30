@@ -20,4 +20,6 @@ export interface AnalysisResult {
   success: boolean;
   mealContents: MealContents;
   mealAnalysis: MealAnalysis;
+  error?: string;
+  mealId?: string;
 } 
