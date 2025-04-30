@@ -1,235 +1,202 @@
 'use client';
 
-import React, { useState, ChangeEvent, FormEvent } from 'react';
-import Link from 'next/link';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import FoodUpload from '@/components/FoodUpload';
+import NutritionAnalysis from '@/components/NutritionAnalysis';
+import { isMobileDevice, isIOSDevice } from '@/utils/deviceDetection';
+
+// Update the mock data structure to match the NutritionData interface
+const mockNutritionData = {
+  calories: 450,
+  caption: "Balanced meal with whole grains and fresh ingredients",
+  goal: "General Wellness",
+  macroNutrients: {
+    protein: { name: "Protein", amount: 20, unit: "g", percentDailyValue: 40, benefits: "Essential for muscle repair and growth" },
+    carbohydrates: { name: "Carbohydrates", amount: 60, unit: "g", percentDailyValue: 20, benefits: "Primary source of energy" },
+    fat: { name: "Fat", amount: 15, unit: "g", percentDailyValue: 23, benefits: "Important for hormone production and nutrient absorption" },
+    fiber: { name: "Fiber", amount: 8, unit: "g", percentDailyValue: 28, benefits: "Supports digestive health and helps manage blood sugar" },
+    sugar: { name: "Sugar", amount: 12, unit: "g", percentDailyValue: 24, benefits: "Natural sugars from fruits provide quick energy" },
+    sodium: { name: "Sodium", amount: 400, unit: "mg", percentDailyValue: 17, benefits: "Essential for fluid balance and nerve/muscle function" },
+  },
+  microNutrients: {
+    "Vitamin A": { name: "Vitamin A", amount: 750, unit: "IU", percentDailyValue: 15, benefits: "Supports vision and immune function" },
+    "Vitamin C": { name: "Vitamin C", amount: 15, unit: "mg", percentDailyValue: 25, benefits: "Antioxidant that helps with iron absorption" },
+    "Vitamin D": { name: "Vitamin D", amount: 2, unit: "μg", percentDailyValue: 10, benefits: "Promotes calcium absorption and bone health" },
+    "Calcium": { name: "Calcium", amount: 120, unit: "mg", percentDailyValue: 12, benefits: "Essential for bone strength and muscle function" },
+    "Iron": { name: "Iron", amount: 1.4, unit: "mg", percentDailyValue: 8, benefits: "Helps transport oxygen throughout the body" }
+  },
+  expertAdvice: "This meal provides a good balance of macronutrients for your General Wellness goal. The moderate protein content supports muscle maintenance, while the carbohydrates provide sustainable energy. Consider adding more leafy greens to increase nutrient density."
+};
+
+const mockHealthInsights = [
+  "Great source of protein and fiber",
+  "Contains essential vitamins for immune support",
+  "Moderate sodium level, within daily recommendations",
+  "Good balance of macronutrients for sustained energy"
+];
+
+const mockConcerns = [
+  "Contains moderate sugar content",
+  "May not provide sufficient omega-3 fatty acids"
+];
+
+const mockSuggestions = [
+  "Add a source of healthy fats like avocado or olive oil",
+  "Include more leafy greens to boost vitamin K content",
+  "Consider adding a whole grain to improve fiber content and satiety"
+];
 
 export default function Home() {
-  const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [imageSrc, setImageSrc] = useState<string | null>(null);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [apiResponse, setApiResponse] = useState<any>(null);
-  const [formData, setFormData] = useState({
-    mealName: '',
-    goal: '',
-  });
-
-  const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setError(null);
-    const file = e.target.files?.[0];
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  
+  // Check device on component mount
+  useEffect(() => {
+    setIsMobile(isMobileDevice());
+    setIsIOS(isIOSDevice());
+  }, []);
+  
+  // This function is just a mock for visual demo purposes
+  // The actual FoodUpload component has its own file upload handling
+  const handleMockUpload = (file: File) => {
+    setImageUrl(URL.createObjectURL(file));
+    setIsAnalyzing(true);
     
-    if (!file) return;
-    
-    // Check file type
-    if (!file.type.startsWith('image/')) {
-      setError('Please upload an image file.');
-      return;
-    }
-    
-    // Read the file as a data URL
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setImageSrc(event.target?.result as string);
-    };
-    reader.readAsDataURL(file);
-    setImageFile(file);
-  };
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    
-    if (!imageFile) {
-      setError('Please upload an image of your meal.');
-      return;
-    }
-    
-    setIsLoading(true);
-    setError(null);
-    setApiResponse(null);
-    
-    try {
-      console.log("Starting meal analysis...");
-      console.log("Image file:", {
-        name: imageFile.name,
-        type: imageFile.type,
-        size: `${(imageFile.size / 1024).toFixed(2)} KB`,
-      });
-      
-      const formDataToSend = new FormData();
-      formDataToSend.append('image', imageFile);
-      formDataToSend.append('mealName', formData.mealName);
-      formDataToSend.append('goal', formData.goal);
-      
-      console.log("Sending data to API...", {
-        mealName: formData.mealName || '(None provided)',
-        goal: formData.goal || '(None provided)'
-      });
-      
-      const response = await fetch('/api/analyze-meal', {
-        method: 'POST',
-        body: formDataToSend,
-      });
-      
-      console.log("API response status:", response.status);
-      
-      const data = await response.json();
-      console.log("API response data:", data);
-      
-      setApiResponse(data);
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to analyze meal');
-      }
-      
-      // Check if we need to use localStorage as a fallback
-      if (data.useLocalStorage && data.mealData) {
-        console.log("Using localStorage fallback as directed by the API");
-        
-        // Store the data in localStorage for the client-side component to retrieve
-        localStorage.setItem('mealData', JSON.stringify(data.mealData));
-        console.log("Meal data saved to localStorage");
-      }
-      
-      // Explicitly log before redirect
-      console.log("Analysis successful, redirecting to results page...");
-      
-      // Add a small delay before redirect to ensure logs are visible
-      setTimeout(() => {
-        router.push('/meal-analysis');
-      }, 500);
-      
-    } catch (err) {
-      console.error('Error submitting form:', err);
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    } finally {
-      setIsLoading(false);
-    }
+    // Simulate API call delay
+    setTimeout(() => {
+      setIsAnalyzing(false);
+      setShowResults(true);
+    }, 2000);
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-4 md:p-24">
-      <div className="w-full max-w-xl bg-white rounded-lg shadow-lg p-6 md:p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold">Snap2Health</h1>
-          <p className="text-gray-600 mt-2">Take a photo of your meal and get instant nutritional analysis</p>
-        </div>
-        
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Image Upload */}
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">
-              Upload a meal photo
-            </label>
-            <div 
-              className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:bg-gray-50"
-              onClick={() => document.getElementById('mealImage')?.click()}
-            >
-              {imageSrc ? (
-                <div className="relative w-full aspect-square max-h-64 mx-auto">
-                  <Image 
-                    src={imageSrc} 
-                    alt="Meal preview" 
-                    fill
-                    className="object-contain" 
-                  />
+    <main className="min-h-screen relative z-10">
+      <div className="container mx-auto px-4 py-10">
+        {/* Header Section */}
+        <section className="flex flex-col items-center justify-center text-center py-16 md:py-24">
+          <h1 className="text-4xl md:text-6xl font-bold text-cyan-accent mb-6">
+            Snap2Health
+          </h1>
+          <p className="text-xl text-blue-100 max-w-2xl mb-12">
+            Analyze Your Food
+          </p>
+          <p className="text-lg text-blue-100/80 max-w-2xl mb-16">
+            Take a photo of your meal for nutritional analysis
+          </p>
+
+          {/* Main Upload Area */}
+          <div className="w-full max-w-3xl mx-auto">
+            {!showResults ? (
+              <div className="bg-darkBlue-secondary/60 backdrop-blur-sm border border-darkBlue-accent/40 p-8 rounded-2xl shadow-lg">
+                <div className="flex flex-col items-center justify-center">
+                  <div className="mb-8 relative">
+                    <div className="relative w-24 h-24 mb-4 mx-auto">
+                      <Image 
+                        src="/camera-icon.svg" 
+                        alt="Camera icon"
+                        fill
+                        className="object-contain invert opacity-70"
+                      />
+                    </div>
+                    <p className="text-center text-lg text-blue-100 mb-2">
+                      Click to upload or take a photo
+                    </p>
+                  </div>
+                  
+                  {/* Original FoodUpload component doesn't have these props, this is just a mock-up for visuals */}
+                  <div className="w-full max-w-md">
+                    <div className="relative border-dashed border-2 border-darkBlue-accent/40 rounded-lg p-8 text-center cursor-pointer hover:bg-darkBlue-accent/10 transition">
+                      <input 
+                        type="file" 
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleMockUpload(file);
+                        }}
+                      />
+                      <p className="text-blue-100">Drop image here or click to browse</p>
+                    </div>
+                  </div>
+                  
+                  {isMobile && (
+                    <div className="mt-6 p-4 bg-darkBlue-accent/20 border border-darkBlue-accent/30 text-blue-100 rounded-lg text-sm">
+                      <p className="flex items-center">
+                        <svg 
+                          className="w-5 h-5 mr-2 flex-shrink-0 text-cyan-accent" 
+                          fill="none" 
+                          stroke="currentColor" 
+                          viewBox="0 0 24 24" 
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        {isIOS 
+                          ? "For best results, allow camera access when prompted."
+                          : "Use your device's camera for the best experience."
+                        }
+                      </p>
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <div className="py-8">
-                  <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <p className="mt-2 text-sm text-gray-600">Click to upload a photo of your meal</p>
-                </div>
-              )}
-              <input
-                id="mealImage"
-                name="mealImage" 
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleImageChange}
-              />
-            </div>
-          </div>
-          
-          {/* Meal Name */}
-          <div>
-            <label htmlFor="mealName" className="block text-sm font-medium text-gray-700 mb-1">
-              Meal Name (optional)
-            </label>
-            <input
-              type="text"
-              id="mealName"
-              name="mealName"
-              value={formData.mealName}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              placeholder="E.g., Breakfast, Chicken Salad, etc."
-            />
-          </div>
-          
-          {/* Dietary Goal */}
-          <div>
-            <label htmlFor="goal" className="block text-sm font-medium text-gray-700 mb-1">
-              Your Dietary Goal (optional)
-            </label>
-            <select
-              id="goal"
-              name="goal"
-              value={formData.goal}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">Select a goal (optional)</option>
-              <option value="Weight Loss">Weight Loss</option>
-              <option value="Muscle Gain">Muscle Gain</option>
-              <option value="Maintenance">Maintenance</option>
-              <option value="Overall Health">Overall Health</option>
-            </select>
-          </div>
-          
-          {/* Error message */}
-          {error && (
-            <div className="text-red-500 text-sm">
-              <p className="font-bold">Error: {error}</p>
-              {apiResponse && (
-                <pre className="mt-2 bg-red-50 p-2 text-xs overflow-auto max-h-32 rounded">
-                  {JSON.stringify(apiResponse, null, 2)}
-                </pre>
-              )}
-            </div>
-          )}
-          
-          {/* Submit button */}
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
-          >
-            {isLoading ? (
-              <div className="flex items-center justify-center">
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Analyzing your meal...
               </div>
             ) : (
-              'Analyze My Meal'
+              // Results section
+              <div className="bg-darkBlue-secondary/60 backdrop-blur-sm border border-darkBlue-accent/40 p-8 rounded-2xl shadow-lg">
+                <div className="flex flex-col md:flex-row gap-6">
+                  <div className="md:w-1/3">
+                    {imageUrl && (
+                      <div className="relative h-64 w-full rounded-lg overflow-hidden">
+                        <Image 
+                          src={imageUrl} 
+                          alt="Uploaded food" 
+                          fill
+                          className="object-cover"
+                        />
+                      </div>
+                    )}
+                    <button 
+                      onClick={() => {
+                        setImageUrl(null);
+                        setShowResults(false);
+                      }}
+                      className="mt-4 w-full py-2 px-4 border border-darkBlue-accent/40 bg-darkBlue-accent/20 text-cyan-accent rounded-lg hover:bg-darkBlue-accent/40 transition"
+                    >
+                      Upload a different image
+                    </button>
+                  </div>
+                  
+                  <div className="md:w-2/3">
+                    <h2 className="text-2xl font-bold text-cyan-accent mb-4">Food Analysis Results</h2>
+                    {/* Only show the NutritionAnalysis component, remove HealthInsights */}
+                    <div className="text-blue-100">
+                      <NutritionAnalysis data={mockNutritionData} />
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
-          </button>
-        </form>
+          </div>
+          
+          {/* Health Goal Section */}
+          <div className="mt-12 w-full max-w-xl">
+            <h2 className="text-xl text-blue-100 mb-4">Health Goal</h2>
+            <input
+              type="text"
+              placeholder="Enter your specific health goal"
+              className="w-full p-4 bg-darkBlue-secondary/60 border border-darkBlue-accent/40 rounded-lg text-blue-100 placeholder-blue-100/50 focus:outline-none focus:ring-2 focus:ring-cyan-accent/50"
+            />
+            <button 
+              className="mt-6 w-full py-4 bg-cyan-accent text-darkBlue font-semibold rounded-lg hover:bg-cyan-accent/90 transition"
+            >
+              Analyze Food
+            </button>
+          </div>
+        </section>
       </div>
     </main>
   );

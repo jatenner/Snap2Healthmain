@@ -19,6 +19,11 @@ const HealthImpactItemSchema = z.object({
 const RecoveryInsightSchema = z.object({
   title: z.string(),
   description: z.string(),
+  timeframe: z.string().optional(),
+  impactRating: z.enum(['low', 'moderate', 'high']).optional(),
+  keyFindings: z.array(z.string()).optional(),
+  researchNotes: z.array(z.string()).optional(),
+  citations: z.array(z.string()).optional()
 });
 
 // Define hydration schema
@@ -39,19 +44,105 @@ const GlycemicLoadSchema = z.object({
   impact: z.string(),
 });
 
-// Define the schema for the nutrition analysis
-export const NutritionAnalysisSchema = z.object({
-  calories: z.number(),
-  macronutrients: z.array(NutrientSchema),
-  micronutrients: z.array(NutrientSchema),
-  benefits: z.array(z.string()),
-  concerns: z.array(z.string()),
-  suggestions: z.array(z.string()),
-  // New fields - all optional as they may not be available for all meals
-  recoveryInsights: z.array(RecoveryInsightSchema).optional(),
-  hydration: HydrationSchema.optional(),
-  glycemicLoad: GlycemicLoadSchema.optional(),
-});
+// Schema for validating nutrition analysis data from GPT
+export const NutritionAnalysisSchema = {
+  type: 'object',
+  properties: {
+    calories: { type: 'number' },
+    macronutrients: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          amount: { type: 'number' },
+          unit: { type: 'string' },
+          percentDailyValue: { type: 'number' },
+          description: { type: 'string' }
+        },
+        required: ['name', 'amount', 'unit']
+      }
+    },
+    micronutrients: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          amount: { type: 'number' },
+          unit: { type: 'string' },
+          percentDailyValue: { type: 'number' },
+          description: { type: 'string' }
+        },
+        required: ['name', 'amount', 'unit']
+      }
+    },
+    benefits: {
+      type: 'array',
+      items: { type: 'string' }
+    },
+    concerns: {
+      type: 'array',
+      items: { type: 'string' }
+    },
+    suggestions: {
+      type: 'array',
+      items: { type: 'string' }
+    },
+    recoveryInsights: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          title: { type: 'string' },
+          description: { type: 'string' },
+          timeframe: { type: 'string' },
+          impactRating: { type: 'string', enum: ['low', 'moderate', 'high'] },
+          keyFindings: { 
+            type: 'array',
+            items: { type: 'string' }
+          },
+          researchNotes: { 
+            type: 'array',
+            items: { type: 'string' }
+          },
+          citations: { 
+            type: 'array',
+            items: { type: 'string' }
+          }
+        },
+        required: ['title', 'description']
+      }
+    },
+    hydration: {
+      type: 'object',
+      properties: {
+        level: { type: 'number' },
+        waterContent: { type: 'number' },
+        unit: { type: 'string' },
+        tips: {
+          type: 'array',
+          items: { type: 'string' }
+        }
+      }
+    },
+    glycemicLoad: {
+      type: 'object',
+      properties: {
+        value: { type: 'number' },
+        index: { type: 'number' },
+        carbs: { type: 'number' },
+        unit: { type: 'string' },
+        foodTypes: {
+          type: 'array',
+          items: { type: 'string' }
+        },
+        impact: { type: 'string' }
+      }
+    }
+  },
+  required: ['calories', 'macronutrients', 'benefits', 'concerns', 'suggestions']
+};
 
 // Export the type for use in TypeScript
 export type NutritionAnalysis = z.infer<typeof NutritionAnalysisSchema>;
@@ -62,3 +153,106 @@ export type HealthImpactItem = z.infer<typeof HealthImpactItemSchema>;
 export type RecoveryInsight = z.infer<typeof RecoveryInsightSchema>;
 export type Hydration = z.infer<typeof HydrationSchema>;
 export type GlycemicLoad = z.infer<typeof GlycemicLoadSchema>;
+
+// Define TypeScript interfaces for the nutrition analysis
+
+export interface Nutrient {
+  name: string;
+  amount: number;
+  unit: string;
+  percentDailyValue?: number;
+  description?: string;
+}
+
+export interface RecoveryInsight {
+  title: string;
+  description: string;
+  timeframe?: string;
+  impactRating?: 'low' | 'moderate' | 'high';
+  keyFindings?: string[];
+  researchNotes?: string[];
+  citations?: string[];
+}
+
+export interface Hydration {
+  level: number;
+  waterContent: number;
+  unit: string;
+  tips: string[];
+}
+
+export interface GlycemicLoad {
+  value: number;
+  index?: number;
+  carbs: number;
+  unit: string;
+  foodTypes: string[];
+  impact: string;
+}
+
+export interface NutritionAnalysis {
+  calories: number;
+  macronutrients: Nutrient[];
+  micronutrients?: Nutrient[];
+  benefits: string[];
+  concerns: string[];
+  suggestions: string[];
+  recoveryInsights?: RecoveryInsight[];
+  hydration?: Hydration;
+  glycemicLoad?: GlycemicLoad;
+}
+
+// Simple validation function to ensure required fields exist
+export function validateNutritionAnalysis(data: any): { valid: boolean; errors?: string[] } {
+  const errors: string[] = [];
+  
+  // Check required fields
+  if (typeof data !== 'object' || data === null) {
+    return { valid: false, errors: ['Data must be an object'] };
+  }
+  
+  if (typeof data.calories !== 'number') {
+    errors.push('Calories must be a number');
+  }
+  
+  if (!Array.isArray(data.macronutrients)) {
+    errors.push('Macronutrients must be an array');
+  } else {
+    // Check each macronutrient
+    data.macronutrients.forEach((nutrient: any, index: number) => {
+      if (typeof nutrient !== 'object' || nutrient === null) {
+        errors.push(`Macronutrient at index ${index} must be an object`);
+        return;
+      }
+      
+      if (typeof nutrient.name !== 'string') {
+        errors.push(`Macronutrient at index ${index} must have a name string`);
+      }
+      
+      if (typeof nutrient.amount !== 'number') {
+        errors.push(`Macronutrient at index ${index} must have an amount number`);
+      }
+      
+      if (typeof nutrient.unit !== 'string') {
+        errors.push(`Macronutrient at index ${index} must have a unit string`);
+      }
+    });
+  }
+  
+  if (!Array.isArray(data.benefits)) {
+    errors.push('Benefits must be an array');
+  }
+  
+  if (!Array.isArray(data.concerns)) {
+    errors.push('Concerns must be an array');
+  }
+  
+  if (!Array.isArray(data.suggestions)) {
+    errors.push('Suggestions must be an array');
+  }
+  
+  return {
+    valid: errors.length === 0,
+    errors: errors.length > 0 ? errors : undefined
+  };
+}

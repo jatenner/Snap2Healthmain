@@ -1,146 +1,87 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '../../context/AuthContext';
-import { formatMealDate, formatMealTime } from '../../utils/formatMealTime';
-import { getLocalMeals, shouldUseLocalStorage } from '../../utils/localStorageMeals';
-import LoadingSpinner from '../../components/LoadingSpinner';
-
-// Define the meal type
-interface Meal {
-  id: string;
-  user_id: string;
-  goal: string;
-  image_url: string;
-  caption: string;
-  created_at: string;
-  analysis: string;
-}
+import { fetchMealHistory, MealHistoryEntry, deleteMealFromHistory } from '@/lib/meal-data';
+import { formatMealDate, formatMealTime } from '@/utils/formatMealTime';
 
 export default function MealHistoryPage() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [meals, setMeals] = useState<any[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [localMealsMode, setLocalMealsMode] = useState(false);
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [meals, setMeals] = useState<MealHistoryEntry[]>([]);
+  const [deletingMealId, setDeletingMealId] = useState<string | null>(null);
 
-  // Add delete handler and loading state for delete operations
-  const [isDeleting, setIsDeleting] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-
-  const { user } = useAuth();
-
+  // Fetch meal history on component mount
   useEffect(() => {
-    async function fetchMeals() {
+    const getMealHistory = async () => {
       try {
-        setIsLoading(true);
-        
-        // Check if we should use localStorage (auth bypass mode)
-        if (shouldUseLocalStorage()) {
-          // Get meals from localStorage
-          const localMeals = getLocalMeals();
-          setMeals(localMeals);
-          setLocalMealsMode(true);
-          setIsLoading(false);
-          return;
-        }
-        
-        // Normal mode - fetch from API
-        if (!user) {
-          setIsLoading(false);
-          return;
-        }
-        
-        const response = await fetch('/api/meals');
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch meal history');
-        }
-        
-        const data = await response.json();
-        setMeals(data.meals || []);
-      } catch (error: any) {
-        console.error('Error fetching meals:', error);
-        setError(error.message || 'Failed to load meal history');
-      } finally {
-        setIsLoading(false);
+        setLoading(true);
+        const history = await fetchMealHistory();
+        setMeals(history);
+        setLoading(false);
+      } catch (err) {
+        console.error('Error fetching meal history:', err);
+        setError('Failed to load meal history. Please try again later.');
+        setLoading(false);
       }
-    }
-    
-    fetchMeals();
-  }, [user]);
+    };
+
+    getMealHistory();
+  }, []);
 
   // Group meals by date
-  const groupedMeals = meals.reduce((groups, meal) => {
-    const date = formatMealDate(meal.created_at);
+  const groupedMeals = meals.reduce<Record<string, MealHistoryEntry[]>>((groups, meal) => {
+    const date = formatMealDate(meal.createdAt);
     if (!groups[date]) {
       groups[date] = [];
     }
     groups[date].push(meal);
     return groups;
-  }, {} as Record<string, Meal[]>);
+  }, {});
 
-  // Sort dates in reverse chronological order
-  const sortedDates = Object.keys(groupedMeals).sort((a, b) => {
-    // Put "Today" and "Yesterday" at the top
-    if (a === 'Today') return -1;
-    if (b === 'Today') return 1;
-    if (a === 'Yesterday') return -1;
-    if (b === 'Yesterday') return 1;
-    
-    // Sort other dates in reverse chronological order
-    const dateA = new Date(a);
-    const dateB = new Date(b);
-    return dateB.getTime() - dateA.getTime();
-  });
-
-  // Function to handle meal deletion
-  const handleDeleteMeal = async (mealId: string, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    if (!confirm('Are you sure you want to delete this meal record?')) {
-      return;
-    }
-    
-    try {
-      setIsDeleting(mealId);
-      
-      const response = await fetch(`/api/meal/delete?id=${mealId}`, {
-        method: 'DELETE',
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to delete meal');
+  // Handle deleting a meal
+  const handleDelete = async (mealId: string) => {
+    if (window.confirm('Are you sure you want to delete this meal analysis?')) {
+      try {
+        setDeletingMealId(mealId);
+        const result = await deleteMealFromHistory(mealId);
+        
+        if (result.success) {
+          // Remove the meal from the state
+          setMeals(meals.filter(meal => meal.id !== mealId));
+        } else {
+          alert('Failed to delete meal. Please try again.');
+        }
+      } catch (err) {
+        console.error('Error deleting meal:', err);
+        alert('Error deleting meal. Please try again.');
+      } finally {
+        setDeletingMealId(null);
       }
-      
-      // Remove the meal from the state upon successful deletion
-      setMeals(prevMeals => prevMeals.filter(meal => meal.id !== mealId));
-    } catch (err: any) {
-      console.error('Error deleting meal:', err);
-      setDeleteError(err.message);
-      
-      // Show error message to user
-      alert(`Failed to delete meal: ${err.message}`);
-    } finally {
-      setIsDeleting(null);
     }
   };
 
-  const handleMealClick = (mealId: string) => {
-    router.push(`/meal-analysis?id=${mealId}`);
+  // View meal details
+  const viewMealDetails = (meal: MealHistoryEntry) => {
+    // Convert the meal entry to URL parameters
+    const params = new URLSearchParams();
+    params.append('imageUrl', meal.imageUrl);
+    params.append('mealName', meal.mealName);
+    if (meal.goal) params.append('goal', meal.goal);
+    
+    // Navigate to the analysis page with parameters
+    router.push(`/meal-analysis?${params.toString()}`);
   };
 
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold mb-6">Meal History</h1>
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-pulse text-gray-500">Loading meal history...</div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold text-gray-700">Loading meal history...</h2>
         </div>
       </div>
     );
@@ -148,150 +89,120 @@ export default function MealHistoryPage() {
 
   if (error) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold mb-6">Meal History</h1>
-        <div className="bg-red-50 border border-red-200 rounded-md p-4 text-red-600">
-          <p>{error}</p>
-          <Link href="/upload" className="mt-4 inline-block text-indigo-600 hover:underline">
-            Add a new meal
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user && !shouldUseLocalStorage()) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold mb-6">Meal History</h1>
-        <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-md">
-          <p className="text-yellow-700">Please log in to view your meal history.</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (meals.length === 0) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold mb-6">Meal History</h1>
-        <div className="bg-gray-50 border border-gray-200 p-4 rounded-md text-center">
-          <p className="text-gray-700 mb-4">You haven't analyzed any meals yet.</p>
-          <button
-            onClick={() => router.push('/upload')}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700"
-          >
-            Analyze Your First Meal
-          </button>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full">
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-semibold text-gray-700 mb-2">{error}</h2>
+            <Link 
+              href="/"
+              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 inline-block"
+            >
+              Back to Home
+            </Link>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-6">Meal History</h1>
-      
-      {localMealsMode && (
-        <div className="bg-blue-100 p-4 mb-6 rounded-md">
-          <p className="text-blue-800">
-            <strong>Development Mode:</strong> Meals are stored temporarily in your browser and will be lost if you clear your browser data.
-          </p>
-        </div>
-      )}
-
-      {isLoading ? (
-        <div className="flex justify-center my-8">
-          <LoadingSpinner />
-        </div>
-      ) : error ? (
-        <div className="bg-red-100 p-4 rounded-md">
-          <p className="text-red-800">{error}</p>
-        </div>
-      ) : meals.length === 0 ? (
-        <div className="text-center my-12">
-          <h2 className="text-xl font-semibold mb-4">No Meals Found</h2>
-          <p className="mb-8">You haven't recorded any meals yet. Start by uploading a meal photo!</p>
-          <Link href="/upload">
-            <button className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Upload Your First Meal</button>
-          </Link>
-        </div>
-      ) : (
-        <div className="container mx-auto px-4 py-8">
-          {sortedDates.map(date => (
-            <div key={date} className="mb-8">
-              <h2 className="text-xl font-semibold mb-4 text-gray-800">{date}</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {groupedMeals[date].map(meal => {
-                  // Parse analysis for display
-                  let parsedAnalysis;
-                  try {
-                    parsedAnalysis = JSON.parse(meal.analysis);
-                  } catch (e) {
-                    parsedAnalysis = { 
-                      caption: meal.caption,
-                      analysis: { calories: 0 } 
-                    };
-                  }
-                  
-                  const analysis = parsedAnalysis.analysis || {};
-                  
-                  return (
-                    <div 
-                      key={meal.id} 
-                      className="group relative rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-all"
-                    >
-                      <Link href={`/meal/${meal.id}`}>
-                        <div className="aspect-square relative">
-                          <Image
-                            src={meal.image_url || '/placeholder-meal.jpg'}
-                            alt={meal.caption || 'Meal photo'}
-                            fill
-                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                            className="object-cover"
-                          />
-                          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3">
-                            <p className="text-white font-medium truncate">{meal.caption || 'Meal photo'}</p>
-                            <p className="text-white/80 text-sm">{formatMealTime(meal.created_at)}</p>
-                          </div>
-                          
-                          {/* Delete button */}
-                          <button
-                            onClick={(e) => handleDeleteMeal(meal.id, e)}
-                            disabled={!!isDeleting}
-                            className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
-                            aria-label="Delete meal"
-                          >
-                            {isDeleting === meal.id ? (
-                              <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                              </svg>
-                            ) : (
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            )}
-                          </button>
-                        </div>
-                      </Link>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-          
-          <div className="mt-8 text-center">
-            <button
-              onClick={() => router.push('/upload')}
-              className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700"
+    <main className="min-h-screen bg-gray-50 py-10">
+      <div className="container mx-auto px-4">
+        {/* Header */}
+        <header className="mb-10">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold text-green-600">Meal History</h1>
+            <Link 
+              href="/"
+              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
             >
               Analyze New Meal
-            </button>
+            </Link>
           </div>
+          <p className="text-gray-600">View and manage your previous meal analyses</p>
+        </header>
+        
+        {/* Main content */}
+        <div className="max-w-4xl mx-auto">
+          {Object.keys(groupedMeals).length === 0 ? (
+            <div className="bg-white p-8 rounded-lg shadow-md text-center">
+              <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              <h2 className="text-xl font-semibold text-gray-700 mb-2">No meal history found</h2>
+              <p className="text-gray-500 mb-6">Start by uploading and analyzing your first meal</p>
+              <Link 
+                href="/"
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                Analyze Your First Meal
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {Object.entries(groupedMeals).map(([date, dateMeals]) => (
+                <div key={date} className="bg-white rounded-lg shadow-md overflow-hidden">
+                  <div className="bg-gray-100 px-6 py-3 border-b">
+                    <h3 className="text-lg font-medium text-gray-800">{date}</h3>
+                  </div>
+                  <div className="divide-y">
+                    {dateMeals.map(meal => (
+                      <div key={meal.id} className="p-4 hover:bg-gray-50 transition-colors">
+                        <div className="flex flex-col sm:flex-row gap-4">
+                          {/* Meal image */}
+                          <div className="sm:w-24 sm:h-24 relative rounded-md overflow-hidden">
+                            <Image 
+                              src={meal.imageUrl} 
+                              alt={meal.mealName || "Food"} 
+                              width={96}
+                              height={96}
+                              style={{ objectFit: 'cover' }}
+                              className="w-full h-full"
+                            />
+                          </div>
+                          
+                          {/* Meal details */}
+                          <div className="flex-1">
+                            <div className="flex justify-between">
+                              <h4 className="text-lg font-medium text-gray-800">{meal.mealName || "Meal Analysis"}</h4>
+                              <span className="text-sm text-gray-500">{formatMealTime(meal.createdAt)}</span>
+                            </div>
+                            {meal.goal && (
+                              <span className="inline-block bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs font-medium mt-1">
+                                {meal.goal}
+                              </span>
+                            )}
+                            <div className="mt-2 flex space-x-3">
+                              <button
+                                onClick={() => viewMealDetails(meal)}
+                                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                              >
+                                View Details
+                              </button>
+                              <button
+                                onClick={() => handleDelete(String(meal.id))}
+                                className="text-red-600 hover:text-red-800 text-sm font-medium"
+                                disabled={deletingMealId === meal.id}
+                              >
+                                {deletingMealId === meal.id ? "Deleting..." : "Delete"}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      )}
-    </div>
+      </div>
+    </main>
   );
 } 

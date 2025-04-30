@@ -5,7 +5,7 @@ export default function MealAnalysisLoading() {
   return (
     <div className="container mx-auto px-4 py-8 max-w-2xl">
       <div className="flex flex-col items-center py-12">
-        <LoadingSpinner size="large" className="mb-6" />
+        <LoadingSpinner size="lg" className="mb-6" />
         <h2 className="text-xl font-medium text-gray-700 mb-2">Analyzing your meal...</h2>
         <p className="text-gray-500 text-center max-w-md">
           Our AI is working to identify ingredients and calculate nutritional information.

@@ -53,5 +53,11 @@ supabase/.temp/
 *.node
 node_modules/supabase/bin/
 node_modules/**/*.bin
-node_modules/
-.vercel
+
+# Public uploads (local dev)
+public/uploads/*
+!public/uploads/.gitkeep
+
+# Exclude some environment files but allow example
+.env.development
+.env.production

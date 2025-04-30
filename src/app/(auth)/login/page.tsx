@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { useAuth } from '../../../context/AuthContext';
+import { useAuth } from '@/context/auth';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -97,9 +97,11 @@ export default function LoginPage() {
         return;
       }
       
-      // Wait for the sign-in to complete and get the user
-      const user = await signIn(email, password);
-      console.log('Sign in completed, user:', user?.email);
+      // Attempt to sign in - this will update the auth context if successful
+      // or throw an error if authentication fails
+      await signIn(email, password);
+      
+      console.log('Sign in completed successfully');
       
       // Get redirect path from URL params or default to upload page
       const redirectPath = searchParams.get('redirect') || '/upload';

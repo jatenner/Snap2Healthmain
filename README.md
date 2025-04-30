@@ -1,131 +1,122 @@
 # Snap2Health
 
-> A Next.js app that lets users snap a meal photo (or type a description) and instantly receive a research‑backed nutritional breakdown plus goal‑specific suggestions powered by GPT-4o.
+AI-powered nutrition analysis and meal tracking application.
 
-## Features
+## Overview
 
-- 📸 Upload food images or enter text descriptions
-- 🧠 GPT-4o Vision analysis for accurate food recognition
-- 🥦 Comprehensive nutrition breakdown (macros, micros, vitamins)
-- 🔬 Personalized health insights based on user goals
-- 🔒 User authentication via Supabase
-- 📱 Responsive design for all devices
+Snap2Health allows users to upload images of their meals and receive detailed nutritional analysis, personalized health insights, and recommendations based on their health goals and profile.
 
-## Tech stack
+## Key Features
 
-| Layer | Choice | Notes |
-|-------|--------|-------|
-|Frontend|Next.js 13 **/app** router| TypeScript, React Server Components, Tailwind + shadcn/ui |
-|Auth & DB|Supabase| Row‑level security; `meals`, `users`, `goals` tables |
-|AI|OpenAI GPT‑4o | Vision + Text; streamed JSON responses |
-|Deployment|Vercel| Serverless edge functions (route handlers) |
+- **AI-Powered Image Analysis**: Upload meal photos for instant nutritional breakdown
+- **Detailed Nutrition Information**: View comprehensive macro and micronutrient data
+- **Health Goal Personalization**: Get recommendations based on your specific health objectives
+- **Meal History**: Save and review past meal analyses
+- **User Profiles**: Enter height, weight, and other details for personalized insights
 
-## Getting Started
+## Requirements
 
-### Prerequisites
+- Node.js 16+
+- Supabase account (for authentication and storage)
+- OpenAI API key (for image analysis)
 
-- Node.js 18+
-- npm or pnpm
-- Supabase CLI (for database migrations)
-- OpenAI API key
+## Setup Instructions
 
-### Installation
+### 1. Environment Setup
 
-1. Clone the repository:
+Create a `.env.local` file in the root directory with the following:
 
-```bash
-git clone https://github.com/yourusername/snap2health.git
-cd snap2health
+```
+SUPABASE_URL=your_supabase_url
+SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_MODEL_GPT_VISION=gpt-4o
+OPENAI_MODEL_GPT_TEXT=gpt-4o
+
+NEXT_PUBLIC_APP_ENV=production
+NEXT_PUBLIC_AUTH_BYPASS=false
 ```
 
-2. Install dependencies:
+### 2. Supabase Setup
+
+1. Create a Supabase project
+2. Set up authentication (Email authentication)
+3. Create database tables:
+   - Execute the following SQL to create required tables:
+
+```sql
+CREATE TABLE IF NOT EXISTS public.meals (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES auth.users(id),
+  goal TEXT,
+  image_url TEXT,
+  caption TEXT,
+  analysis JSONB,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Enable row level security
+ALTER TABLE public.meals ENABLE ROW LEVEL SECURITY;
+
+-- Create access policies
+CREATE POLICY "Users can view their own meals"
+  ON public.meals
+  FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own meals"
+  ON public.meals
+  FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+```
+
+4. Create a storage bucket:
+   - Name: `meal-images`
+   - Make it public
+   - Set size limits as needed
+
+### 3. Install Dependencies
 
 ```bash
 npm install
-# or
-pnpm install
 ```
 
-3. Set up environment variables:
-
-```bash
-cp .env.example .env.local
-```
-
-4. Edit `.env.local` and add your API keys:
-
-```bash
-NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=xxxxx
-OPENAI_API_KEY=xxxxx
-OPENAI_MODEL_GPT_VISION=gpt-4o
-OPENAI_MODEL_GPT_TEXT=gpt-4o
-```
-
-5. Start the development server:
+### 4. Development Server
 
 ```bash
 npm run dev
-# or
-pnpm dev
 ```
 
-6. Open [http://localhost:3000](http://localhost:3000) in your browser.
+### 5. Production Deployment
 
-### Database Setup
-
-1. Start your local Supabase instance:
+#### Build and Start Locally
 
 ```bash
-supabase start
+npm run prod-deploy
 ```
 
-2. Apply migrations:
+#### Deploy to Vercel
 
-```bash
-supabase db push
-```
+1. Push your code to a GitHub repository
+2. Connect the repository to Vercel
+3. Configure environment variables in the Vercel dashboard
+4. Deploy
 
 ## Project Structure
 
-```
-snap2health/
-├─ .vscode/
-├─ .env.example
-├─ README.md
-├─ supabase/
-│  ├─ migrations/
-│  └─ seed/
-├─ src/
-│  ├─ app/
-│  │  ├─ (auth)/login/page.tsx
-│  │  ├─ upload/page.tsx
-│  │  └─ meal-analysis/page.tsx
-│  ├─ components/
-│  │  ├─ NutrientCard.tsx
-│  │  ├─ NutrientGroup.tsx
-│  │  └─ HealthImpact.tsx
-│  ├─ lib/
-│  │  ├─ supabaseClient.ts
-│  │  ├─ gpt/
-│  │  │  ├─ visionPrompt.ts
-│  │  │  ├─ nutritionPrompt.ts
-│  │  │  └─ validator.ts
-│  │  └─ utils.ts
-│  └─ api/
-│     ├─ analyze/route.ts
-│     └─ auth/[...supabase].ts
-└─ package.json
-```
+- `app/` - Next.js app router-based components
+- `src/components/` - Primary React components
+- `lib/` - Utility functions and API clients
+- `public/` - Static assets
 
-## Contributing
+## Implementation Notes
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
----
-
-Made with ☕ + 🌴 in 2025. 
+- The application uses Imperial units (inches/pounds) for height/weight in user profiles
+- BMI calculations have been updated to work with these units
+- Authentication is required in production (AUTH_BYPASS=false)
+- OpenAI API integration analyzes food images and provides nutritional data 

@@ -1,28 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Get environment variables
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+// Initialize the Supabase client
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
 
-// Check environment variables and provide helpful error messages
-if (!supabaseUrl) {
-  throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL environment variable');
-}
-
-if (!supabaseAnonKey) {
-  throw new Error('Missing NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable');
-}
-
-// Create the Supabase client with persistence configuration
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-    flowType: 'pkce'
-  }
-});
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 /**
  * Verifies that essential database tables exist
@@ -30,27 +12,27 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
  */
 export const verifyDatabaseTables = async () => {
   const results = {
-    meals: { exists: false, message: '' }
+    meal_history: { exists: false, message: '' }
   };
 
   try {
-    // Check meals table
+    // Check meal_history table
     const { error: mealsError } = await supabase
-      .from('meals')
+      .from('meal_history')
       .select('id')
       .limit(1);
 
     if (mealsError) {
       if (mealsError.message.includes('does not exist')) {
-        results.meals.exists = false;
-        results.meals.message = 'Table does not exist. You need to create it in the Supabase dashboard.';
+        results.meal_history.exists = false;
+        results.meal_history.message = 'Table does not exist. Please run the migration files in your Supabase project.';
       } else {
-        results.meals.exists = false;
-        results.meals.message = `Error checking table: ${mealsError.message}`;
+        results.meal_history.exists = false;
+        results.meal_history.message = `Error checking table: ${mealsError.message}`;
       }
     } else {
-      results.meals.exists = true;
-      results.meals.message = 'Table exists';
+      results.meal_history.exists = true;
+      results.meal_history.message = 'Table exists';
     }
   } catch (err) {
     console.error('Error verifying database tables:', err);
@@ -72,49 +54,49 @@ export const verifyStorageBuckets = async () => {
       return;
     }
     
-    const mealImagesBucket = buckets.find(bucket => bucket.name === 'meal-images');
+    const mealImagesBucket = buckets?.find(bucket => bucket.name === 'meal-images');
     
     if (!mealImagesBucket) {
       console.log('Creating meal-images bucket...');
       // Create bucket if it doesn't exist
       const { error: createError } = await supabase.storage.createBucket('meal-images', {
         public: true, // Make bucket public
+        fileSizeLimit: 10485760, // 10MB max file size
       });
       
       if (createError) {
         console.error('Error creating meal-images bucket:', createError);
       } else {
         console.log('meal-images bucket created successfully');
+        
+        // Add public access policy
+        const { error: policyError } = await supabase.storage
+          .from('meal-images')
+          .createSignedUrl('dummy.jpg', 60);
+          
+        if (policyError && !policyError.message.includes('not found')) {
+          console.error('Error setting bucket policy:', policyError);
+        }
       }
     } else {
       console.log('meal-images bucket exists');
-      
-      // Ensure the bucket is public
-      if (!mealImagesBucket.public) {
-        console.log('Updating meal-images bucket to be public...');
-        const { error: updateError } = await supabase.storage.updateBucket('meal-images', {
-          public: true,
-        });
-        
-        if (updateError) {
-          console.error('Error updating meal-images bucket:', updateError);
-        } else {
-          console.log('meal-images bucket updated to be public');
-        }
-      }
     }
   } catch (err) {
     console.error('Error verifying storage buckets:', err);
   }
 };
 
-// Update development check to include bucket verification
-if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
+// Skip verification in auth bypass mode or SSR
+const shouldRunVerification = typeof window !== 'undefined' && 
+  process.env.NODE_ENV === 'development' && 
+  process.env.NEXT_PUBLIC_AUTH_BYPASS !== 'true';
+
+if (shouldRunVerification) {
   setTimeout(async () => {
+    console.log('✅ Running database verification...');
+    
     const tableStatus = await verifyDatabaseTables();
-    if (process.env.NODE_ENV === 'development') {
-      console.log('Database table status:', tableStatus);
-    }
+    console.log('Database table status:', tableStatus);
     
     // Also verify storage buckets
     await verifyStorageBuckets();

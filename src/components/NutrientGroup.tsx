@@ -3,6 +3,7 @@ import React from 'react';
 interface Nutrient {
   name: string;
   amount: string | number;
+  unit?: string;
 }
 
 interface NutrientGroupProps {
@@ -22,7 +23,12 @@ export default function NutrientGroup({ title, nutrients }: NutrientGroupProps) 
         {nutrients.map((nutrient, index) => (
           <div key={index} className="flex justify-between items-center py-2 border-b">
             <span className="font-medium">{nutrient.name}</span>
-            <span>{nutrient.amount}</span>
+            <span>
+              {typeof nutrient.amount === 'number' 
+                ? nutrient.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })
+                : nutrient.amount}
+              {nutrient.unit && ` ${nutrient.unit}`}
+            </span>
           </div>
         ))}
       </div>

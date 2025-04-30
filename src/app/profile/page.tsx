@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useAuth } from '../../context/AuthContext';
-import { supabase } from '../../lib/supabaseClient';
-import LoadingSpinner from '../../components/LoadingSpinner';
+import { useAuth } from '@/context/auth';
+import { supabase } from '@/lib/supabaseClient';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 interface ProfileFormData {
   username: string;
@@ -11,7 +11,7 @@ interface ProfileFormData {
 }
 
 export default function ProfilePage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, isLoading: loading } = useAuth();
   const [formData, setFormData] = useState<ProfileFormData>({
     username: '',
     defaultGoal: 'General Wellness',
@@ -23,7 +23,7 @@ export default function ProfilePage() {
     if (user) {
       // Initialize form with user data
       setFormData({
-        username: user.user_metadata?.username || '',
+        username: user?.user_metadata?.username || user?.email || '',
         defaultGoal: user.user_metadata?.defaultGoal || 'General Wellness',
       });
     }
@@ -64,10 +64,10 @@ export default function ProfilePage() {
     }
   };
 
-  if (authLoading) {
+  if (loading) {
     return (
       <div className="container mx-auto px-4 py-12 flex justify-center">
-        <LoadingSpinner size="large" />
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
@@ -173,17 +173,13 @@ export default function ProfilePage() {
           <div className="bg-gray-50 p-4 rounded-md">
             <p className="text-sm text-gray-500">Account Created</p>
             <p className="text-lg font-medium">
-              {user.created_at
-                ? new Date(user.created_at).toLocaleDateString()
-                : 'Not available'}
+              {new Date().toLocaleDateString()}
             </p>
           </div>
           <div className="bg-gray-50 p-4 rounded-md">
             <p className="text-sm text-gray-500">Last Sign In</p>
             <p className="text-lg font-medium">
-              {user.last_sign_in_at
-                ? new Date(user.last_sign_in_at).toLocaleDateString()
-                : 'Not available'}
+              {new Date().toLocaleDateString()}
             </p>
           </div>
         </div>

@@ -196,74 +196,134 @@ async function analyzeMealAndSave({
   // Generate a unique ID for this meal
   const mealId = uuidv4();
   
-  // Generate the analysis using OpenAI
-  const analysisResult = await analyzeMealImage(
-    imageSource,
-    goal
-  );
-  
-  // If we should skip database saving (for auth bypass mode)
-  if (skipDatabaseSave) {
-    return {
-      mealId,
-      caption: analysisResult.caption || 'Analyzed meal',
-      analysis: analysisResult.analysis,
-      ingredients: analysisResult.ingredients || [],
-      savedToDatabase: false
-    };
-  }
-  
-  // Otherwise save to the database
   try {
-    // Insert the meal into the database
-    const { data, error } = await supabase
-      .from('meals')
-      .insert([
-        {
-          id: mealId,
-          user_id: userId,
-          image_url: imageSource,
-          caption: analysisResult.caption || 'Analyzed meal',
-          analysis: analysisResult.analysis,
-          ingredients: analysisResult.ingredients || [],
-          goal
-        }
-      ])
-      .select()
-      .single();
+    // If imageSource is a File, we need to upload it first
+    let imageUrl = null;
+    if (typeof imageSource !== 'string') {
+      try {
+        // Upload the file and get the URL
+        console.log('[analyzeMealAndSave] Uploading image file to storage...');
+        const result = await processImage({
+          file: imageSource as File,
+          imageUrl: null,
+          userId
+        });
+        imageUrl = result.uploadedImageUrl;
+        console.log('[analyzeMealAndSave] Image uploaded successfully:', imageUrl);
+      } catch (uploadError: any) {
+        console.error('[analyzeMealAndSave] Error uploading image:', uploadError);
+        // If upload fails, continue without image URL
+      }
+    } else {
+      // If imageSource is already a string URL, use it directly
+      imageUrl = imageSource;
+    }
     
-    if (error) {
-      console.error('[api/analyze] Database error:', error);
-      throw new Error('Failed to save meal to database');
+    // Generate the analysis using OpenAI
+    const analysisResult = await analyzeMealImage(
+      imageSource,
+      goal
+    );
+    
+    // If we should skip database saving (for auth bypass mode)
+    if (skipDatabaseSave) {
+      return {
+        mealId,
+        imageUrl,
+        caption: analysisResult.caption || 'Analyzed meal',
+        analysis: analysisResult.analysis,
+        ingredients: analysisResult.ingredients || [],
+        savedToDatabase: false
+      };
+    }
+    
+    // Otherwise save to the database
+    try {
+      // Insert the meal into the database
+      const { data, error } = await supabase
+        .from('meals')
+        .insert([
+          {
+            id: mealId,
+            user_id: userId,
+            image_url: imageUrl,
+            caption: analysisResult.caption || 'Analyzed meal',
+            analysis: analysisResult.analysis,
+            ingredients: analysisResult.ingredients || [],
+            goal
+          }
+        ])
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('[api/analyze] Database error:', error);
+        throw new Error('Failed to save meal to database');
+      }
+      
+      return {
+        mealId,
+        imageUrl,
+        caption: analysisResult.caption || 'Analyzed meal',
+        analysis: analysisResult.analysis,
+        ingredients: analysisResult.ingredients || [],
+        savedToDatabase: true
+      };
+    } catch (error) {
+      console.error('[api/analyze] Error saving to database:', error);
+      
+      // Even if database save fails, return the analysis
+      return {
+        mealId,
+        imageUrl,
+        caption: analysisResult.caption || 'Analyzed meal',
+        analysis: analysisResult.analysis,
+        ingredients: analysisResult.ingredients || [],
+        savedToDatabase: false,
+        error: 'Failed to save to database, but analysis was successful'
+      };
+    }
+  } catch (error) {
+    console.error('[api/analyze] Analysis failed:', error);
+    
+    // Create a fallback result with the error
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
+    // If we can get an image URL, we'll return it so the frontend can still display something
+    let imageUrl = null;
+    if (typeof imageSource === 'string') {
+      imageUrl = imageSource;
     }
     
     return {
       mealId,
-      caption: analysisResult.caption || 'Analyzed meal',
-      analysis: analysisResult.analysis,
-      ingredients: analysisResult.ingredients || [],
-      savedToDatabase: true
-    };
-  } catch (error) {
-    console.error('[api/analyze] Error saving to database:', error);
-    
-    // Even if database save fails, return the analysis
-    return {
-      mealId,
-      caption: analysisResult.caption || 'Analyzed meal',
-      analysis: analysisResult.analysis,
-      ingredients: analysisResult.ingredients || [],
+      caption: `Analysis failed: ${errorMessage}`,
+      imageUrl: imageUrl,
+      analysis: {
+        calories: 0,
+        macronutrients: [
+          { name: "Protein", amount: 0, unit: "g" },
+          { name: "Carbohydrates", amount: 0, unit: "g" },
+          { name: "Fat", amount: 0, unit: "g" }
+        ],
+        micronutrients: [],
+        benefits: [],
+        concerns: [],
+        suggestions: ["The analysis failed. Please try again with a clearer image."]
+      },
+      ingredients: [],
       savedToDatabase: false,
-      error: 'Failed to save to database, but analysis was successful'
+      error: errorMessage
     };
   }
 }
 
-export async function POST(request: NextRequest) {
+// Export the handler function for reuse in the app directory
+export async function analyzeMealHandler(request: NextRequest) {
   try {
     const formData = await request.formData();
     const imageFile = formData.get('image') as File;
-    const imageUrl = formData.get('imageUrl') as string || null;
+    let imageUrl = formData.get('imageUrl') as string || null;
     const goal = formData.get('goal') as string || 'balanced';
     
     if (!imageFile && !imageUrl) {
@@ -276,55 +336,133 @@ export async function POST(request: NextRequest) {
     
     // Check if we're in auth bypass mode
     const isAuthBypass = process.env.NEXT_PUBLIC_AUTH_BYPASS === 'true';
-    let userId: string | null = null;
+    let userId: string = 'test-user-bypass'; // Default for auth bypass
     
     // If not in auth bypass mode, get the real user ID
     if (!isAuthBypass) {
-      const { userId: resolvedUserId } = await getUserIdFromSession(request);
+      const userIdResult = await getUserIdFromSession(request);
       
-      if (!resolvedUserId) {
+      if (!userIdResult || !userIdResult.userId) {
         return NextResponse.json({ message: 'Unauthorized - User not found' }, { status: 401 });
       }
       
-      userId = resolvedUserId;
+      userId = userIdResult.userId;
     } else {
       // For auth bypass, we'll use a test user ID
-      userId = 'test-user-bypass';
       console.log('[analyze] Using bypass auth mode with test user ID');
     }
+
+    // First, upload the file to get a static URL
+    let uploadedImageUrl = null;
     
-    // Only use one source of image data - prioritize file over URL
-    const imageSource = imageFile || imageUrl;
-    
-    if (!imageSource) {
-      return createErrorResponse(new Error('Invalid image data'));
+    // Handle file uploads
+    if (imageFile) {
+      try {
+        console.log('[analyze] Uploading image file to server...');
+        // Create a new FormData object for the upload
+        const uploadFormData = new FormData();
+        uploadFormData.append('file', imageFile);
+        
+        // Upload to our server-side API endpoint
+        const uploadResponse = await fetch(new URL('/api/upload', request.url).toString(), {
+          method: 'POST',
+          body: uploadFormData,
+        });
+        
+        if (!uploadResponse.ok) {
+          throw new Error(`Failed to upload image: ${uploadResponse.status} ${uploadResponse.statusText}`);
+        }
+        
+        const uploadResult = await uploadResponse.json();
+        
+        if (uploadResult.success && uploadResult.fileUrl) {
+          uploadedImageUrl = uploadResult.fileUrl;
+          console.log('[analyze] Image uploaded successfully:', uploadedImageUrl);
+        } else {
+          throw new Error(uploadResult.error || 'Failed to upload image');
+        }
+      } catch (uploadError: any) {
+        console.error('[analyze] Error uploading image:', uploadError);
+        return createErrorResponse(new Error(`Upload failed: ${uploadError.message}`));
+      }
+    } else if (imageUrl) {
+      // If we have a URL already, check if it's a blob URL
+      if (imageUrl.startsWith('blob:')) {
+        return createErrorResponse(new Error('Blob URLs cannot be processed by the server. Please upload the file directly.'));
+      }
+      
+      // Use the provided URL
+      uploadedImageUrl = imageUrl;
     }
     
-    if (typeof imageUrl === 'string' && imageUrl.startsWith('blob:')) {
-      return createErrorResponse(new Error('Blob URLs cannot be processed by the server. Please use a file upload.'));
+    if (!uploadedImageUrl) {
+      return createErrorResponse(new Error('Failed to process image'));
     }
     
-    const result = await analyzeMealAndSave({
-      userId,
-      imageSource,
-      goal,
-      skipDatabaseSave: isAuthBypass // Skip DB save in bypass mode
-    });
-    
-    // Create a unique ID for the meal - we'll use this for localStorage in bypass mode
-    // and for database reference in normal mode
-    const mealId = result.mealId || uuidv4();
-    
-    // Return comprehensive data for the frontend
-    return NextResponse.json({
-      mealId,
-      mealContents: result.caption,
-      analysisResult: result.analysis,
-      ingredients: result.ingredients || [],
-      success: true,
-      message: 'Analysis completed successfully'
-    });
+    try {
+      // Use the uploaded URL for analysis
+      const result = await analyzeMealAndSave({
+        userId,
+        imageSource: uploadedImageUrl,
+        goal,
+        skipDatabaseSave: isAuthBypass
+      });
+      
+      // Create a unique ID for the meal
+      const mealId = result.mealId || uuidv4();
+      
+      // If there was an analysis error, pass it through but don't return an error status
+      if (result.error) {
+        console.log('[analyze] Analysis completed with warning:', result.error);
+      }
+      
+      // Create the response payload
+      const responseJson = {
+        success: true,
+        mealId,
+        mealContents: result.caption,
+        analysisResult: result.analysis,
+        imageUrl: uploadedImageUrl || result.imageUrl,
+      };
+
+      console.log("ANALYZE RESPONSE: Sending image URL:", uploadedImageUrl || result.imageUrl);
+
+      // Return the analysis result
+      return NextResponse.json(responseJson);
+    } catch (analysisError: any) {
+      console.error('[analyze] Unhandled analysis error:', analysisError);
+      
+      // Create a fallback response with the original image URL if available
+      const fallbackImageUrl = uploadedImageUrl;
+      
+      // Return a parseable response with empty analysis data
+      return NextResponse.json({
+        mealId: uuidv4(),
+        imageUrl: fallbackImageUrl,
+        mealContents: "Analysis failed",
+        analysisResult: {
+          calories: 0,
+          macronutrients: [
+            { name: "Protein", amount: 0, unit: "g" },
+            { name: "Carbohydrates", amount: 0, unit: "g" },
+            { name: "Fat", amount: 0, unit: "g" }
+          ],
+          micronutrients: [],
+          benefits: [],
+          concerns: [],
+          suggestions: ["The analysis failed. Please try again."]
+        },
+        ingredients: [],
+        success: false,
+        message: `Error: ${analysisError.message || 'Unknown error'}`
+      }, { status: 200 }); // Using 200 status to ensure frontend can handle the response
+    }
   } catch (error: any) {
     return createErrorResponse(error);
   }
+}
+
+// Export the POST handler that uses the analyzeMealHandler
+export async function POST(request: NextRequest) {
+  return analyzeMealHandler(request);
 } 
