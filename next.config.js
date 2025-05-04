@@ -23,7 +23,6 @@ const nextConfig = {
     
     return config;
   },
-  output: process.env.NEXT_PUBLIC_VERCEL_DEPLOYMENT === 'true' ? 'export' : undefined,
   experimental: {
     optimizeCss: true,
     scrollRestoration: true,
