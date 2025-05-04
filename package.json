@@ -30,7 +30,7 @@
     "fix:auth": "node scripts/fix-auth.js",
     "fix:gotrue": "node scripts/fix-auth.js --gotrue",
     "lint": "next lint",
-    "vercel-build": "VERCEL=1 NEXT_PUBLIC_VERCEL_DEPLOYMENT=true NODE_OPTIONS='--max-old-space-size=4096' next build || (echo 'Build failed - running emergency fixes' && VERCEL=1 NEXT_PUBLIC_VERCEL_DEPLOYMENT=true NODE_OPTIONS='--max-old-space-size=4096' node scripts/fix-all-issues.js && VERCEL=1 NEXT_PUBLIC_VERCEL_DEPLOYMENT=true NODE_OPTIONS='--max-old-space-size=4096' next build --no-lint)",
+    "vercel-build": "node vercel-build.js",
     "fix-ports-vercel": "echo 'Skipping port check in Vercel environment'",
     "prepare-vercel": "node scripts/prepare-for-vercel.js",
     "prisma:generate": "prisma generate",
