@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snap2Health Cache Cleaner</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      color: #333;
+      line-height: 1.6;
+    }
+    
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 20px;
+    }
+    
+    h1 {
+      color: #0055a4;
+      margin-bottom: 10px;
+    }
+    
+    .card {
+      background-color: #f9f9f9;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    
+    button {
+      background-color: #0055a4;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    
+    button:hover {
+      background-color: #003b73;
+    }
+    
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    
+    .secondary-button {
+      background-color: #666;
+    }
+    
+    .progress-container {
+      margin-top: 20px;
+      display: none;
+    }
+    
+    .progress-bar {
+      height: 20px;
+      background-color: #e0e0e0;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+    
+    .progress-fill {
+      height: 100%;
+      background-color: #4CAF50;
+      width: 0%;
+      transition: width 0.3s;
+    }
+    
+    .log-container {
+      background-color: #f0f0f0;
+      border-radius: 4px;
+      padding: 10px;
+      height: 150px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 12px;
+      margin-top: 20px;
+      border: 1px solid #ddd;
+    }
+    
+    .log-entry {
+      margin: 2px 0;
+      padding: 2px 5px;
+    }
+    
+    .log-info {
+      color: #0055a4;
+    }
+    
+    .log-success {
+      color: green;
+    }
+    
+    .log-error {
+      color: red;
+    }
+    
+    .log-warning {
+      color: orange;
+    }
+    
+    .status-message {
+      padding: 10px;
+      border-radius: 4px;
+      text-align: center;
+      margin: 15px 0;
+      display: none;
+    }
+    
+    .status-success {
+      background-color: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    
+    .status-error {
+      background-color: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+    
+    .status-warning {
+      background-color: #fff3cd;
+      color: #856404;
+      border: 1px solid #ffeeba;
+    }
+    
+    .tips-container {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Snap2Health Cache Cleaner</h1>
+    <p>Use this tool to fix glitches, loading issues, and "Failed to execute 'addAll' on 'Cache'" errors</p>
+  </div>
+  
+  <div class="card">
+    <h2>Cache Cleaning Tool</h2>
+    <p>This tool will help resolve common issues with the Snap2Health app by clearing caches and service workers.</p>
+    <p>Use this when you experience:</p>
+    <ul>
+      <li>Loading errors or blank screens</li>
+      <li>Features not working properly</li>
+      <li>Old content being displayed</li>
+      <li>Error messages in the console</li>
+    </ul>
+    
+    <div class="actions">
+      <button id="clearCacheBtn">Clean Browser Caches</button>
+      <button id="fullResetBtn" class="secondary-button">Full App Reset</button>
+      <button id="backToAppBtn">Back to App</button>
+    </div>
+    
+    <div id="progressContainer" class="progress-container">
+      <div class="progress-bar">
+        <div id="progressFill" class="progress-fill"></div>
+      </div>
+      <p id="progressText">Starting cache cleanup...</p>
+    </div>
+    
+    <div id="statusMessage" class="status-message"></div>
+    
+    <div id="logContainer" class="log-container"></div>
+  </div>
+  
+  <div class="card tips-container">
+    <h2>Troubleshooting Tips</h2>
+    <ul>
+      <li><strong>Reload the page</strong> after clearing caches</li>
+      <li>Make sure you're using a <strong>supported browser</strong> (Chrome, Firefox, Safari, Edge)</li>
+      <li>Try using <strong>private/incognito mode</strong> if issues persist</li>
+      <li>If problems continue, try accessing the app from a different device</li>
+    </ul>
+  </div>
+  
+  <script>
+    // DOM elements
+    const clearCacheBtn = document.getElementById('clearCacheBtn');
+    const fullResetBtn = document.getElementById('fullResetBtn');
+    const backToAppBtn = document.getElementById('backToAppBtn');
+    const progressContainer = document.getElementById('progressContainer');
+    const progressFill = document.getElementById('progressFill');
+    const progressText = document.getElementById('progressText');
+    const statusMessage = document.getElementById('statusMessage');
+    const logContainer = document.getElementById('logContainer');
+    
+    // Log function to display messages in the log container
+    function log(message, type = 'info') {
+      const entry = document.createElement('div');
+      entry.classList.add('log-entry', `log-${type}`);
+      
+      // Format timestamp
+      const now = new Date();
+      const time = now.toTimeString().substr(0, 8);
+      
+      entry.textContent = `[${time}] ${message}`;
+      logContainer.appendChild(entry);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+    
+    // Function to show status message
+    function showStatus(message, type) {
+      statusMessage.textContent = message;
+      statusMessage.className = 'status-message';
+      statusMessage.classList.add(`status-${type}`);
+      statusMessage.style.display = 'block';
+    }
+    
+    // Update progress bar
+    function updateProgress(percent, message) {
+      progressFill.style.width = `${percent}%`;
+      progressText.textContent = message;
+    }
+    
+    // Clear all browser caches related to the app
+    async function clearCaches() {
+      try {
+        log('Starting cache cleanup operation...', 'info');
+        updateProgress(10, 'Checking for service workers...');
+        
+        // Clear service workers
+        if ('serviceWorker' in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          log(`Found ${registrations.length} service worker registrations`, 'info');
+          
+          updateProgress(20, 'Unregistering service workers...');
+          
+          let unregisteredCount = 0;
+          for (let registration of registrations) {
+            try {
+              await registration.unregister();
+              unregisteredCount++;
+              log(`Service worker unregistered: ${registration.scope}`, 'success');
+            } catch (err) {
+              log(`Failed to unregister service worker: ${err.message}`, 'error');
+            }
+          }
+          
+          log(`Unregistered ${unregisteredCount} service workers`, unregisteredCount > 0 ? 'success' : 'info');
+        } else {
+          log('Service workers not supported in this browser', 'warning');
+        }
+        
+        updateProgress(40, 'Clearing caches...');
+        
+        // Clear caches
+        if ('caches' in window) {
+          try {
+            const cacheNames = await caches.keys();
+            log(`Found ${cacheNames.length} caches to clear`, 'info');
+            
+            let clearedCount = 0;
+            let failedCount = 0;
+            
+            for (const cacheName of cacheNames) {
+              try {
+                const success = await caches.delete(cacheName);
+                if (success) {
+                  clearedCount++;
+                  log(`Cleared cache: ${cacheName}`, 'success');
+                } else {
+                  failedCount++;
+                  log(`Failed to clear cache: ${cacheName}`, 'warning');
+                  
+                  // Try alternative clearing approach
+                  try {
+                    const cache = await caches.open(cacheName);
+                    const requests = await cache.keys();
+                    log(`Attempting to clear ${requests.length} entries from cache ${cacheName}...`, 'info');
+                    
+                    for (const request of requests) {
+                      await cache.delete(request);
+                    }
+                    
+                    log(`Cleared all entries from cache ${cacheName}`, 'success');
+                    clearedCount++;
+                    failedCount--;
+                  } catch (err) {
+                    log(`Alternative clearing failed for ${cacheName}: ${err.message}`, 'error');
+                  }
+                }
+              } catch (err) {
+                failedCount++;
+                log(`Error clearing cache ${cacheName}: ${err.message}`, 'error');
+              }
+              
+              // Update progress for each cache
+              const progressPercent = 40 + (clearedCount / cacheNames.length) * 30;
+              updateProgress(progressPercent, `Clearing caches (${clearedCount}/${cacheNames.length})...`);
+            }
+            
+            log(`Cache clearing completed. Cleared: ${clearedCount}, Failed: ${failedCount}`, 
+                failedCount === 0 ? 'success' : 'warning');
+          } catch (err) {
+            log(`Error accessing caches: ${err.message}`, 'error');
+            throw err;
+          }
+        } else {
+          log('Cache API not supported in this browser', 'warning');
+        }
+        
+        updateProgress(70, 'Clearing localStorage...');
+        
+        // Clear localStorage
+        try {
+          const itemCount = localStorage.length;
+          localStorage.clear();
+          log(`Cleared ${itemCount} items from localStorage`, 'success');
+        } catch (err) {
+          log(`Error clearing localStorage: ${err.message}`, 'error');
+        }
+        
+        updateProgress(80, 'Clearing sessionStorage...');
+        
+        // Clear sessionStorage
+        try {
+          const itemCount = sessionStorage.length;
+          sessionStorage.clear();
+          log(`Cleared ${itemCount} items from sessionStorage`, 'success');
+        } catch (err) {
+          log(`Error clearing sessionStorage: ${err.message}`, 'error');
+        }
+        
+        updateProgress(100, 'Cache cleanup completed!');
+        log('Cache cleanup operation completed successfully', 'success');
+        
+        return true;
+      } catch (error) {
+        log(`Cache cleanup failed: ${error.message}`, 'error');
+        updateProgress(100, 'Cache cleanup failed');
+        return false;
+      }
+    }
+    
+    // Full reset including IndexedDB and other storage
+    async function fullReset() {
+      try {
+        // First run the standard cache clear
+        await clearCaches();
+        
+        updateProgress(80, 'Clearing IndexedDB...');
+        
+        // Try to clear IndexedDB
+        if ('indexedDB' in window) {
+          try {
+            const databases = await indexedDB.databases();
+            log(`Found ${databases.length} IndexedDB databases`, 'info');
+            
+            for (const db of databases) {
+              try {
+                log(`Deleting IndexedDB database: ${db.name}`, 'info');
+                await indexedDB.deleteDatabase(db.name);
+                log(`Deleted IndexedDB database: ${db.name}`, 'success');
+              } catch (err) {
+                log(`Failed to delete IndexedDB database ${db.name}: ${err.message}`, 'error');
+              }
+            }
+          } catch (err) {
+            log(`Error listing IndexedDB databases: ${err.message}`, 'error');
+          }
+        } else {
+          log('IndexedDB not supported in this browser', 'warning');
+        }
+        
+        updateProgress(90, 'Setting reset flags...');
+        
+        // Add a reset flag to localStorage to signal app to reset on next load
+        localStorage.setItem('app_full_reset', 'true');
+        localStorage.setItem('reset_timestamp', Date.now().toString());
+        
+        updateProgress(100, 'Full reset completed!');
+        log('Full app reset completed successfully', 'success');
+        
+        return true;
+      } catch (error) {
+        log(`Full reset failed: ${error.message}`, 'error');
+        updateProgress(100, 'Full reset failed');
+        return false;
+      }
+    }
+    
+    // Event listener for clear cache button
+    clearCacheBtn.addEventListener('click', async () => {
+      clearCacheBtn.disabled = true;
+      fullResetBtn.disabled = true;
+      progressContainer.style.display = 'block';
+      statusMessage.style.display = 'none';
+      
+      const success = await clearCaches();
+      
+      if (success) {
+        showStatus('Cache cleanup completed successfully! You should reload the app now.', 'success');
+      } else {
+        showStatus('Cache cleanup encountered some issues. See the log for details.', 'warning');
+      }
+      
+      clearCacheBtn.disabled = false;
+      fullResetBtn.disabled = false;
+    });
+    
+    // Event listener for full reset button
+    fullResetBtn.addEventListener('click', async () => {
+      if (confirm('This will clear ALL app data including login sessions and settings. Continue?')) {
+        clearCacheBtn.disabled = true;
+        fullResetBtn.disabled = true;
+        progressContainer.style.display = 'block';
+        statusMessage.style.display = 'none';
+        
+        const success = await fullReset();
+        
+        if (success) {
+          showStatus('Full app reset completed! You need to reload the app now.', 'success');
+        } else {
+          showStatus('Full reset encountered some issues. See the log for details.', 'warning');
+        }
+        
+        clearCacheBtn.disabled = false;
+        fullResetBtn.disabled = false;
+      }
+    });
+    
+    // Event listener for back to app button
+    backToAppBtn.addEventListener('click', () => {
+      window.location.href = '/';
+    });
+    
+    // Initialize
+    log('Cache Cleaner tool initialized', 'info');
+    log('Ready to perform cache operations', 'info');
+  </script>
+</body>
+</html> 

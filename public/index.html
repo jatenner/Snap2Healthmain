@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snap2Health Emergency Cache Reset</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 20px;
+      line-height: 1.6;
+      color: #333;
+    }
+    
+    h1 {
+      color: #0055a4;
+      border-bottom: 2px solid #eee;
+      padding-bottom: 10px;
+    }
+    
+    .card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      background-color: #f9f9f9;
+    }
+    
+    button {
+      background-color: #0055a4;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      margin-right: 10px;
+      margin-bottom: 10px;
+    }
+    
+    button.secondary {
+      background-color: #666;
+    }
+    
+    button:hover {
+      opacity: 0.9;
+    }
+    
+    .status {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 4px;
+    }
+    
+    .status.success {
+      background-color: #e6f7e6;
+      border: 1px solid #a3d9a3;
+      color: #2c662c;
+    }
+    
+    .status.error {
+      background-color: #ffebeb;
+      border: 1px solid #ffb2b2;
+      color: #b30000;
+    }
+    
+    .progress-container {
+      margin-top: 20px;
+      display: none;
+    }
+    
+    .progress-bar {
+      background-color: #eee;
+      height: 10px;
+      border-radius: 5px;
+      margin-bottom: 10px;
+      overflow: hidden;
+    }
+    
+    .progress-fill {
+      background-color: #0055a4;
+      height: 100%;
+      width: 0%;
+      transition: width 0.3s;
+    }
+    
+    .log {
+      background-color: #111;
+      color: #eee;
+      padding: 10px;
+      border-radius: 4px;
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 14px;
+      display: none;
+      margin-top: 20px;
+    }
+    
+    .log-entry {
+      margin-bottom: 5px;
+    }
+    
+    .log-entry.success {
+      color: #a3d9a3;
+    }
+    
+    .log-entry.error {
+      color: #ffb2b2;
+    }
+  </style>
+</head>
+<body>
+  <h1>Snap2Health Emergency Cache Reset</h1>
+  
+  <div class="card">
+    <h2>Fix App Glitching Issues</h2>
+    <p>If you're experiencing any of these issues:</p>
+    <ul>
+      <li>App doesn't respond to clicks</li>
+      <li>Pages load but appear broken</li>
+      <li>UI elements are misaligned or invisible</li>
+      <li>App seems stuck or frozen</li>
+    </ul>
+    <p>Use the buttons below to clear your browser's cache and storage data to fix the issues:</p>
+    
+    <button id="clearCacheBtn">Clear Cache & Storage</button>
+    <button id="fullResetBtn" class="secondary">Full System Reset</button>
+    <button id="viewLogsBtn" class="secondary">View Logs</button>
+  </div>
+  
+  <div id="statusMessage" class="status" style="display: none;"></div>
+  
+  <div id="progressContainer" class="progress-container">
+    <div class="progress-bar">
+      <div id="progressFill" class="progress-fill"></div>
+    </div>
+    <p id="progressText">Starting cache cleanup...</p>
+  </div>
+  
+  <div id="logContainer" class="log">
+    <div class="log-entry">Cache clearing log will appear here...</div>
+  </div>
+  
+  <div class="card">
+    <h3>After clearing cache:</h3>
+    <ol>
+      <li>Close this tab</li>
+      <li>Open a new tab</li>
+      <li>Navigate to <a href="http://localhost:3000" id="mainSiteLink">localhost:3000</a></li>
+    </ol>
+    <p><strong>Note:</strong> If issues persist, try using the "Full System Reset" button or restart your browser completely.</p>
+  </div>
+  
+  <script>
+    // DOM Elements
+    const clearCacheBtn = document.getElementById('clearCacheBtn');
+    const fullResetBtn = document.getElementById('fullResetBtn');
+    const viewLogsBtn = document.getElementById('viewLogsBtn');
+    const statusMessage = document.getElementById('statusMessage');
+    const progressContainer = document.getElementById('progressContainer');
+    const progressFill = document.getElementById('progressFill');
+    const progressText = document.getElementById('progressText');
+    const logContainer = document.getElementById('logContainer');
+    const mainSiteLink = document.getElementById('mainSiteLink');
+    
+    // Add a timestamp to the main site link
+    mainSiteLink.href = `http://localhost:3000?cache_bust=${Date.now()}`;
+    
+    // Show/hide logs
+    viewLogsBtn.addEventListener('click', () => {
+      logContainer.style.display = logContainer.style.display === 'block' ? 'none' : 'block';
+      viewLogsBtn.textContent = logContainer.style.display === 'block' ? 'Hide Logs' : 'View Logs';
+    });
+    
+    // Log function
+    function log(message, type = 'info') {
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logContainer.appendChild(entry);
+      logContainer.scrollTop = logContainer.scrollHeight;
+      console.log(`[${type}] ${message}`);
+    }
+    
+    // Update status
+    function updateStatus(message, isSuccess) {
+      statusMessage.textContent = message;
+      statusMessage.className = isSuccess ? 'status success' : 'status error';
+      statusMessage.style.display = 'block';
+    }
+    
+    // Update progress
+    function updateProgress(percent, text) {
+      progressContainer.style.display = 'block';
+      progressFill.style.width = `${percent}%`;
+      if (text) progressText.textContent = text;
+    }
+    
+    // Clear browser cache and storage
+    async function clearCacheAndStorage() {
+      try {
+        logContainer.style.display = 'block';
+        progressContainer.style.display = 'block';
+        updateProgress(5, 'Starting cache cleanup...');
+        log('Starting cache clearing process', 'info');
+        
+        // Clear localStorage
+        try {
+          log('Clearing localStorage...', 'info');
+          localStorage.clear();
+          log('localStorage cleared', 'success');
+          updateProgress(20, 'Cleared local storage...');
+        } catch(e) {
+          log(`Error clearing localStorage: ${e.message}`, 'error');
+        }
+        
+        // Clear sessionStorage
+        try {
+          log('Clearing sessionStorage...', 'info');
+          sessionStorage.clear();
+          log('sessionStorage cleared', 'success');
+          updateProgress(30, 'Cleared session storage...');
+        } catch(e) {
+          log(`Error clearing sessionStorage: ${e.message}`, 'error');
+        }
+        
+        // Clear caches
+        if ('caches' in window) {
+          try {
+            log('Clearing browser caches...', 'info');
+            const cacheNames = await caches.keys();
+            log(`Found ${cacheNames.length} caches to clear`, 'info');
+            
+            let cleared = 0;
+            for (const name of cacheNames) {
+              try {
+                await caches.delete(name);
+                log(`Cache '${name}' deleted`, 'success');
+                cleared++;
+                updateProgress(30 + (cleared / cacheNames.length) * 30, `Cleared ${cleared}/${cacheNames.length} caches...`);
+              } catch(e) {
+                log(`Failed to clear cache '${name}': ${e.message}`, 'error');
+              }
+            }
+          } catch(e) {
+            log(`Error accessing caches: ${e.message}`, 'error');
+          }
+        } else {
+          log('Cache API not available in this browser', 'error');
+        }
+        
+        updateProgress(65, 'Clearing service workers...');
+        
+        // Unregister service workers
+        if ('serviceWorker' in navigator) {
+          try {
+            log('Unregistering service workers...', 'info');
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            log(`Found ${registrations.length} service workers`, 'info');
+            
+            let cleared = 0;
+            for (const registration of registrations) {
+              try {
+                await registration.unregister();
+                log('Service worker unregistered', 'success');
+                cleared++;
+                updateProgress(65 + (cleared / registrations.length) * 25, `Unregistered ${cleared}/${registrations.length} service workers...`);
+              } catch(e) {
+                log(`Failed to unregister service worker: ${e.message}`, 'error');
+              }
+            }
+          } catch(e) {
+            log(`Error with service workers: ${e.message}`, 'error');
+          }
+        } else {
+          log('ServiceWorker API not available in this browser', 'error');
+        }
+        
+        // Set timestamp for last clear
+        try {
+          localStorage.setItem('cache_cleared_at', new Date().toISOString());
+          localStorage.setItem('app_reset_version', Date.now().toString());
+        } catch(e) {
+          log(`Failed to save reset timestamp: ${e.message}`, 'error');
+        }
+        
+        updateProgress(100, 'Cleanup completed!');
+        log('Cache clearing completed', 'success');
+        updateStatus('Cache and storage successfully cleared! Please refresh the app.', true);
+        
+        // Update the main site link again
+        mainSiteLink.href = `http://localhost:3000?cache_bust=${Date.now()}`;
+        
+        return true;
+      } catch(e) {
+        log(`Error in cache clearing process: ${e.message}`, 'error');
+        updateStatus('Error clearing cache. See logs for details.', false);
+        return false;
+      }
+    }
+    
+    // Full system reset - more aggressive
+    async function fullSystemReset() {
+      if (!confirm('This will completely reset all application data. Continue?')) {
+        return;
+      }
+      
+      await clearCacheAndStorage();
+      
+      try {
+        log('Performing full system reset...', 'info');
+        
+        // Clear IndexedDB
+        if (window.indexedDB) {
+          try {
+            log('Clearing IndexedDB databases...', 'info');
+            const databases = await indexedDB.databases();
+            log(`Found ${databases.length} IndexedDB databases`, 'info');
+            
+            for (const db of databases) {
+              if (db.name) {
+                try {
+                  indexedDB.deleteDatabase(db.name);
+                  log(`Deleted IndexedDB database: ${db.name}`, 'success');
+                } catch(e) {
+                  log(`Failed to delete IndexedDB '${db.name}': ${e.message}`, 'error');
+                }
+              }
+            }
+          } catch(e) {
+            log(`Error accessing IndexedDB: ${e.message}`, 'error');
+          }
+        }
+        
+        // Additional localStorage items to force reset app state
+        try {
+          localStorage.setItem('app_force_reset', 'true');
+          localStorage.setItem('reset_timestamp', Date.now().toString());
+        } catch(e) {}
+        
+        log('Full system reset completed', 'success');
+        updateStatus('Full system reset complete! Please restart your browser and reopen the app.', true);
+      } catch(e) {
+        log(`Error in full system reset: ${e.message}`, 'error');
+        updateStatus('Error performing full reset. Try restarting your browser manually.', false);
+      }
+    }
+    
+    // Attach event listeners
+    clearCacheBtn.addEventListener('click', clearCacheAndStorage);
+    fullResetBtn.addEventListener('click', fullSystemReset);
+    
+    // Run initial diagnostics
+    log('Emergency cache reset tool loaded', 'info');
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(registrations => {
+        log(`Found ${registrations.length} registered service workers`, 'info');
+      }).catch(e => {
+        log(`Error checking service workers: ${e.message}`, 'error');
+      });
+    }
+    
+    if ('caches' in window) {
+      caches.keys().then(cacheNames => {
+        log(`Found ${cacheNames.length} browser caches`, 'info');
+      }).catch(e => {
+        log(`Error checking caches: ${e.message}`, 'error');
+      });
+    }
+  </script>
+  
+  <!-- Include the cache-invalidate script -->
+  <script src="clear-cache.js"></script>
+</body>
+</html> 
