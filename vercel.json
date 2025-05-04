@@ -1,6 +1,7 @@
 {
   "version": 2,
-  "buildCommand": "node vercel-build.js",
+  "cleanUrls": true,
+  "buildCommand": "NEXT_PUBLIC_VERCEL_DEPLOYMENT=true next build",
   "outputDirectory": "out",
   "trailingSlash": true,
   "headers": [
