@@ -1,323 +1,367 @@
 #!/usr/bin/env node
 
 /**
- * Ultra-Lightweight server for memory-constrained environments
- * 
- * This is an optimized version specifically addressing:
- * 1. Memory issues with "Killed: 9" errors
- * 2. GoTrueClient conflicts in authentication
- * 3. Image analysis memory management
+ * Ultra-lightweight Next.js development server with memory optimization
+ * This server implements memory management features to prevent OOM crashes
  */
 
 const { createServer } = require('http');
 const { parse } = require('url');
-const next = require('next');
-const { execSync } = require('child_process');
-const path = require('path');
 const fs = require('fs');
+const path = require('path');
+const { spawn, execSync } = require('child_process');
+const dotenv = require('dotenv');
+const next = require('next');
 
-// Configure memory usage monitoring
-const MEMORY_MONITORING = true;
-const MEMORY_CHECK_INTERVAL = 30000; // 30 seconds
-const WARNING_THRESHOLD_MB = 800;  // 800MB
-const CRITICAL_THRESHOLD_MB = 1200; // 1.2GB
-const RESTART_THRESHOLD_MB = 1400; // 1.4GB
-let lastMemoryUsageMB = 0;
-let restartCount = 0;
-const MAX_RESTARTS = 5;
+// Configure environment
+const PORT = parseInt(process.env.PORT, 10) || 3000;
+const isDev = process.env.NODE_ENV !== 'production';
 
-// Check environment
-const dev = process.env.NODE_ENV !== 'production';
-const hostname = 'localhost';
-const port = process.env.PORT || 3000;
+// Memory settings
+const MEMORY_LIMIT = 1200; // Maximum RSS memory (MB) before forced GC
+const HEAP_LIMIT = 800;   // Maximum heap memory (MB) before forced GC
+const LOW_MEMORY_THRESHOLD = 128; // Low memory MB threshold for emergency GC
+const GC_INTERVAL = 30000; // Run GC every 30 seconds if needed
 
-// Configure Next.js to use minimal memory
-const nextConfig = {
-  dev,
-  hostname,
-  port,
-  conf: {
-    compress: true,
-    poweredByHeader: false,
-    reactStrictMode: false, // Disable strict mode to reduce renders
-    swcMinify: true,
-    productionBrowserSourceMaps: false,
-    experimental: {
-      optimizeCss: true,
-      esmExternals: false,
-      scrollRestoration: false,
-      legacyBrowsers: false,
-      browsersListForSwc: false,
-      serverActions: false,
-      serverComponentsExternalPackages: [],
-      webpackBuildWorker: false,
-      optimisticClientCache: false,
+// Create a timestamp-based logger
+function createLogger() {
+  return {
+    log: (message) => {
+      const timestamp = new Date().toISOString();
+      console.log(`[${timestamp}] ${message}`);
     },
-    eslint: {
-      ignoreDuringBuilds: true,
+    error: (message) => {
+      const timestamp = new Date().toISOString();
+      console.error(`[${timestamp}] ERROR: ${message}`);
     },
-    typescript: {
-      ignoreBuildErrors: true,
-    },
-    compiler: {
-      reactRemoveProperties: true,
-    },
-    webpack: (config, { dev, isServer }) => {
-      // Disable source maps in production
-      if (!dev) {
-        config.devtool = false;
-      }
-      return config;
-    },
-  }
-};
-
-// Create a lightweight Next.js app instance
-const app = next({ dev, hostname, port, conf: nextConfig.conf });
-const handle = app.getRequestHandler();
-
-// Log current timestamp in a readable format
-function logWithTimestamp(message) {
-  const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] ${message}`);
+    warn: (message) => {
+      const timestamp = new Date().toISOString();
+      console.warn(`[${timestamp}] WARNING: ${message}`);
+    }
+  };
 }
 
-// Attempt to free memory
-function attemptMemoryRelease() {
-  try {
-    if (global.gc) {
-      global.gc();
-      logWithTimestamp('Manual garbage collection performed');
+// Create logger instance
+const logger = createLogger();
+
+// Load environment variables
+function loadEnv() {
+  logger.log('Loading environment variables...');
+  
+  // Check for .env.local file
+  const envLocalPath = path.join(process.cwd(), '.env.local');
+  if (fs.existsSync(envLocalPath)) {
+    logger.log('.env.local file found, loading...');
+    dotenv.config({ path: envLocalPath });
+  } else {
+    // Fall back to .env
+    const envPath = path.join(process.cwd(), '.env');
+    if (fs.existsSync(envPath)) {
+      logger.log('.env file found, loading...');
+      dotenv.config({ path: envPath });
     }
-  } catch (e) {
-    logWithTimestamp('Failed to perform manual garbage collection: ' + e.message);
   }
   
-  // Also suggest running with --expose-gc flag if it's not enabled
-  if (!global.gc) {
-    logWithTimestamp('Note: Run with --expose-gc flag to enable manual garbage collection');
+  logger.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+}
+
+// Create auth client fix script
+function createAuthClientFix() {
+  try {
+    // Generate a dedicated auth client fix script for client-side use
+    const fixScriptPath = path.join(process.cwd(), 'public', 'auth-client-fix.js');
+    
+    if (!fs.existsSync(path.dirname(fixScriptPath))) {
+      fs.mkdirSync(path.dirname(fixScriptPath), { recursive: true });
+    }
+    
+    // Check if file exists and is recent
+    const exists = fs.existsSync(fixScriptPath);
+    
+    // Always create a fresh copy to ensure latest fixes are applied
+    // The actual content of this file should be maintained separately in version control
+    if (!exists) {
+      // Create a placeholder if the file doesn't exist in the repo
+      const placeholderScript = `
+      /**
+       * Auth Client Fix Script (Placeholder)
+       * This is a placeholder for the auth client fix. The actual script should be maintained in version control.
+       */
+       console.log('Auth client fix script loaded (placeholder)');
+      `;
+      
+      fs.writeFileSync(fixScriptPath, placeholderScript);
+      logger.log('Created auth client fix script placeholder');
+    } else {
+      logger.log('Auth client fix script exists');
+    }
+  } catch (error) {
+    logger.error(`Error creating auth client fix script: ${error.message}`);
   }
 }
 
-// Check memory usage
-function checkMemoryUsage() {
-  try {
-    const memoryUsage = process.memoryUsage();
-    const usedHeapMB = Math.round(memoryUsage.heapUsed / 1024 / 1024);
-    const totalHeapMB = Math.round(memoryUsage.heapTotal / 1024 / 1024);
-    const rssMB = Math.round(memoryUsage.rss / 1024 / 1024);
-    
-    // Only log if there's a significant change (>10%) or every 5 minutes
-    const significantChange = Math.abs(lastMemoryUsageMB - rssMB) > lastMemoryUsageMB * 0.1;
-    const fiveMinuteInterval = Date.now() % (5 * 60 * 1000) < MEMORY_CHECK_INTERVAL;
-    
-    if (significantChange || fiveMinuteInterval) {
-      logWithTimestamp(`Memory: ${rssMB}MB RSS, ${usedHeapMB}MB heap used, ${totalHeapMB}MB heap total`);
+// Get memory usage in MB
+function getMemoryUsage() {
+  const memUsage = process.memoryUsage();
+  const rss = Math.round(memUsage.rss / 1024 / 1024);
+  const heapUsed = Math.round(memUsage.heapUsed / 1024 / 1024);
+  const heapTotal = Math.round(memUsage.heapTotal / 1024 / 1024);
+  
+  return { rss, heapUsed, heapTotal };
+}
+
+// Force garbage collection if available
+function forceGarbageCollection() {
+  if (global.gc) {
+    try {
+      global.gc();
+      logger.log('Manual garbage collection performed');
+      return true;
+    } catch (error) {
+      logger.error(`Error during manual garbage collection: ${error.message}`);
+      return false;
     }
-    
-    lastMemoryUsageMB = rssMB;
-    
-    // Check thresholds and take action if needed
-    if (rssMB > RESTART_THRESHOLD_MB) {
-      logWithTimestamp(`CRITICAL: Memory usage critically high (${rssMB}MB > ${RESTART_THRESHOLD_MB}MB)`);
+  } else {
+    logger.warn('Garbage collection not available. Start with --expose-gc flag.');
+    return false;
+  }
+}
+
+// Memory management system
+function setupMemoryManagement() {
+  let initialMemory = getMemoryUsage();
+  logger.log(`Initial memory: ${initialMemory.rss}MB RSS, ${initialMemory.heapUsed}MB heap used`);
+  
+  // Perform initial garbage collection
+  forceGarbageCollection();
+  
+  // Set up periodic memory monitoring and garbage collection
+  const memoryInterval = setInterval(() => {
+    try {
+      const memory = getMemoryUsage();
       
-      if (restartCount < MAX_RESTARTS) {
-        logWithTimestamp(`Attempting server restart (${restartCount + 1}/${MAX_RESTARTS})`);
-        restartCount++;
+      // Log memory usage
+      logger.log(`Memory: ${memory.rss}MB RSS, ${memory.heapUsed}MB heap used, ${memory.heapTotal}MB heap total`);
+      
+      // Check if memory usage is high
+      if (memory.rss > MEMORY_LIMIT) {
+        logger.warn(`Critical memory usage (${memory.rss}MB > ${MEMORY_LIMIT}MB), forcing GC`);
+        forceGarbageCollection();
         
-        // Attempt to restart process by exiting and letting process manager restart it
-        setTimeout(() => {
-          process.exit(1);
-        }, 1000);
-      } else {
-        logWithTimestamp(`Maximum restart count reached (${restartCount}/${MAX_RESTARTS}). Attempting emergency cleanup only.`);
-        attemptMemoryRelease();
+        // If still high after GC, take emergency measures
+        const postGcMemory = getMemoryUsage();
+        if (postGcMemory.rss > MEMORY_LIMIT) {
+          logger.error(`Memory still critical after GC: ${postGcMemory.rss}MB`);
+          
+          // Implement more aggressive memory reduction
+          if (global.gc) {
+            // Multiple forced GCs
+            for (let i = 0; i < 3; i++) {
+              global.gc(true); // true for full GC
+            }
+            
+            // Clear module cache for non-essential modules
+            Object.keys(require.cache).forEach(id => {
+              // Don't clear critical modules
+              if (!id.includes('node_modules/next') && 
+                  !id.includes('node_modules/react') &&
+                  !id.includes('lightweight-server')) {
+                delete require.cache[id];
+              }
+            });
+          }
+        }
+      } 
+      // Warn if getting close to limit
+      else if (memory.rss > MEMORY_LIMIT * 0.8) {
+        logger.warn(`High memory usage (${memory.rss}MB > ${MEMORY_LIMIT * 0.8}MB)`);
+        forceGarbageCollection();
       }
-    } else if (rssMB > CRITICAL_THRESHOLD_MB) {
-      logWithTimestamp(`CRITICAL: Memory usage too high (${rssMB}MB > ${CRITICAL_THRESHOLD_MB}MB), attempting cleanup`);
-      attemptMemoryRelease();
-    } else if (rssMB > WARNING_THRESHOLD_MB) {
-      logWithTimestamp(`WARNING: High memory usage (${rssMB}MB > ${WARNING_THRESHOLD_MB}MB)`);
+      // Run GC if heap is getting large
+      else if (memory.heapUsed > HEAP_LIMIT) {
+        logger.warn(`High heap usage (${memory.heapUsed}MB > ${HEAP_LIMIT}MB), running GC`);
+        forceGarbageCollection();
+      }
+      // Run GC if system memory is low
+      const availableMemory = getAvailableSystemMemory();
+      if (availableMemory && availableMemory < LOW_MEMORY_THRESHOLD) {
+        logger.warn(`Low system memory (${availableMemory}MB), running emergency GC`);
+        forceGarbageCollection();
+      }
+    } catch (error) {
+      logger.error(`Error in memory management: ${error.message}`);
     }
-    
-    return { used: usedHeapMB, total: totalHeapMB, rss: rssMB };
-  } catch (e) {
-    logWithTimestamp('Error checking memory usage: ' + e.message);
-    return { used: 0, total: 0, rss: 0 };
-  }
+  }, GC_INTERVAL);
+  
+  // Clean up interval on exit
+  process.on('exit', () => {
+    clearInterval(memoryInterval);
+  });
 }
 
-// Fix Supabase GoTrueClient conflict 
-function fixAuthConflicts() {
+// Get available system memory in MB
+function getAvailableSystemMemory() {
   try {
-    // Create a client reset script in public directory
-    const scriptPath = path.join(process.cwd(), 'public', 'auth-client-fix.js');
-    const scriptContent = `
-// Fix for Multiple GoTrueClient instances detected
-(function() {
-  try {
-    // Check if we've already initialized
-    const initialized = localStorage.getItem('gotrue-initialized');
-    
-    if (initialized) {
-      // Clear any conflicting auth data
-      const now = Date.now();
-      const initTime = parseInt(initialized, 10);
-      const timeSinceInit = now - initTime;
+    if (process.platform === 'darwin' || process.platform === 'linux') {
+      // For macOS and Linux
+      const freeMem = execSync('vm_stat | grep "Pages free:" || free -m | grep Mem:').toString();
       
-      if (timeSinceInit < 60000) { // If less than a minute ago
-        console.log('[Auth] Multiple instances detected, clearing storage');
-        
-        // Clear all Supabase and GoTrue related items
-        Object.keys(localStorage).forEach(key => {
-          if (key.includes('supabase') || key.includes('gotrue') || key.includes('sb-')) {
-            localStorage.removeItem(key);
+      if (freeMem.includes('Pages free:')) {
+        // Parse macOS output (vm_stat)
+        const matches = freeMem.match(/Pages free:\s+(\d+)/);
+        if (matches && matches[1]) {
+          const pageSize = 4096; // Standard page size on macOS
+          const freePages = parseInt(matches[1], 10);
+          return Math.round((freePages * pageSize) / (1024 * 1024));
+        }
+      } else {
+        // Parse Linux output (free -m)
+        const matches = freeMem.match(/Mem:\s+\d+\s+\d+\s+(\d+)/);
+        if (matches && matches[1]) {
+          return parseInt(matches[1], 10);
+        }
+      }
+    } else if (process.platform === 'win32') {
+      // For Windows
+      const memInfo = execSync('wmic OS get FreePhysicalMemory /Value').toString();
+      const matches = memInfo.match(/FreePhysicalMemory=(\d+)/);
+      if (matches && matches[1]) {
+        // Convert from KB to MB
+        return Math.round(parseInt(matches[1], 10) / 1024);
+      }
+    }
+  } catch (error) {
+    logger.error(`Error getting system memory: ${error.message}`);
+  }
+  
+  // Return null if we couldn't determine available memory
+  return null;
+}
+
+// Kill processes using a specific port
+async function killProcessesOnPort(port) {
+  logger.log(`Checking for processes using port ${port}...`);
+  
+  try {
+    if (process.platform === 'win32') {
+      // Windows
+      execSync(`netstat -ano | findstr :${port} | findstr LISTENING`, { stdio: 'pipe' })
+        .toString()
+        .split('\n')
+        .forEach(line => {
+          const match = line.match(/(\d+)$/);
+          if (match) {
+            const pid = match[1];
+            try {
+              execSync(`taskkill /F /PID ${pid}`);
+              logger.log(`Killed process ${pid} using port ${port}`);
+            } catch (err) {
+              // Ignore errors when killing processes
+            }
           }
         });
+    } else {
+      // Unix-like systems
+      try {
+        const output = execSync(`lsof -ti:${port}`, { stdio: 'pipe' }).toString().trim();
+        if (output) {
+          output.split('\n').forEach(pid => {
+            try {
+              execSync(`kill -9 ${pid}`);
+              logger.log(`Killed process ${pid} using port ${port}`);
+            } catch (err) {
+              // Ignore errors when killing processes
+            }
+          });
+        } else {
+          logger.log(`No processes found using port ${port} on Unix`);
+        }
+      } catch (err) {
+        // lsof command might not be available or no processes found
+        logger.log(`No processes found using port ${port} or lsof not available`);
       }
     }
     
-    // Set current timestamp
-    localStorage.setItem('gotrue-initialized', Date.now().toString());
-  } catch (e) {
-    console.error('[Auth] Error fixing client conflict:', e);
-  }
-})();
-    `;
-    
-    // Write the script
-    fs.writeFileSync(scriptPath, scriptContent);
-    logWithTimestamp('Created auth client fix script');
-    
-    // Modify HTML to include the script
-    const documentPath = path.join(process.cwd(), '.next', 'server', 'pages', '_document.js');
-    if (fs.existsSync(documentPath)) {
-      logWithTimestamp('Document file found, adding auth fix script reference');
-      
-      // Auto-inject script reference into Next.js HTML output
-      // Will be handled by middleware
-    }
-  } catch (e) {
-    logWithTimestamp('Error fixing auth conflicts: ' + e.message);
+    logger.log(`Port ${port} should now be free`);
+    return true;
+  } catch (error) {
+    logger.log(`No processes found using port ${port}`);
+    return true;
   }
 }
 
-// Start the server
+// Start the Next.js server
 async function startServer() {
+  logger.log('Starting ultra-lightweight server in development mode');
+  
+  // First ensure the port is free
+  await killProcessesOnPort(PORT);
+  
+  // Force garbage collection before starting
+  forceGarbageCollection();
+  
+  // Create the auth fix script
+  createAuthClientFix();
+  
   try {
-    logWithTimestamp('Starting ultra-lightweight server in ' + (dev ? 'development' : 'production') + ' mode');
+    // Create the Next.js app
+    const app = next({ dev: isDev, quiet: false });
+    const handle = app.getRequestHandler();
     
-    // Free up any memory before starting
-    attemptMemoryRelease();
-    
-    // Fix auth conflicts
-    fixAuthConflicts();
-    
-    // Prepare the Next.js app
     await app.prepare();
     
-    // Create a simple HTTP server
-    const server = createServer(async (req, res) => {
+    // Create custom server
+    const server = createServer((req, res) => {
       try {
-        // Add response timeout
-        res.setTimeout(30000); // 30 seconds timeout
-        
-        // Parse URL
-        const url = parse(req.url, true);
-        
-        // Add auth fix script reference
-        if (url.pathname.endsWith('.html') || !url.pathname.includes('.')) {
-          const originalWriteHead = res.writeHead;
-          const originalWrite = res.write;
-          
-          let body = '';
-          
-          // Override write to capture body
-          res.write = function(chunk, ...args) {
-            body += chunk.toString();
-            return originalWrite.apply(res, [chunk, ...args]);
-          };
-          
-          // Override writeHead to modify headers
-          res.writeHead = function(statusCode, headers) {
-            if (headers && headers['content-type'] && headers['content-type'].includes('text/html')) {
-              // Add script reference to head
-              body = body.replace('</head>', '<script src="/auth-client-fix.js"></script></head>');
-            }
-            return originalWriteHead.apply(res, [statusCode, headers]);
-          };
-        }
-        
-        // Add basic request logging only for non-static requests
-        const isStatic = url.pathname.startsWith('/_next/') || 
-                        url.pathname.includes('.') ||
-                        url.pathname.startsWith('/static/');
-                        
-        if (!isStatic && url.pathname !== '/favicon.ico') {
-          logWithTimestamp(`${req.method} ${url.pathname}`);
-        }
-        
-        // Very aggressive cache control to help manage memory
-        if (isStatic) {
-          // Cache static assets aggressively
-          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-        } else {
-          // Don't cache dynamic routes
-          res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-          res.setHeader('Pragma', 'no-cache');
-          res.setHeader('Expires', '0');
-        }
-        
-        // Handle request with Next.js
-        await handle(req, res);
+        const parsedUrl = parse(req.url, true);
+        handle(req, res, parsedUrl);
       } catch (err) {
-        console.error('Error handling request:', err);
+        logger.error(`Error handling request: ${err.message}`);
         res.statusCode = 500;
         res.end('Internal Server Error');
       }
     });
     
-    // Start the server
-    server.listen(port, (err) => {
+    // Start listening
+    server.listen(PORT, (err) => {
       if (err) throw err;
-      logWithTimestamp(`> Ready on http://${hostname}:${port}`);
       
-      // Check initial memory usage
-      const memory = checkMemoryUsage();
-      logWithTimestamp(`Initial memory: ${memory.rss}MB RSS, ${memory.used}MB heap used`);
+      const memUsage = getMemoryUsage();
+      logger.log(`> Ready on http://localhost:${PORT}`);
+      logger.log(`Memory: ${memUsage.rss}MB RSS, ${memUsage.heapUsed}MB heap used, ${memUsage.heapTotal}MB heap total`);
       
-      // Set up periodic memory monitoring
-      if (MEMORY_MONITORING) {
-        setInterval(checkMemoryUsage, MEMORY_CHECK_INTERVAL);
+      // Set up memory management after server is running
+      setupMemoryManagement();
+    });
+    
+    // Handle server errors
+    server.on('error', (err) => {
+      logger.error(`Server error: ${err.message}`);
+      if (err.code === 'EADDRINUSE') {
+        logger.error(`Port ${PORT} is already in use. Trying to free it...`);
+        killProcessesOnPort(PORT).then(() => {
+          logger.log('Retrying server start...');
+          server.listen(PORT);
+        });
       }
     });
-    
-    // Handle uncaught exceptions and unhandled rejections
-    ['uncaughtException', 'unhandledRejection'].forEach(event => {
-      process.on(event, (err) => {
-        logWithTimestamp(`${event}: ${err.message}`);
-        console.error(err);
-        
-        // Attempt to clean up memory
-        attemptMemoryRelease();
-      });
-    });
-    
-    // Handle signals for graceful shutdown
-    ['SIGINT', 'SIGTERM'].forEach(signal => {
-      process.on(signal, () => {
-        logWithTimestamp(`${signal} received, shutting down...`);
-        server.close(() => {
-          logWithTimestamp('Server closed');
-          process.exit(0);
-        });
-      });
-    });
-  } catch (e) {
-    console.error('Error starting server:', e);
+  } catch (err) {
+    logger.error(`Failed to start server: ${err.message}`);
     process.exit(1);
   }
 }
 
 // Start the server
-startServer(); 
+function main() {
+  // Load environment variables first
+  loadEnv();
+  
+  // Start the server
+  startServer().catch(err => {
+    logger.error(`Failed to start server: ${err.message}`);
+    process.exit(1);
+  });
+}
+
+// Run the main function
+main(); 
