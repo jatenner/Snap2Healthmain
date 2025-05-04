@@ -1,16 +1,8 @@
 {
   "version": 2,
-  "buildCommand": "npm run vercel-build",
-  "outputDirectory": ".next",
-  "installCommand": "npm install",
-  "framework": "nextjs",
-  "regions": [
-    "sfo1"
-  ],
-  "env": {
-    "NEXT_PUBLIC_VERCEL_DEPLOYMENT": "true",
-    "NODE_OPTIONS": "--max-old-space-size=4096 --expose-gc"
-  },
+  "buildCommand": "node vercel-build.js",
+  "outputDirectory": "out",
+  "trailingSlash": true,
   "headers": [
     {
       "source": "/(.*)",
@@ -26,19 +18,6 @@
         {
           "key": "Expires",
           "value": "0"
-        },
-        {
-          "key": "X-Build-ID",
-          "value": "vercel-deployment-$TIME"
-        }
-      ]
-    },
-    {
-      "source": "/api/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-store, no-cache, must-revalidate, proxy-revalidate"
         }
       ]
     },
@@ -66,25 +45,6 @@
     }
   ],
   "rewrites": [
-    {
-      "source": "/_next/static/(.*)",
-      "destination": "/_next/static/$1"
-    },
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
-    }
-  ],
-  "builds": [
-    {
-      "src": "next.config.js",
-      "use": "@vercel/next"
-    }
-  ],
-  "build": {
-    "env": {
-      "NEXT_PUBLIC_VERCEL_DEPLOYMENT": "true",
-      "NODE_OPTIONS": "--max-old-space-size=4096"
-    }
-  }
+    { "source": "/(.*)", "destination": "/$1" }
+  ]
 }

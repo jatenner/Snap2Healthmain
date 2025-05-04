@@ -3,6 +3,7 @@
 /**
  * Custom build script for Vercel deployments
  * This script is designed to work in environments where system commands like lsof aren't available
+ * It builds a static export of the Next.js app for Vercel
  */
 const { execSync } = require('child_process');
 const path = require('path');
@@ -13,7 +14,7 @@ process.env.VERCEL = '1';
 process.env.NEXT_PUBLIC_VERCEL_DEPLOYMENT = 'true';
 process.env.NEXT_PUBLIC_BUILD_TIMESTAMP = new Date().toISOString();
 
-console.log('🚀 Starting Vercel build script');
+console.log('🚀 Starting Vercel static export build script');
 console.log('Environment: Production Vercel deployment');
 
 // Ensure the .next directory exists
@@ -27,17 +28,29 @@ if (!fs.existsSync(nextDir)) {
   }
 }
 
-// Run the Next.js build
+// Create an out directory for the static export
+const outDir = path.join(process.cwd(), 'out');
+if (!fs.existsSync(outDir)) {
+  try {
+    fs.mkdirSync(outDir, { recursive: true });
+    console.log('Created out directory');
+  } catch (error) {
+    console.warn('Error creating out directory:', error.message);
+  }
+}
+
+// Run the Next.js static export build
 try {
-  console.log('Running Next.js build...');
+  console.log('Running Next.js static export build...');
   execSync('next build', { 
     stdio: 'inherit',
     env: {
       ...process.env,
-      NODE_OPTIONS: '--max-old-space-size=4096'
+      NODE_OPTIONS: '--max-old-space-size=4096',
+      NEXT_PUBLIC_VERCEL_DEPLOYMENT: 'true'
     }
   });
-  console.log('✅ Build completed successfully');
+  console.log('✅ Static export build completed successfully');
   process.exit(0);
 } catch (error) {
   console.error('❌ Build failed, running emergency fixes...');
@@ -54,15 +67,16 @@ try {
     });
     
     // Try building again without linting
-    console.log('Retrying build without linting...');
+    console.log('Retrying static export build without linting...');
     execSync('next build --no-lint', { 
       stdio: 'inherit',
       env: {
         ...process.env,
-        NODE_OPTIONS: '--max-old-space-size=4096'
+        NODE_OPTIONS: '--max-old-space-size=4096',
+        NEXT_PUBLIC_VERCEL_DEPLOYMENT: 'true'
       }
     });
-    console.log('✅ Build completed successfully after fixes');
+    console.log('✅ Static export build completed successfully after fixes');
     process.exit(0);
   } catch (fixError) {
     console.error('❌ Failed to recover from build error:', fixError.message);

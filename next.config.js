@@ -23,7 +23,7 @@ const nextConfig = {
     
     return config;
   },
-  output: 'standalone',
+  output: process.env.NEXT_PUBLIC_VERCEL_DEPLOYMENT === 'true' ? 'export' : undefined,
   experimental: {
     optimizeCss: true,
     scrollRestoration: true,
@@ -33,7 +33,7 @@ const nextConfig = {
     cpus: 1
   },
   swcMinify: true,
-  reactStrictMode: process.env.NODE_ENV === 'production',
+  reactStrictMode: true,
   onDemandEntries: {
     maxInactiveAge: 15 * 1000,
     pagesBufferLength: 2,
@@ -48,20 +48,29 @@ const nextConfig = {
     minimumCacheTTL: 60,
     deviceSizes: [640, 960, 1200],
     imageSizes: [32, 64, 96],
+    domains: ['storage.googleapis.com', 'lh3.googleusercontent.com'],
   },
   async headers() {
     return [
       {
-        source: '/(.*)',
+        source: '/:path*',
         headers: [
           {
             key: 'Cache-Control',
             value: 'public, max-age=0, must-revalidate',
           },
+          {
+            key: 'Pragma',
+            value: 'no-cache',
+          },
+          {
+            key: 'Expires',
+            value: '0',
+          },
         ],
       },
       {
-        source: '/api/(.*)',
+        source: '/api/:path*',
         headers: [
           {
             key: 'Cache-Control',
@@ -70,7 +79,7 @@ const nextConfig = {
         ],
       },
       {
-        source: '/_next/static/(.*)',
+        source: '/_next/static/:path*',
         headers: [
           {
             key: 'Cache-Control',
@@ -84,6 +93,10 @@ const nextConfig = {
           {
             key: 'Cache-Control',
             value: 'no-store, max-age=0',
+          },
+          {
+            key: 'X-Auth-Fix-Script',
+            value: 'true',
           },
         ],
       },
