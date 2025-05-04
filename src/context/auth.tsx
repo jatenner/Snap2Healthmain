@@ -4,6 +4,8 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { createClient, SupabaseClient, type User as SupabaseUser } from '@supabase/supabase-js';
 import { getCookie, setCookie, deleteCookie } from 'cookies-next';
 import { useRouter } from 'next/navigation';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 // Add TypeScript declaration for window.ENV
 declare global {
@@ -21,84 +23,24 @@ declare global {
 // Check if we're in mock mode - only enable if explicitly set to 'true'
 const mockAuth = false; // Always disable mock auth
 
-// Create a Supabase client (or a mock one if in mock mode)
-let supabase: SupabaseClient;
+// Add this singleton protection
+let supabaseClientInstance: SupabaseClient | null = null;
 
-try {
-  if (mockAuth) {
-    // Use a basic client with no actual connection in mock mode
-    console.log('Using mock Supabase client');
-    // Create a complete mock implementation that won't try to validate URLs
-    supabase = {
-      auth: {
-        getSession: async () => ({ data: { session: null }, error: null }),
-        onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } }, error: null }),
-        signInWithPassword: async () => ({ data: { user: null, session: null }, error: null }),
-        signUp: async () => ({ data: { user: null, session: null }, error: null }),
-        signOut: async () => ({ error: null }),
-        getUser: async () => ({ data: { user: null }, error: null })
-      },
-      from: () => ({
-        select: () => ({
-          eq: () => ({
-            order: () => ({
-              range: () => Promise.resolve({ data: [], error: null })
-            })
-          })
-        })
-      }),
-      storage: { 
-        from: () => ({
-          upload: async () => ({ data: null, error: null }),
-          getPublicUrl: () => ({ data: { publicUrl: "" } })
-        })
-      }
-    } as unknown as SupabaseClient;
-  } else {
-    const supabaseUrl = typeof window !== 'undefined' && window.ENV?.NEXT_PUBLIC_SUPABASE_URL 
-      ? window.ENV.NEXT_PUBLIC_SUPABASE_URL 
-      : process.env.NEXT_PUBLIC_SUPABASE_URL;
-      
-    const supabaseKey = typeof window !== 'undefined' && window.ENV?.NEXT_PUBLIC_SUPABASE_ANON_KEY
-      ? window.ENV.NEXT_PUBLIC_SUPABASE_ANON_KEY
-      : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Supabase credentials missing - falling back to mock');
-    }
-    
-    supabase = createClient(supabaseUrl, supabaseKey);
+// Create client function that returns singleton instance
+export const getSupabaseClient = () => {
+  // If we already have an instance, return it
+  if (supabaseClientInstance) {
+    return supabaseClientInstance;
   }
-} catch (error) {
-  console.error('Error initializing Supabase client:', error);
-  // Fallback to mock client with more complete implementation
-  console.log('Falling back to mock Supabase client due to error');
-  supabase = {
-    auth: {
-      getSession: async () => ({ data: { session: null }, error: null }),
-      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } }, error: null }),
-      signInWithPassword: async () => ({ data: { user: null, session: null }, error: null }),
-      signUp: async () => ({ data: { user: null, session: null }, error: null }),
-      signOut: async () => ({ error: null }),
-      getUser: async () => ({ data: { user: null }, error: null })
-    },
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          order: () => ({
-            range: () => Promise.resolve({ data: [], error: null })
-          })
-        })
-      })
-    }),
-    storage: { 
-      from: () => ({
-        upload: async () => ({ data: null, error: null }),
-        getPublicUrl: () => ({ data: { publicUrl: "" } })
-      })
-    }
-  } as unknown as SupabaseClient;
-}
+  
+  // Otherwise, create a new one and store it
+  supabaseClientInstance = createClientComponentClient({
+    // No options needed, they're automatically pulled from env vars
+  });
+  
+  console.log('Created Supabase client singleton');
+  return supabaseClientInstance;
+};
 
 // User interface (at the top of the file)
 interface User {
@@ -158,23 +100,17 @@ const clearLocalAuth = () => {
   }
 };
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   const router = useRouter();
   
-  // Configure Supabase client
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  // Use the singleton client instead of creating a new one
+  const supabase = getSupabaseClient();
   
   // Only use mock in development if explicitly enabled
   const useMockAuth = false; // Always disable mock auth
-  
-  // Initialize Supabase client if credentials are available
-  const supabase = supabaseUrl && supabaseAnonKey ? 
-    createClient(supabaseUrl, supabaseAnonKey) : 
-    null;
   
   if (!supabase && !useMockAuth) {
     console.warn('Supabase client not initialized and mock auth not enabled');
@@ -896,7 +832,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
-}
+};
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
