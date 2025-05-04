@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { createClient, SupabaseClient, type User as SupabaseUser } from '@supabase/supabase-js';
+import { createClient, type User as SupabaseUser } from '@supabase/supabase-js';
 import { getCookie, setCookie, deleteCookie } from 'cookies-next';
 import { useRouter } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
