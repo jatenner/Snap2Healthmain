@@ -902,6 +902,38 @@ function fixMissingModules() {
       console.log(`✅ Module exists: ${module.importPath}`);
     }
   }
+  
+  // Create auth-client-fix.js in public directory if it doesn't exist
+  const authClientFixPath = path.join(process.cwd(), 'public/auth-client-fix.js');
+  if (!fs.existsSync(authClientFixPath)) {
+    try {
+      // Find auth-client-fix in missingModules
+      const authClientFixModule = missingModules.find(module => module.importPath === 'auth-client-fix');
+      if (authClientFixModule) {
+        ensureDirectoryExists(authClientFixPath);
+        fs.writeFileSync(authClientFixPath, authClientFixModule.content.trim());
+        console.log(`✅ Created auth-client-fix.js in public directory`);
+      }
+    } catch (error) {
+      console.error(`❌ Failed to create auth-client-fix.js:`, error.message);
+    }
+  }
+  
+  // Create auth-fix page if it doesn't exist
+  const authFixPagePath = path.join(process.cwd(), 'app/(auth)/auth-fix/page.tsx');
+  if (!fs.existsSync(authFixPagePath)) {
+    try {
+      // Find auth-fix in missingModules
+      const authFixModule = missingModules.find(module => module.importPath === 'auth-fix');
+      if (authFixModule) {
+        ensureDirectoryExists(authFixPagePath);
+        fs.writeFileSync(authFixPagePath, authFixModule.content.trim());
+        console.log(`✅ Created auth-fix page in app/(auth)/auth-fix directory`);
+      }
+    } catch (error) {
+      console.error(`❌ Failed to create auth-fix page:`, error.message);
+    }
+  }
 }
 
 // Make sure next.config.js has the correct transpilation config

@@ -1,0 +1,11 @@
+'use client';
+
+// This is a clean minimal wrapper that simply imports and exports SimpleFoodAnalysis
+import { SimpleFoodAnalysis } from './SimpleFoodAnalysis';
+
+// Direct assignment without any extra code
+const FoodAnalysis = SimpleFoodAnalysis;
+
+// Export both as default and named export for maximum compatibility
+export default FoodAnalysis;
+export { FoodAnalysis, SimpleFoodAnalysis }; 

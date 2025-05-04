@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary-dark-blue: #020e2c;
+  --secondary-blue: #0a2053;
+  --accent-blue: #1e3a7b;
+  --accent-cyan: #5cd2ff;
+  --text-blue: #ffffff;
+  --highlight-blue: #43b0ff;
+}
+
+body {
+  background-color: var(--primary-dark-blue);
+  background-image: 
+    radial-gradient(circle at 20% 35%, var(--secondary-blue) 0%, transparent 25%),
+    radial-gradient(circle at 75% 65%, var(--accent-blue) 0%, transparent 25%);
+  color: var(--text-blue);
+  position: relative;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    radial-gradient(circle at 15% 15%, #ffffff 0%, #ffffff 0.1%, transparent 0.2%),
+    radial-gradient(circle at 85% 25%, #ffffff 0%, #ffffff 0.1%, transparent 0.2%),
+    radial-gradient(circle at 35% 65%, #ffffff 0%, #ffffff 0.1%, transparent 0.2%),
+    radial-gradient(circle at 60% 40%, #ffffff 0%, #ffffff 0.1%, transparent 0.2%),
+    radial-gradient(circle at 75% 85%, #ffffff 0%, #ffffff 0.1%, transparent 0.2%),
+    radial-gradient(circle at 25% 45%, #ffffff 0%, #ffffff 0.1%, transparent 0.2%),
+    radial-gradient(circle at 42% 25%, #ffffff 0%, #ffffff 0.1%, transparent 0.2%),
+    radial-gradient(circle at 92% 55%, #ffffff 0%, #ffffff 0.1%, transparent 0.2%),
+    radial-gradient(circle at 15% 85%, #ffffff 0%, #ffffff 0.1%, transparent 0.2%),
+    radial-gradient(circle at 65% 75%, #ffffff 0%, #ffffff 0.1%, transparent 0.2%);
+  opacity: 0.6;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ai-chip {
+  background-color: var(--accent-cyan);
+  color: var(--primary-dark-blue);
+  font-weight: bold;
+} 

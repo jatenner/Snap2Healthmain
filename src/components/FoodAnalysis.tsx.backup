@@ -1,0 +1,192 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+
+interface FoodAnalysisProps {
+  imageUrl?: string;
+  mealData?: any;
+  isLoading?: boolean;
+  onAnalyze?: (file?: File) => void;
+  className?: string;
+  goal?: string;
+}
+
+export function FoodAnalysis({ 
+  analysisData, 
+  isAnalyzing = false,
+  onAnalyze,
+  error = null
+}: FoodAnalysisProps) {
+  const [versionString, setVersionString] = useState('1.0');
+  const [version, setVersion] = useState(Date.now());
+  
+  useEffect(() => {
+    // Get version from API for debugging purposes
+    fetch('/api/version')
+      .then(res => res.json())
+      .then(data => {
+        setVersionString(data.version || '1.0');
+      })
+      .catch(err => {
+        console.error('Error fetching version:', err);
+      });
+  }, []);
+  
+  if (isAnalyzing) {
+    return (
+      <Card className="w-full bg-slate-50">
+        <CardContent className="p-4">
+          <div className="flex flex-col items-center justify-center py-8">
+            <Loader2 className="h-8 w-8 text-blue-500 animate-spin mb-4" />
+            <p className="text-lg font-medium text-gray-700">Analyzing your meal...</p>
+            <p className="text-sm text-gray-500 mt-2">This may take a moment</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+  
+  if (error) {
+    return (
+      <Card className="w-full bg-red-50">
+        <CardContent className="p-4">
+          <div className="flex flex-col items-center justify-center py-8">
+            <AlertCircle className="h-8 w-8 text-red-500 mb-4" />
+            <p className="text-lg font-medium text-red-700">Analysis failed</p>
+            <p className="text-sm text-red-600 mt-2">{error}</p>
+            <Button 
+              id="retry-analyze-button"
+              variant="outline" 
+              className="mt-4" 
+              onClick={onAnalyze}
+            >
+              Try Again
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+  
+  if (!analysisData) {
+    return (
+      <Card className="w-full bg-slate-50">
+        <CardContent className="p-4">
+          <div className="flex flex-col items-center justify-center py-8">
+            <p className="text-lg font-medium text-gray-700">Ready to analyze your meal</p>
+            <p className="text-sm text-gray-500 mt-2">Upload an image to get started</p>
+            <Button 
+              id="analyze-button"
+              variant="default" 
+              className="mt-4" 
+              onClick={onAnalyze}
+            >
+              Analyze
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+  
+  const {
+    mealName,
+    calories = 0,
+    protein = 0,
+    carbs = 0,
+    fat = 0,
+    protein_percent = 20,
+    carbs_percent = 50,
+    fat_percent = 30
+  } = analysisData;
+  
+  return (
+    <div className="max-w-4xl mx-auto p-4" data-timestamp={version}>
+      <div className="fixed top-0 right-0 bg-blue-600 text-white px-2 py-1 text-xs z-50">
+        Version: {versionString} (UPDATED)
+      </div>
+      
+      <Card className="w-full">
+        <CardContent className="p-6">
+          <div className="flex items-center mb-4">
+            <CheckCircle className="h-6 w-6 text-green-500 mr-2" />
+            <h2 className="text-xl font-bold text-gray-800">Analysis Results</h2>
+          </div>
+          
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-gray-700">{mealName || 'Your Meal'}</h3>
+            <p className="text-2xl font-bold text-gray-900 mt-1">{calories} calories</p>
+          </div>
+          
+          <div className="mb-6">
+            <h4 className="text-sm font-medium text-gray-600 mb-2">Macronutrient Breakdown</h4>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <p className="text-sm text-gray-500">Protein</p>
+                <p className="text-lg font-semibold">{protein}g ({protein_percent}%)</p>
+                <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
+                  <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${protein_percent}%` }}></div>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Carbs</p>
+                <p className="text-lg font-semibold">{carbs}g ({carbs_percent}%)</p>
+                <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
+                  <div className="bg-green-500 h-2 rounded-full" style={{ width: `${carbs_percent}%` }}></div>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Fat</p>
+                <p className="text-lg font-semibold">{fat}g ({fat_percent}%)</p>
+                <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
+                  <div className="bg-yellow-500 h-2 rounded-full" style={{ width: `${fat_percent}%` }}></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {analysisData.macronutrients && analysisData.macronutrients.length > 0 && (
+            <div className="mb-6">
+              <h4 className="text-sm font-medium text-gray-600 mb-2">Detailed Nutrition</h4>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {analysisData.macronutrients.map((nutrient, index) => (
+                  <div key={index} className="p-2 bg-gray-50 rounded">
+                    <p className="text-sm font-medium text-gray-700">{nutrient.name}</p>
+                    <p className="text-sm text-gray-500">
+                      {nutrient.amount}{nutrient.unit} {nutrient.percentDailyValue ? `(${nutrient.percentDailyValue}% DV)` : ''}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {analysisData.generalInsights && analysisData.generalInsights.length > 0 && (
+            <div className="mb-6">
+              <h4 className="text-sm font-medium text-gray-600 mb-2">Insights</h4>
+              <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
+                {analysisData.generalInsights.map((insight, index) => (
+                  <li key={index}>{insight}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          
+          <Button 
+            id="analyze-another-button"
+            variant="outline" 
+            className="mt-4 w-full" 
+            onClick={onAnalyze}
+          >
+            Analyze Another Meal
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export default FoodAnalysis;

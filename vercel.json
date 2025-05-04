@@ -73,10 +73,6 @@
     {
       "source": "/api/(.*)",
       "destination": "/api/$1"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/"
     }
   ],
   "builds": [
@@ -84,5 +80,11 @@
       "src": "next.config.js",
       "use": "@vercel/next"
     }
-  ]
+  ],
+  "build": {
+    "env": {
+      "NEXT_PUBLIC_VERCEL_DEPLOYMENT": "true",
+      "NODE_OPTIONS": "--max-old-space-size=4096"
+    }
+  }
 }

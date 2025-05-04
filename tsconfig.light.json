@@ -1,0 +1,33 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // Disable type checking for development to reduce memory usage
+    "skipLibCheck": true,
+    "noEmit": true,
+    
+    // Use minimal lib dependencies
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    
+    // Reduce type checking strictness for development
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "noFallthroughCasesInSwitch": false,
+    
+    // Disable source maps to save memory
+    "sourceMap": false,
+    "inlineSources": false,
+    
+    // Lower TypeScript memory usage
+    "assumeChangesOnlyAffectDirectDependencies": true,
+    "disableSizeLimit": true
+  },
+  "exclude": [
+    "node_modules",
+    ".next",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx"
+  ]
+} 

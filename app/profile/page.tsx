@@ -1,0 +1,439 @@
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import { useAuth } from '@/context/auth';
+import { supabase } from '@/lib/supabaseClient';
+import LoadingSpinner from '@/components/LoadingSpinner';
+import ProfileDashboard from '@/components/ProfileDashboard';
+import { useRouter } from 'next/navigation';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { Database } from '@/types/supabase';
+import { ProfileImageUpload } from '@/components/ProfileImageUpload';
+import { shouldUseLocalAuth, updateLocalUser } from '@/app/(auth)/login/auth-workaround';
+import { getCookie } from 'cookies-next';
+
+interface ProfileFormData {
+  username: string;
+  defaultGoal: string;
+  height?: string;
+  weight?: string;
+  age?: string;
+  gender?: string;
+  activityLevel?: string;
+}
+
+// Match the User interface from AuthContext but extend it with Supabase properties
+interface User {
+  id: string;
+  name?: string;
+  email?: string;
+  // These properties are available from Supabase but not in the AuthContext
+  created_at?: string;
+  last_sign_in_at?: string;
+  user_metadata?: {
+    username?: string;
+    defaultGoal?: string;
+    height?: string;
+    weight?: string;
+    age?: string;
+    gender?: string;
+    activityLevel?: string;
+  };
+}
+
+export default function ProfilePage() {
+  const { user, isLoading: authLoading, reloadUser } = useAuth();
+  const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [supabase] = useState(() => createClientComponentClient<Database>());
+  const [isSetupMode, setIsSetupMode] = useState(false);
+  
+  const [formData, setFormData] = useState<ProfileFormData>({
+    username: '',
+    defaultGoal: 'General Wellness',
+  });
+
+  const [isLocalAuth, setIsLocalAuth] = useState(false);
+
+  // Add a script element to hide BMI elements
+  useEffect(() => {
+    // Create and add a script that will run on the client
+    const script = document.createElement('script');
+    script.innerHTML = `
+      // Find and hide any BMI elements
+      setTimeout(function() {
+        document.querySelectorAll('div').forEach(function(el) {
+          if (el.textContent && el.textContent.trim() === 'BMI') {
+            // Find the closest parent that's likely the entire BMI row
+            var parent = el;
+            for (var i = 0; i < 3; i++) {
+              if (parent.parentElement) parent = parent.parentElement;
+            }
+            if (parent) parent.style.display = 'none';
+          }
+        });
+      }, 500);
+    `;
+    document.body.appendChild(script);
+    
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
+  // Check if using local auth and if in setup mode
+  useEffect(() => {
+    const localAuth = getCookie('use-local-auth') === 'true';
+    setIsLocalAuth(localAuth);
+    
+    // Check URL for setup parameter
+    const params = new URLSearchParams(window.location.search);
+    setIsSetupMode(params.get('setup') === 'true');
+  }, []);
+
+  // Load user data when the component mounts
+  useEffect(() => {
+    if (user) {
+      // Initialize form with user data
+      setFormData({
+        username: user.user_metadata?.username || '',
+        defaultGoal: user.user_metadata?.defaultGoal || 'General Wellness',
+        height: user.user_metadata?.height || '',
+        weight: user.user_metadata?.weight || '',
+        age: user.user_metadata?.age || '',
+        gender: user.user_metadata?.gender || '',
+        activityLevel: user.user_metadata?.activityLevel || '',
+      });
+    }
+  }, [user]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setMessage(null);
+
+    try {
+      if (isLocalAuth) {
+        // Use local auth workaround for updates
+        const success = updateLocalUser({
+          username: formData.username,
+          defaultGoal: formData.defaultGoal,
+          height: formData.height,
+          weight: formData.weight,
+          age: formData.age,
+          gender: formData.gender,
+          activityLevel: formData.activityLevel,
+          profile_completed: true // Mark profile as completed
+        });
+
+        if (!success) throw new Error('Failed to update local profile');
+
+        // Reload user data in the auth context
+        await reloadUser();
+
+        setMessage({
+          text: 'Profile updated successfully!',
+          type: 'success',
+        });
+        
+        // After successful update, refresh the page to ensure we have the latest data
+        setTimeout(() => {
+          // Remove setup parameter when reloading
+          const url = new URL(window.location.href);
+          url.searchParams.delete('setup');
+          router.replace(url.toString());
+        }, 1500);
+      } else {
+        // Use Supabase auth for updates
+        const { error } = await supabase.auth.updateUser({
+          data: {
+            username: formData.username,
+            defaultGoal: formData.defaultGoal,
+            height: formData.height,
+            weight: formData.weight,
+            age: formData.age,
+            gender: formData.gender,
+            activityLevel: formData.activityLevel,
+            profile_completed: true // Mark profile as completed
+          },
+        });
+
+        if (error) throw error;
+
+        // After Supabase update, also reload user
+        await reloadUser();
+
+        setMessage({
+          text: 'Profile updated successfully!',
+          type: 'success',
+        });
+        
+        // After successful update, refresh the page to ensure we have the latest data
+        setTimeout(() => {
+          // Remove setup parameter when reloading
+          const url = new URL(window.location.href);
+          url.searchParams.delete('setup');
+          router.replace(url.toString());
+        }, 1500);
+      }
+    } catch (err: any) {
+      console.error('Error updating profile:', err);
+      setMessage({
+        text: err.message || 'Failed to update profile',
+        type: 'error',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (authLoading) {
+    return (
+      <div className="container mx-auto px-4 py-12 flex justify-center">
+        <LoadingSpinner size={36} />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="container mx-auto px-4 py-12">
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-md p-4">
+          <p>Please sign in to access your profile.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <h1 className="text-3xl font-bold mb-4">Your Health Profile</h1>
+
+      {/* Main Info Box - Make it very visible */}
+      <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg shadow-lg p-6 mb-6">
+        <div className="flex items-center mb-4">
+          <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mr-4">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-xl font-bold">Personalize Your Experience</h2>
+            <p className="opacity-90">{user.email}</p>
+          </div>
+        </div>
+        
+        <p className="text-lg mb-3">
+          <span className="font-bold">For the most accurate nutrition analysis</span>, please complete your health profile below.
+        </p>
+        
+        <p className="mb-1">
+          ✓ All your uploads and history are securely stored in your account
+        </p>
+        <p className="mb-1">
+          ✓ Your health data is used to provide personalized nutrition recommendations
+        </p>
+        <p>
+          ✓ Complete all fields for the most tailored analysis results
+        </p>
+      </div>
+
+      {isLocalAuth && (
+        <div className="mb-6 bg-yellow-50 border-l-4 border-yellow-500 p-3 rounded">
+          <p className="text-yellow-700 text-sm">
+            <strong>Note:</strong> You're using simplified authentication. Your profile changes will be saved locally.
+          </p>
+        </div>
+      )}
+
+      {/* Profile Dashboard - Only show if profile is partially or fully complete */}
+      {formData.height || formData.weight || formData.age || formData.gender ? (
+        <div className="mb-6">
+          <ProfileDashboard />
+        </div>
+      ) : null}
+
+      {/* Profile Form - More compact layout */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Health Information Section - Main focus */}
+          <div className="border-2 border-blue-100 rounded-lg p-4 bg-blue-50">
+            <h2 className="text-xl font-semibold text-blue-800 mb-3">Health Information</h2>
+            <p className="text-blue-700 mb-4 font-medium">
+              This is the data used to analyze your food photos and provide personalized recommendations.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+              {/* Height */}
+              <div>
+                <label htmlFor="height" className="block text-sm font-medium text-gray-700 mb-1">
+                  Height <span className="text-blue-600 font-semibold">(important)</span>
+                </label>
+                <div className="relative">
+                  <input
+                    id="height"
+                    name="height"
+                    type="text"
+                    value={formData.height}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-black"
+                    placeholder="Height in inches"
+                  />
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-500">
+                    in
+                  </div>
+                </div>
+                <p className="mt-1 text-xs text-gray-600">5'10" = 70 inches</p>
+              </div>
+
+              {/* Weight */}
+              <div>
+                <label htmlFor="weight" className="block text-sm font-medium text-gray-700 mb-1">
+                  Weight <span className="text-blue-600 font-semibold">(important)</span>
+                </label>
+                <div className="relative">
+                  <input
+                    id="weight"
+                    name="weight"
+                    type="text"
+                    value={formData.weight}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-black"
+                    placeholder="Weight in pounds"
+                  />
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-500">
+                    lbs
+                  </div>
+                </div>
+              </div>
+
+              {/* Age */}
+              <div>
+                <label htmlFor="age" className="block text-sm font-medium text-gray-700 mb-1">
+                  Age <span className="text-blue-600 font-semibold">(important)</span>
+                </label>
+                <input
+                  id="age"
+                  name="age"
+                  type="text"
+                  value={formData.age}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-black"
+                  placeholder="Your age"
+                />
+              </div>
+
+              {/* Gender */}
+              <div>
+                <label htmlFor="gender" className="block text-sm font-medium text-gray-700 mb-1">
+                  Gender <span className="text-blue-600 font-semibold">(important)</span>
+                </label>
+                <select
+                  id="gender"
+                  name="gender"
+                  value={formData.gender}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-700"
+                >
+                  <option value="">Select gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                  <option value="Prefer not to say">Prefer not to say</option>
+                </select>
+              </div>
+
+              {/* Activity Level */}
+              <div>
+                <label htmlFor="activityLevel" className="block text-sm font-medium text-gray-700 mb-1">
+                  Activity Level <span className="text-blue-600 font-semibold">(important)</span>
+                </label>
+                <select
+                  id="activityLevel"
+                  name="activityLevel"
+                  value={formData.activityLevel}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-700"
+                >
+                  <option value="">Select activity level</option>
+                  <option value="Sedentary">Sedentary (little to no exercise)</option>
+                  <option value="Light">Light (light exercise 1-3 days/week)</option>
+                  <option value="Moderate">Moderate (moderate exercise 3-5 days/week)</option>
+                  <option value="Active">Active (hard exercise 6-7 days/week)</option>
+                  <option value="Very Active">Very Active (intense exercise daily or 2x/day)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          
+          {/* Username and Goals Section */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Username */}
+            <div>
+              <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
+                Username
+              </label>
+              <input
+                id="username"
+                name="username"
+                type="text"
+                value={formData.username}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-black"
+                placeholder="Your username"
+              />
+            </div>
+
+            {/* Default Goal */}
+            <div>
+              <label htmlFor="defaultGoal" className="block text-sm font-medium text-gray-700 mb-1">
+                Nutritional Goal
+              </label>
+              <select
+                id="defaultGoal"
+                name="defaultGoal"
+                value={formData.defaultGoal}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-700"
+              >
+                <option value="General Wellness">General Wellness</option>
+                <option value="Weight Loss">Weight Loss</option>
+                <option value="Muscle Gain">Muscle Gain</option>
+                <option value="Athletic Performance">Athletic Performance</option>
+                <option value="Heart Health">Heart Health</option>
+                <option value="Blood Sugar Management">Blood Sugar Management</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Submit Button */}
+          <div>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-lg font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              {isSubmitting ? 'Saving...' : 'Save Health Profile'}
+            </button>
+            
+            {message && (
+              <div
+                className={`mt-4 p-3 rounded ${
+                  message.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
+                }`}
+              >
+                {message.text}
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+} 
