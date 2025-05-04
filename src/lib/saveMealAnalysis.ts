@@ -1,4 +1,4 @@
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { getSupabaseClient } from './supabase-singleton';
 import { v4 as uuidv4 } from 'uuid';
 import { Database } from '@/types/supabase';
 
@@ -48,8 +48,8 @@ export async function saveMealAnalysis(mealData: MealData): Promise<{
       return { success: true, mealId };
     }
     
-    // In production, save to Supabase
-    const supabase = createClientComponentClient<Database>();
+    // In production, save to Supabase using singleton client
+    const supabase = getSupabaseClient();
     
     const { data, error } = await supabase
       .from('meals')
@@ -109,8 +109,8 @@ export async function getMealHistory(userId: string): Promise<{
       return { success: true, meals: userMeals };
     }
     
-    // In production, get from Supabase
-    const supabase = createClientComponentClient<Database>();
+    // In production, get from Supabase using singleton client
+    const supabase = getSupabaseClient();
     
     const { data, error } = await supabase
       .from('meals')

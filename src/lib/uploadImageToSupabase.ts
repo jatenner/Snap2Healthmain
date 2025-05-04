@@ -1,4 +1,4 @@
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { getSupabaseClient } from './supabase-singleton';
 import { v4 as uuidv4 } from 'uuid';
 import { Database } from '@/types/supabase';
 
@@ -20,8 +20,8 @@ export async function uploadImageToSupabase(file: File): Promise<string> {
       return URL.createObjectURL(file);
     }
     
-    // In production mode, upload to Supabase Storage
-    const supabase = createClientComponentClient<Database>();
+    // In production mode, upload to Supabase Storage using singleton client
+    const supabase = getSupabaseClient();
     
     // Check if user is authenticated first to avoid 400 errors
     const { data: { session } } = await supabase.auth.getSession();
