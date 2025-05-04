@@ -19,6 +19,18 @@ export const metadata = {
   expires: '0'
 };
 
+// Add this script to the head
+const AuthFixScript = () => {
+  return (
+    <script
+      id="auth-client-fix"
+      src="/auth-client-fix.js"
+      async
+      data-priority="high"
+    />
+  );
+};
+
 export default function RootLayout({
   children,
 }: {
@@ -52,6 +64,8 @@ export default function RootLayout({
           }
           .loading-overlay { display: none !important; }
         `}} />
+
+        <AuthFixScript />
       </head>
       <body 
         className={cn(

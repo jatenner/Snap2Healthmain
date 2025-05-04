@@ -17,29 +17,42 @@ declare global {
       NEXT_PUBLIC_AUTH_BYPASS?: string;
       NEXT_PUBLIC_APP_ENV?: string;
     };
+    __fixAuthStorage?: () => boolean;
+    __recordAuthFailure?: () => void;
+    __clearAuthFailures?: () => void;
   }
 }
 
 // Check if we're in mock mode - only enable if explicitly set to 'true'
-const mockAuth = false; // Always disable mock auth
+const mockAuth = typeof window !== 'undefined' && 
+  (window.ENV?.NEXT_PUBLIC_MOCK_AUTH === 'true' || process.env.NEXT_PUBLIC_MOCK_AUTH === 'true');
 
-// Add this singleton protection
-let supabaseClientInstance: SupabaseClient | null = null;
+const authBypass = typeof window !== 'undefined' && 
+  (window.ENV?.NEXT_PUBLIC_AUTH_BYPASS === 'true' || process.env.NEXT_PUBLIC_AUTH_BYPASS === 'true');
 
-// Create client function that returns singleton instance
+// Create a singleton instance of the Supabase client
+// This prevents the "Multiple GoTrueClient instances detected" warning
+let supabaseClientSingleton: SupabaseClient | null = null;
+
 export const getSupabaseClient = () => {
-  // If we already have an instance, return it
-  if (supabaseClientInstance) {
-    return supabaseClientInstance;
+  if (supabaseClientSingleton) {
+    return supabaseClientSingleton;
   }
-  
-  // Otherwise, create a new one and store it
-  supabaseClientInstance = createClientComponentClient({
-    // No options needed, they're automatically pulled from env vars
-  });
-  
-  console.log('Created Supabase client singleton');
-  return supabaseClientInstance;
+
+  // Fix any auth storage issues before creating a new client
+  if (typeof window !== 'undefined' && window.__fixAuthStorage) {
+    window.__fixAuthStorage();
+  }
+
+  // For client-side, create a new client
+  if (typeof window !== 'undefined') {
+    console.log('Created Supabase client singleton');
+    supabaseClientSingleton = createClientComponentClient();
+    return supabaseClientSingleton;
+  }
+
+  // For server-side, create a new client each time (should not be an issue)
+  return createClientComponentClient();
 };
 
 // User interface (at the top of the file)
@@ -101,188 +114,182 @@ const clearLocalAuth = () => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
-  const router = useRouter();
-  
-  // Use the singleton client instead of creating a new one
-  const supabase = getSupabaseClient();
-  
-  // Only use mock in development if explicitly enabled
-  const useMockAuth = false; // Always disable mock auth
-  
-  if (!supabase && !useMockAuth) {
-    console.warn('Supabase client not initialized and mock auth not enabled');
-  } else if (!supabase) {
-    console.log('Using mock Supabase client');
-  }
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
-  // Modify the initialize function to make it more resilient and handle auth issues better
-  const initialize = async () => {
-    setIsInitialized(false);
-    setLoading(true);
-    
+  // For compatibility with existing code
+  const isLoading = loading;
+
+  // Use local authentication if set
+  const checkLocalAuth = () => {
     try {
-      // Prevent multiple GoTrueClient instances by checking if we've already initialized
-      const authInitialized = localStorage.getItem('auth-initialized');
-      const currentTimestamp = Date.now();
+      const useLocalAuth = getCookie('use-local-auth') === 'true';
+      const localAuthUser = getCookie('local-auth-user');
       
-      if (authInitialized) {
-        try {
-          const parsedTime = parseInt(authInitialized, 10);
-          // If we initialized less than 5 seconds ago, wait a bit to prevent conflicts
-          if (currentTimestamp - parsedTime < 5000) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          }
-        } catch (e) {
-          console.warn('Error parsing auth timestamp:', e);
-        }
+      if (useLocalAuth && localAuthUser) {
+        const userData = JSON.parse(localAuthUser as string) as User;
+        setUser(userData);
+        setIsAuthenticated(true);
+        setLoading(false);
+        setIsInitialized(true);
+        setIsInitializing(false);
+        return true;
       }
       
-      // Check if we should use local auth first 
-      // (this helps prevent multiple GoTrueClient instances)
-      const useLocalAuth = 
-        localStorage.getItem('use-local-auth') === 'true' || 
-        getCookie('use-local-auth') === 'true' || 
-        getCookie('auth-fallback') === 'active';
-      
-      if (useLocalAuth) {
-        try {
-          // Get user from localStorage or cookies
-          const localUserStr = 
-            localStorage.getItem('local-auth-user') || 
-            getCookie('local-auth-user') as string;
-            
-          if (localUserStr) {
-            const localUser = JSON.parse(localUserStr);
-            setUser(localUser);
-            setLoading(false);
-            setIsInitialized(true);
-            localStorage.setItem('auth-initialized', currentTimestamp.toString());
-            return; // Exit early, no need to check Supabase
-          }
-        } catch (e) {
-          console.warn('Error getting local auth user:', e);
-        }
-      }
-      
-      // Try to get user from Supabase auth
-      if (supabase) {
-        try {
-          // Set a flag to track initialization to prevent duplicate instances
-          localStorage.setItem('auth-initialized', currentTimestamp.toString());
-          
-          // Get session data
-          const { data: { session } } = await supabase.auth.getSession();
-          
-          // Check if we have a session
-          if (session) {
-            try {
-              // Get the user profile with a more resilient approach
-              const profile = await fetchProfileWithFallback(session.user.id);
-              
-              // Create a complete user object
-              const userData: User = {
-                id: session.user.id,
-                email: session.user.email || '',
-                name: profile?.name || session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'User',
-                avatar_url: profile?.avatar_url || session.user.user_metadata?.avatar_url || '/avatar-placeholder.png',
-                created_at: session.user.created_at,
-                user_metadata: {
-                  ...session.user.user_metadata,
-                  ...(profile || {})
-                },
-                profile_completed: !!(
-                  session.user.user_metadata?.height &&
-                  session.user.user_metadata?.weight &&
-                  session.user.user_metadata?.age &&
-                  session.user.user_metadata?.gender
-                )
-              };
-              
-              // Store essential user data in localStorage for redundancy
-              try {
-                const minimalUser = {
-                  id: userData.id,
-                  email: userData.email,
-                  name: userData.name,
-                  user_metadata: userData.user_metadata
-                };
-                localStorage.setItem('auth-user-backup', JSON.stringify(minimalUser));
-              } catch (storageErr) {
-                console.warn('Failed to cache user data:', storageErr);
-              }
-              
-              setUser(userData);
-            } catch (profileError) {
-              console.error('Error fetching profile, using basic user data:', profileError);
-              
-              // Fall back to just the basic user data
-              setUser({
-                id: session.user.id,
-                email: session.user.email || '',
-                name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'User',
-                created_at: session.user.created_at,
-                user_metadata: session.user.user_metadata || {},
-                profile_completed: false
-              });
-            }
-          } else {
-            // No session, try to recover from backup if available
-            try {
-              const backupUser = localStorage.getItem('auth-user-backup');
-              if (backupUser) {
-                console.log('No active session, using backup user data');
-                setUser(JSON.parse(backupUser));
-              } else {
-                setUser(null);
-              }
-            } catch (backupErr) {
-              console.warn('Error using backup user:', backupErr);
-              setUser(null);
-            }
-          }
-        } catch (authError) {
-          console.error('Error during auth check:', authError);
-          
-          // Last resort - try local auth again
-          try {
-            const localUserStr = localStorage.getItem('local-auth-user');
-            if (localUserStr) {
-              setUser(JSON.parse(localUserStr));
-            } else {
-              setUser(null);
-            }
-          } catch (localErr) {
-            console.error('Failed to get local user after auth error:', localErr);
-            setUser(null);
-          }
-        }
-      } else {
-        console.warn('Supabase client not initialized, checking for local user');
-        
-        // Try local auth as a fallback
-        try {
-          const localUserStr = localStorage.getItem('local-auth-user');
-          if (localUserStr) {
-            setUser(JSON.parse(localUserStr));
-          } else {
-            setUser(null);
-          }
-        } catch (e) {
-          console.error('Error getting local user when Supabase unavailable:', e);
-          setUser(null);
-        }
-      }
+      return false;
     } catch (error) {
-      console.error('Unexpected error during auth initialization:', error);
-      setUser(null);
-    } finally {
-      setLoading(false);
-      setIsInitialized(true);
+      console.error('Error checking local auth:', error);
+      return false;
     }
   };
+
+  // Initialize auth state
+  useEffect(() => {
+    if (isInitializing) {
+      // Try to use local auth first
+      const hasLocalAuth = checkLocalAuth();
+      if (hasLocalAuth) return;
+      
+      // Otherwise initialize with Supabase
+      const initialize = async () => {
+        try {
+          setLoading(true);
+          
+          // If we're using auth bypass, create a mock user and skip Supabase
+          if (authBypass) {
+            const mockUser = createMockUser();
+            setUser(mockUser);
+            setIsAuthenticated(true);
+            setIsInitialized(true);
+            setLoading(false);
+            if (window.__clearAuthFailures) {
+              window.__clearAuthFailures();
+            }
+            return;
+          }
+
+          // Get the Supabase client
+          const supabase = getSupabaseClient();
+          
+          // Get the current session
+          const { data: { session } } = await supabase.auth.getSession();
+
+          // If we have a session, set the user
+          if (session) {
+            // Get user with metadata
+            const { data: userData } = await supabase.auth.getUser();
+            
+            if (userData?.user) {
+              const fullUser: User = {
+                id: userData.user.id,
+                email: userData.user.email || '',
+                name: userData.user.user_metadata?.name || userData.user.email?.split('@')[0] || 'User',
+                avatar_url: userData.user.user_metadata?.avatar_url,
+                created_at: userData.user.created_at,
+                user_metadata: userData.user.user_metadata,
+              };
+              
+              // Fetch additional profile data if needed
+              try {
+                const profileData = await fetchProfileWithFallback(userData.user.id);
+                if (profileData) {
+                  fullUser.user_metadata = {
+                    ...fullUser.user_metadata,
+                    ...profileData
+                  };
+                }
+              } catch (error) {
+                console.error('Error fetching profile data:', error);
+              }
+              
+              setUser(fullUser);
+              setIsAuthenticated(true);
+              
+              // Mark authentication success
+              if (window.__clearAuthFailures) {
+                window.__clearAuthFailures();
+              }
+            }
+          } else {
+            setUser(null);
+            setIsAuthenticated(false);
+            
+            // Record authentication failure for troubleshooting
+            if (window.__recordAuthFailure) {
+              window.__recordAuthFailure();
+            }
+          }
+          
+          // Set up auth state change listener
+          const { data: authListener } = supabase.auth.onAuthStateChange(
+            async (event, session) => {
+              if (event === 'SIGNED_IN' && session) {
+                const { data: userData } = await supabase.auth.getUser();
+                
+                if (userData?.user) {
+                  const fullUser: User = {
+                    id: userData.user.id,
+                    email: userData.user.email || '',
+                    name: userData.user.user_metadata?.name || userData.user.email?.split('@')[0] || 'User',
+                    avatar_url: userData.user.user_metadata?.avatar_url,
+                    created_at: userData.user.created_at,
+                    user_metadata: userData.user.user_metadata,
+                  };
+                  
+                  setUser(fullUser);
+                  setIsAuthenticated(true);
+                  
+                  // Mark authentication success
+                  if (window.__clearAuthFailures) {
+                    window.__clearAuthFailures();
+                  }
+                }
+              } else if (event === 'SIGNED_OUT') {
+                setUser(null);
+                setIsAuthenticated(false);
+              }
+            }
+          );
+          
+          // Clean up the listener on unmount
+          return () => {
+            authListener.subscription.unsubscribe();
+          };
+        } catch (error) {
+          console.error('Auth initialization error:', error);
+          setError(error instanceof Error ? error.message : 'Authentication error');
+          
+          // Record authentication failure for troubleshooting
+          if (window.__recordAuthFailure) {
+            window.__recordAuthFailure();
+          }
+          
+          // If initialization fails, try fixing auth storage and retry
+          if (window.__fixAuthStorage && retryCount < 2) {
+            console.log('Retrying auth initialization...');
+            window.__fixAuthStorage();
+            setRetryCount(prev => prev + 1);
+            // Let the retry happen on the next cycle
+          } else {
+            setUser(null);
+            setIsAuthenticated(false);
+          }
+        } finally {
+          setLoading(false);
+          setIsInitialized(true);
+          setIsInitializing(false);
+        }
+      };
+      
+      initialize();
+    }
+  }, [isInitializing, retryCount]);
 
   // Add this helper function to fetch profile with multiple fallbacks
   const fetchProfileWithFallback = async (userId: string): Promise<any> => {
@@ -308,8 +315,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     // Fall back to direct database query
     try {
-      if (supabase) {
-        const { data, error } = await supabase
+      if (supabaseClientSingleton) {
+        const { data, error } = await supabaseClientSingleton
           .from('profiles')
           .select('*')
           .eq('user_id', userId)
@@ -341,292 +348,82 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null;
   };
 
-  // Initialize user session on load
-  useEffect(() => {
-    const initialize = async () => {
-      try {
-        setLoading(true);
-        
-        // Check Supabase auth
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session) {
-          const { user: authUser } = session;
-          
-          if (authUser) {
-            // Try to get profile via our custom API endpoint
-            const { data: profileData, error: profileError } = await fetchProfileWithFallback(authUser.id);
-            
-            if (profileData && !profileError) {
-              // Merge data from Supabase Auth with our profile data
-              const mergedUser = { 
-                ...authUser, 
-                ...profileData,
-                profile_completed: !!(
-                  authUser.user_metadata?.height &&
-                  authUser.user_metadata?.weight &&
-                  authUser.user_metadata?.age &&
-                  authUser.user_metadata?.gender
-                )
-              };
-              
-              setUser(mergedUser);
-              setLoading(false);
-              setIsInitialized(true);
-              return;
-            } else {
-              console.log('Profile data not found, using auth data only');
-              // Create a merged user that matches our User type
-              const userWithRequiredFields: User = {
-                id: authUser.id,
-                email: authUser.email || '',
-                name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
-                avatar_url: '/avatar-placeholder.png',
-                avatar: '/avatar-placeholder.png',
-                created_at: authUser.created_at,
-                user_metadata: authUser.user_metadata || {},
-                profile_completed: !!(
-                  authUser.user_metadata?.height &&
-                  authUser.user_metadata?.weight &&
-                  authUser.user_metadata?.age &&
-                  authUser.user_metadata?.gender
-                )
-              };
-              
-              setUser(userWithRequiredFields);
-              setLoading(false);
-              setIsInitialized(true);
-              return;
-            }
-          }
-        }
-        
-        // Check for local auth (cookie-based fallback)
-        try {
-          const useLocalAuth = localStorage.getItem('use-local-auth') === 'true' || 
-                                getCookie('use-local-auth') === 'true';
-          
-          if (useLocalAuth) {
-            // Get the user from localStorage
-            const localUserString = localStorage.getItem('local-auth-user') || 
-                                   getCookie('local-auth-user') as string;
-            
-            if (localUserString) {
-              try {
-                const localUser = JSON.parse(localUserString);
-                console.log('Using local auth fallback');
-                
-                // Add required fields if missing
-                const userWithRequiredFields: User = {
-                  id: localUser.id || 'local-user-id',
-                  email: localUser.email || 'user@example.com',
-                  name: localUser.name || localUser.email?.split('@')[0] || 'User',
-                  avatar_url: '/avatar-placeholder.png',
-                  avatar: '/avatar-placeholder.png',
-                  user_metadata: localUser.user_metadata || {},
-                  profile_completed: !!(
-                    localUser.user_metadata?.height &&
-                    localUser.user_metadata?.weight &&
-                    localUser.user_metadata?.age &&
-                    localUser.user_metadata?.gender
-                  )
-                };
-                
-                setUser(userWithRequiredFields);
-                setLoading(false);
-                setIsInitialized(true);
-                return;
-              } catch (e) {
-                console.error('Error parsing local user:', e);
-              }
-            }
-          }
-        } catch (localAuthError) {
-          console.error('Error checking local auth:', localAuthError);
-        }
-        
-        // If no session or local auth, set no user
-        setUser(null);
-        setLoading(false);
-        setIsInitialized(true);
-      } catch (error) {
-        console.error('Error during auth initialization:', error);
-        setUser(null);
-        setLoading(false);
-        setIsInitialized(true);
-      }
-    };
-    
-    initialize();
-    
-    // Listen for auth state changes
-    if (supabase) {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-        console.log('Auth state changed:', event);
-        
-        if (event === 'SIGNED_IN' && session?.user) {
-          const { user: authUser } = session;
-          
-          try {
-            // Try to get profile via our custom API endpoint
-            const { data: profileData, error: profileError } = await fetchProfileWithFallback(authUser.id);
-            
-            if (profileData && !profileError) {
-              // Merge data from Supabase Auth with our profile data
-              const mergedUser = { 
-                ...authUser, 
-                ...profileData,
-                profile_completed: !!(
-                  authUser.user_metadata?.height &&
-                  authUser.user_metadata?.weight &&
-                  authUser.user_metadata?.age &&
-                  authUser.user_metadata?.gender
-                )
-              };
-              
-              setUser(mergedUser);
-              setLoading(false);
-            } else {
-              // Create a user with just the auth data
-              const userWithRequiredFields: User = {
-                id: authUser.id,
-                email: authUser.email || '',
-                name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
-                avatar_url: '/avatar-placeholder.png',
-                avatar: '/avatar-placeholder.png',
-                created_at: authUser.created_at,
-                user_metadata: authUser.user_metadata || {},
-                profile_completed: !!(
-                  authUser.user_metadata?.height &&
-                  authUser.user_metadata?.weight &&
-                  authUser.user_metadata?.age &&
-                  authUser.user_metadata?.gender
-                )
-              };
-              
-              setUser(userWithRequiredFields);
-              setLoading(false);
-            }
-          } catch (e) {
-            console.error('Error updating user on auth state change:', e);
-            
-            // At minimum, set the auth user
-            const userWithRequiredFields: User = {
-              id: authUser.id,
-              email: authUser.email || '',
-              name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
-              avatar_url: '/avatar-placeholder.png',
-              avatar: '/avatar-placeholder.png',
-              created_at: authUser.created_at,
-              user_metadata: authUser.user_metadata || {},
-              profile_completed: false
-            };
-            
-            setUser(userWithRequiredFields);
-            setLoading(false);
-          }
-        } else if (event === 'SIGNED_OUT') {
-          // Clear local auth data
-          clearLocalAuth();
-          setUser(null);
-          setLoading(false);
-        }
-      });
-      
-      return () => {
-        subscription.unsubscribe();
-      };
-    }
-  }, []);
-  
+  // Handle sign in
   const signIn = async (email: string, password: string) => {
     try {
       setLoading(true);
-      
-      if (useMockAuth) {
-        // Set mock user for testing
+
+      // For local auth testing
+      if (mockAuth || authBypass) {
         const mockUser = createMockUser();
         setUser(mockUser);
+        setIsAuthenticated(true);
+        
+        // If using cookies for local auth
+        setCookie('use-local-auth', 'true');
+        setCookie('local-auth-user', JSON.stringify(mockUser));
+        
+        // Mock a delay for more realistic behavior
+        await new Promise(resolve => setTimeout(resolve, 800));
         setLoading(false);
+        
         return { success: true };
       }
+
+      // For normal authentication
+      const supabase = getSupabaseClient();
       
-      if (!supabase) {
-        throw new Error('Supabase client not initialized');
+      // Clear auth storage first to prevent issues
+      if (window.__fixAuthStorage) {
+        window.__fixAuthStorage();
       }
       
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
-        password
+        password,
       });
-      
+
       if (error) {
-        setLoading(false);
         console.error('Sign in error:', error.message);
-        return { success: false, error: error.message };
+        throw new Error(error.message);
       }
-      
-      if (data.user) {
-        try {
-          const { data: profileData, error: profileError } = await fetchProfileWithFallback(data.user.id);
-          
-          let userData: User;
-          
-          if (profileData && !profileError) {
-            userData = { 
-              ...data.user, 
-              ...profileData,
-              profile_completed: !!(
-                data.user.user_metadata?.height &&
-                data.user.user_metadata?.weight &&
-                data.user.user_metadata?.age &&
-                data.user.user_metadata?.gender
-              )
-            };
-          } else {
-            userData = {
-              id: data.user.id,
-              email: data.user.email || '',
-              name: data.user.user_metadata?.name || data.user.email?.split('@')[0] || 'User',
-              avatar_url: '/avatar-placeholder.png',
-              avatar: '/avatar-placeholder.png',
-              created_at: data.user.created_at,
-              user_metadata: data.user.user_metadata || {},
-              profile_completed: !!(
-                data.user.user_metadata?.height &&
-                data.user.user_metadata?.weight &&
-                data.user.user_metadata?.age &&
-                data.user.user_metadata?.gender
-              )
-            };
-          }
-          
-          setUser(userData);
-        } catch (e) {
-          console.error('Error fetching profile after login:', e);
-          
-          // Set minimal user data
-          const userData: User = {
-            id: data.user.id,
-            email: data.user.email || '',
-            name: data.user.user_metadata?.name || data.user.email?.split('@')[0] || 'User',
-            avatar_url: '/avatar-placeholder.png',
-            avatar: '/avatar-placeholder.png',
-            created_at: data.user.created_at,
-            user_metadata: data.user.user_metadata || {},
-            profile_completed: false
-          };
-          
-          setUser(userData);
+
+      if (data?.user) {
+        const fullUser: User = {
+          id: data.user.id,
+          email: data.user.email || '',
+          name: data.user.user_metadata?.name || data.user.email?.split('@')[0] || 'User',
+          avatar_url: data.user.user_metadata?.avatar_url,
+          created_at: data.user.created_at,
+          user_metadata: data.user.user_metadata,
+        };
+
+        setUser(fullUser);
+        setIsAuthenticated(true);
+        
+        // Mark authentication success
+        if (window.__clearAuthFailures) {
+          window.__clearAuthFailures();
         }
+        
+        return { success: true };
+      }
+
+      return { success: false, error: 'Login failed' };
+    } catch (error) {
+      console.error('Sign in error:', error);
+      
+      // Record authentication failure
+      if (window.__recordAuthFailure) {
+        window.__recordAuthFailure();
       }
       
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Login failed'
+      };
+    } finally {
       setLoading(false);
-      return { success: true };
-    } catch (error) {
-      setLoading(false);
-      console.error('Sign in exception:', error);
-      return { success: false, error: (error as Error).message };
     }
   };
   
@@ -634,7 +431,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(true);
       
-      if (useMockAuth) {
+      if (mockAuth || authBypass) {
         // Set mock user for testing
         const mockUser = createMockUser();
         setUser({
@@ -647,11 +444,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: true };
       }
       
-      if (!supabase) {
+      if (!supabaseClientSingleton) {
         throw new Error('Supabase client not initialized');
       }
       
-      const { data, error } = await supabase.auth.signUp({
+      const { data, error } = await supabaseClientSingleton.auth.signUp({
         email,
         password,
         options: {
@@ -691,8 +488,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // Create a profile for the user
       try {
-        if (data.user && supabase) {
-          const { error: profileError } = await supabase
+        if (data.user && supabaseClientSingleton) {
+          const { error: profileError } = await supabaseClientSingleton
             .from('profiles')
             .insert([
               { 
@@ -728,8 +525,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     clearLocalAuth();
     
     try {
-      if (supabase) {
-        await supabase.auth.signOut();
+      if (supabaseClientSingleton) {
+        await supabaseClientSingleton.auth.signOut();
       }
       
       setUser(null);
@@ -746,8 +543,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(true);
       
-      if (supabase) {
-        const { data, error } = await supabase.auth.getUser();
+      if (supabaseClientSingleton) {
+        const { data, error } = await supabaseClientSingleton.auth.getUser();
         
         if (error || !data.user) {
           console.error('Error reloading user:', error);
@@ -819,14 +616,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         user,
         loading,
-        isLoading: loading, // For backwards compatibility
+        isLoading,
         isInitialized,
         signIn,
         signUp,
         signOut,
-        isAuthenticated: !!user,
-        setMockUser: useMockAuth ? setMockUser : undefined,
-        reloadUser
+        isAuthenticated,
+        setMockUser,
+        reloadUser,
       }}
     >
       {children}

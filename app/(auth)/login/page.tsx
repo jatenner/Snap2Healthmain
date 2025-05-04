@@ -14,7 +14,9 @@ import Script from 'next/script';
 // Add this type declaration for the global window object
 declare global {
   interface Window {
-    __fixAuthStorage?: () => void;
+    __fixAuthStorage?: () => boolean;
+    __clearAuthFailures?: () => void;
+    __recordAuthFailure?: () => void;
   }
 }
 
@@ -33,8 +35,14 @@ export default function LoginPage() {
   
   const { signIn, isLoading, user } = useAuth();
 
-  // Redirect if already logged in
+  // Update the useEffect to fix auth issues
   useEffect(() => {
+    // Clear auth storage on page load to prevent issues
+    if (typeof window !== 'undefined' && window.__fixAuthStorage) {
+      window.__fixAuthStorage();
+    }
+    
+    // Redirect if already logged in
     if (user) {
       router.push(redirectParam);
     }
@@ -58,6 +66,11 @@ export default function LoginPage() {
     setAuthMessage('');
     setIsSubmitting(true);
     
+    // Clear auth storage before trying to sign in
+    if (typeof window !== 'undefined' && window.__fixAuthStorage) {
+      window.__fixAuthStorage();
+    }
+    
     if (!email || !password) {
       setError('Email and password are required');
       setIsSubmitting(false);
@@ -71,10 +84,24 @@ export default function LoginPage() {
       if (success) {
         // Reset auth attempts on success
         setAuthAttempts(0);
-        router.push(redirectParam);
+        
+        // Clear auth failures
+        if (window.__clearAuthFailures) {
+          window.__clearAuthFailures();
+        }
+        
+        // Use setTimeout to allow auth state to fully initialize
+        setTimeout(() => {
+          router.push(redirectParam);
+        }, 100);
       } else {
         // Increment auth attempts
         setAuthAttempts(prev => prev + 1);
+        
+        // Record auth failure
+        if (window.__recordAuthFailure) {
+          window.__recordAuthFailure();
+        }
         
         if (error) {
           setError(error);
@@ -93,6 +120,11 @@ export default function LoginPage() {
       
       // Increment auth attempts
       setAuthAttempts(prev => prev + 1);
+      
+      // Record auth failure
+      if (window.__recordAuthFailure) {
+        window.__recordAuthFailure();
+      }
       
       // After 1 failed attempt, suggest the auth recovery page
       if (authAttempts >= 0) {
