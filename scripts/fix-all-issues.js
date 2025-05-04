@@ -599,31 +599,820 @@ async function fixPortConflicts() {
   return true;
 }
 
+// Fix authentication issues
+async function fixAuthIssues() {
+  log('🔧 Checking and fixing authentication issues...', 'blue');
+  
+  // Ensure auth-client-fix.js exists
+  const authClientFixPath = path.join('public', 'auth-client-fix.js');
+  const fullAuthClientFixPath = path.join(process.cwd(), authClientFixPath);
+  
+  // Create auth-client-fix.js content
+  const authClientFixContent = `/**
+ * Auth Client Fix Script
+ * Fixes auth storage issues and prevents multiple GoTrueClient instances
+ */
+
+(function() {
+  console.log('Auth Client Fix loaded');
+  
+  // Track authentication failures
+  let authFailCount = 0;
+  const MAX_AUTH_FAILURES = 3;
+  
+  // Store a reference to the original localStorage methods
+  const originalGetItem = localStorage.getItem;
+  const originalSetItem = localStorage.setItem;
+  const originalRemoveItem = localStorage.removeItem;
+  
+  // Expose function to record authentication failures
+  window.__recordAuthFailure = function() {
+    authFailCount++;
+    try {
+      localStorage.setItem('auth_fail_count', authFailCount.toString());
+      
+      if (authFailCount >= MAX_AUTH_FAILURES) {
+        console.warn('Multiple authentication failures detected - clearing auth storage');
+        clearAuthStorage();
+        window.location.href = '/auth-fix';
+      }
+    } catch (e) {
+      console.error('Error recording auth failure:', e);
+    }
+    return authFailCount;
+  };
+  
+  // Expose function to clear auth failures
+  window.__clearAuthFailures = function() {
+    authFailCount = 0;
+    try {
+      localStorage.removeItem('auth_fail_count');
+    } catch (e) {
+      console.error('Error clearing auth failures:', e);
+    }
+    return true;
+  };
+  
+  // Clear all auth-related storage
+  function clearAuthStorage() {
+    try {
+      // Clear local storage supabase items
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.includes('supabase') || key.includes('auth') || key.includes('sb-'))) {
+          keysToRemove.push(key);
+        }
+      }
+      
+      // Remove in separate loop to avoid index issues
+      keysToRemove.forEach(key => {
+        localStorage.removeItem(key);
+      });
+      
+      // Also clear session storage
+      sessionStorage.clear();
+      
+      return true;
+    } catch (e) {
+      console.error('Error clearing auth storage:', e);
+      return false;
+    }
+  }
+  
+  // Expose storage fix function
+  window.__fixAuthStorage = function() {
+    let fixed = false;
+    
+    try {
+      // Find problematic items
+      const keysToFix = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        
+        if (key && key.startsWith('sb-')) {
+          try {
+            // Try to parse the item
+            const item = localStorage.getItem(key);
+            JSON.parse(item);
+          } catch (e) {
+            console.warn('Found corrupted storage item:', key);
+            keysToFix.push(key);
+            fixed = true;
+          }
+        }
+      }
+      
+      // Fix problematic items
+      keysToFix.forEach(key => {
+        localStorage.removeItem(key);
+      });
+      
+      return fixed;
+    } catch (e) {
+      console.error('Error fixing auth storage:', e);
+      return false;
+    }
+  };
+  
+  // Singleton GoTrueClient - detect and fix issues with multiple instances
+  let detectedMultipleClients = false;
+  const originalGoTrueClient = window.GoTrueClient;
+  
+  if (typeof originalGoTrueClient === 'function') {
+    console.log('Patching GoTrueClient to prevent multiple instances');
+    
+    let clientInstance = null;
+    
+    // Override the constructor to ensure singleton pattern
+    window.GoTrueClient = function(...args) {
+      if (!clientInstance) {
+        clientInstance = new originalGoTrueClient(...args);
+        console.log('Created singleton GoTrueClient instance');
+      } else if (!detectedMultipleClients) {
+        console.warn('Multiple GoTrueClient instances detected - using singleton instance');
+        detectedMultipleClients = true;
+        
+        // Fix storage just in case
+        window.__fixAuthStorage();
+      }
+      
+      return clientInstance;
+    };
+    
+    // Copy prototype
+    window.GoTrueClient.prototype = originalGoTrueClient.prototype;
+  }
+  
+  // Run initial auth storage check
+  window.__fixAuthStorage();
+  
+  // Read pre-existing auth failures
+  try {
+    const storedFailCount = localStorage.getItem('auth_fail_count');
+    if (storedFailCount) {
+      authFailCount = parseInt(storedFailCount, 10) || 0;
+    }
+  } catch (e) {
+    console.error('Error reading stored auth failures:', e);
+  }
+})();`;
+
+  // Ensure auth-client-fix.js exists
+  ensureFile(fullAuthClientFixPath, authClientFixContent);
+  
+  // Ensure auth-fix page exists
+  const authFixPagePath = path.join('app', '(auth)', 'auth-fix', 'page.tsx');
+  const fullAuthFixPagePath = path.join(process.cwd(), authFixPagePath);
+  
+  // Content for auth-fix page
+  const authFixPageContent = `'use client';
+
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+
+// Add window type declaration
+declare global {
+  interface Window {
+    __fixAuthStorage?: () => boolean;
+    __clearAuthFailures?: () => void;
+    __recordAuthFailure?: () => void;
+  }
+}
+
+export default function AuthFixPage() {
+  const router = useRouter();
+  const [storageInfo, setStorageInfo] = useState<any>({});
+  const [fixApplied, setFixApplied] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string>('');
+
+  // Get information about local storage
+  const updateStorageInfo = () => {
+    const info: any = {
+      totalItems: 0,
+      authItems: 0,
+      otherItems: 0,
+      itemsList: []
+    };
+
+    try {
+      // Count items
+      info.totalItems = localStorage.length;
+      
+      // Examine auth-related items
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key) continue;
+        
+        let value = '(unable to read)';
+        try {
+          value = localStorage.getItem(key) || '';
+          if (value.length > 50) {
+            value = value.substring(0, 50) + '...';
+          }
+        } catch (e) {
+          // Ignore read errors
+        }
+        
+        const item = { key, value };
+        
+        if (key.includes('supabase') || key.includes('auth') || key.includes('sb-')) {
+          info.authItems++;
+          info.itemsList.push({ ...item, type: 'auth' });
+        } else {
+          info.otherItems++;
+          info.itemsList.push({ ...item, type: 'other' });
+        }
+      }
+      
+      setStorageInfo(info);
+    } catch (e) {
+      setDebugInfo('Error reading storage: ' + (e as Error).message);
+    }
+  };
+
+  // Apply the auth storage fix
+  const clearAuthStorage = () => {
+    try {
+      let success = false;
+      
+      // Use the window helper if available
+      if (typeof window !== 'undefined' && window.__fixAuthStorage) {
+        success = window.__fixAuthStorage();
+        
+        if (window.__clearAuthFailures) {
+          window.__clearAuthFailures();
+        }
+      } else {
+        // Fallback manual implementation
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (key.includes('supabase') || key.includes('auth') || key.includes('sb-'))) {
+            keysToRemove.push(key);
+          }
+        }
+        
+        // Remove in separate loop to avoid index issues
+        keysToRemove.forEach(key => {
+          localStorage.removeItem(key);
+        });
+        
+        success = true;
+      }
+      
+      setFixApplied(success);
+      updateStorageInfo();
+      setDebugInfo('Auth storage cleared successfully');
+    } catch (e) {
+      setDebugInfo('Error clearing auth storage: ' + (e as Error).message);
+    }
+  };
+
+  // Reset and redirect to login
+  const resetAndRedirect = () => {
+    try {
+      // Clear all storage
+      localStorage.clear();
+      sessionStorage.clear();
+      
+      // Set a flag to indicate we're coming from the auth fix page
+      localStorage.setItem('auth_fixed', 'true');
+      
+      // Clear failures if possible
+      if (typeof window !== 'undefined' && window.__clearAuthFailures) {
+        window.__clearAuthFailures();
+      }
+      
+      setDebugInfo('Storage cleared, redirecting to login page...');
+      
+      // Redirect after a short delay
+      setTimeout(() => {
+        router.push('/login');
+      }, 1000);
+    } catch (e) {
+      setDebugInfo('Error during reset: ' + (e as Error).message);
+    }
+  };
+
+  // Hard reset - reload the page with a cache-busting parameter
+  const hardReset = () => {
+    try {
+      // Clear all storage
+      localStorage.clear();
+      sessionStorage.clear();
+      
+      // Set a flag to indicate we're coming from the auth fix page
+      localStorage.setItem('auth_fixed', 'true');
+      
+      setDebugInfo('Hard reset initiated, page will reload...');
+      
+      // Reload the page with a cache-busting parameter
+      setTimeout(() => {
+        window.location.href = '/login?t=' + Date.now();
+      }, 1000);
+    } catch (e) {
+      setDebugInfo('Error during hard reset: ' + (e as Error).message);
+    }
+  };
+
+  // Update storage info on mount
+  useEffect(() => {
+    updateStorageInfo();
+  }, []);
+
+  return (
+    <div className="mx-auto max-w-md px-4 py-8">
+      <div className="mb-6 text-center">
+        <h1 className="text-2xl font-bold mb-2">Authentication Storage Fix</h1>
+        <p className="text-sm text-gray-500">
+          This page helps recover from authentication storage issues
+        </p>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-lg font-medium mb-4">Browser Storage Information</h2>
+        
+        <div className="space-y-2 mb-4">
+          <div className="flex justify-between">
+            <span>Total items:</span>
+            <span className="font-medium">{storageInfo.totalItems || 0}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Auth-related items:</span>
+            <span className="font-medium">{storageInfo.authItems || 0}</span>
+          </div>
+        </div>
+        
+        <div className="flex space-x-2 mb-4">
+          <button 
+            onClick={clearAuthStorage}
+            className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-md"
+          >
+            Clear Auth Storage
+          </button>
+          <button 
+            onClick={updateStorageInfo}
+            className="bg-gray-200 hover:bg-gray-300 py-2 px-3 rounded-md"
+          >
+            Refresh
+          </button>
+        </div>
+        
+        {fixApplied && (
+          <div className="bg-green-50 text-green-700 p-3 rounded-md mb-4">
+            Auth storage fix has been applied.
+          </div>
+        )}
+      </div>
+
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-lg font-medium mb-4">Authentication Reset</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          Use these options if you're still experiencing login issues.
+        </p>
+        
+        <div className="space-y-3">
+          <button 
+            onClick={resetAndRedirect}
+            className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-md"
+          >
+            Reset & Go To Login
+          </button>
+          
+          <button 
+            onClick={hardReset}
+            className="w-full bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-md"
+          >
+            Hard Reset (Clear All Data)
+          </button>
+        </div>
+      </div>
+      
+      <div className="text-center">
+        <Link href="/" className="text-blue-500 hover:text-blue-700">
+          Return to Home Page
+        </Link>
+      </div>
+      
+      {debugInfo && (
+        <div className="mt-4 p-2 bg-gray-100 rounded text-xs text-gray-700">
+          {debugInfo}
+        </div>
+      )}
+    </div>
+  );
+}`;
+
+  // Ensure auth-fix page directory exists
+  const authFixDir = path.dirname(fullAuthFixPagePath);
+  if (!fs.existsSync(authFixDir)) {
+    try {
+      fs.mkdirSync(authFixDir, { recursive: true });
+      log(`✅ Created directory: ${authFixDir}`, 'green');
+    } catch (error) {
+      log(`❌ Failed to create directory: ${authFixDir}`, 'red');
+    }
+  }
+  
+  // Create auth-fix page
+  ensureFile(fullAuthFixPagePath, authFixPageContent);
+  
+  // Ensure Vercel configuration is properly set up
+  const vercelJsonPath = path.join(process.cwd(), 'vercel.json');
+  if (!fs.existsSync(vercelJsonPath)) {
+    log('Creating vercel.json...', 'yellow');
+    
+    const vercelJsonContent = `{
+  "version": 2,
+  "buildCommand": "npm run vercel-build",
+  "outputDirectory": ".next",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "regions": [
+    "sfo1"
+  ],
+  "env": {
+    "NEXT_PUBLIC_VERCEL_DEPLOYMENT": "true",
+    "NODE_OPTIONS": "--max-old-space-size=4096 --expose-gc"
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        },
+        {
+          "key": "Pragma",
+          "value": "no-cache"
+        },
+        {
+          "key": "Expires",
+          "value": "0"
+        },
+        {
+          "key": "X-Build-ID",
+          "value": "vercel-deployment-$TIME"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/auth-client-fix.js",
+      "destination": "/public/auth-client-fix.js"
+    }
+  ]
+}`;
+    
+    fs.writeFileSync(vercelJsonPath, vercelJsonContent);
+    log('✅ Created vercel.json', 'green');
+  } else {
+    log('✅ vercel.json already exists', 'green');
+  }
+  
+  return true;
+}
+
+// Check and update lightweight-server.js for Vercel
+async function fixLightweightServer() {
+  log('🔧 Checking lightweight-server.js...', 'blue');
+  
+  const serverPath = path.join(process.cwd(), 'lightweight-server.js');
+  
+  if (!fs.existsSync(serverPath)) {
+    log('Creating lightweight-server.js...', 'yellow');
+    
+    const serverContent = `
+const { createServer } = require('http');
+const { parse } = require('url');
+const next = require('next');
+const fs = require('fs');
+const path = require('path');
+const { execSync } = require('child_process');
+
+// Detect environment
+const dev = process.env.NODE_ENV !== 'production';
+const hostname = 'localhost';
+const port = process.env.PORT || 3000;
+let initialMemoryUsage = 0;
+
+// Memory monitoring
+function getMemoryUsage() {
+  try {
+    const used = process.memoryUsage();
+    return {
+      rss: Math.round(used.rss / (1024 * 1024)), // RSS in MB
+      heapUsed: Math.round(used.heapUsed / (1024 * 1024)), // Heap used in MB
+      heapTotal: Math.round(used.heapTotal / (1024 * 1024)), // Heap total in MB
+      external: Math.round(used.external / (1024 * 1024)) // External in MB
+    };
+  } catch (e) {
+    console.error('Error getting memory usage:', e.message);
+    return { rss: 0, heapUsed: 0, heapTotal: 0, external: 0 };
+  }
+}
+
+// Memory monitor
+function monitorMemory() {
+  const memoryInfo = getMemoryUsage();
+  console.log(\`[${new Date().toISOString()}] Memory: ${memoryInfo.rss}MB RSS, ${memoryInfo.heapUsed}MB heap used, ${memoryInfo.heapTotal}MB heap total\`);
+  
+  // Check if we're using too much memory (over 800MB RSS)
+  if (memoryInfo.rss > 800) {
+    console.log(\`[${new Date().toISOString()}] WARNING: High memory usage (${memoryInfo.rss}MB > 800MB)\`);
+  }
+  
+  // Run garbage collection if available
+  if (global.gc) {
+    global.gc();
+  }
+}
+
+// Create Next.js app with minimal memory usage
+const app = next({ 
+  dev,
+  hostname,
+  port,
+  conf: {
+    compress: true,
+    onDemandEntries: {
+      maxInactiveAge: 15 * 1000,
+      pagesBufferLength: 2,
+    },
+    experimental: {
+      optimizeCss: true,
+    }
+  }
+});
+
+// Create auth client fix
+function createAuthClientFix() {
+  try {
+    const authClientFixPath = path.join(process.cwd(), 'public', 'auth-client-fix.js');
+    
+    // Create directory if it doesn't exist
+    const dir = path.dirname(authClientFixPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    
+    const content = \`/**
+ * Auth Client Fix Script
+ * Fixes auth storage issues and prevents multiple GoTrueClient instances
+ */
+
+(function() {
+  console.log('Auth Client Fix loaded');
+  
+  // Track authentication failures
+  let authFailCount = 0;
+  const MAX_AUTH_FAILURES = 3;
+  
+  // Store a reference to the original localStorage methods
+  const originalGetItem = localStorage.getItem;
+  const originalSetItem = localStorage.setItem;
+  const originalRemoveItem = localStorage.removeItem;
+  
+  // Expose function to record authentication failures
+  window.__recordAuthFailure = function() {
+    authFailCount++;
+    try {
+      localStorage.setItem('auth_fail_count', authFailCount.toString());
+      
+      if (authFailCount >= MAX_AUTH_FAILURES) {
+        console.warn('Multiple authentication failures detected - clearing auth storage');
+        clearAuthStorage();
+        window.location.href = '/auth-fix';
+      }
+    } catch (e) {
+      console.error('Error recording auth failure:', e);
+    }
+    return authFailCount;
+  };
+  
+  // Expose function to clear auth failures
+  window.__clearAuthFailures = function() {
+    authFailCount = 0;
+    try {
+      localStorage.removeItem('auth_fail_count');
+    } catch (e) {
+      console.error('Error clearing auth failures:', e);
+    }
+    return true;
+  };
+  
+  // Clear all auth-related storage
+  function clearAuthStorage() {
+    try {
+      // Clear local storage supabase items
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.includes('supabase') || key.includes('auth') || key.includes('sb-'))) {
+          keysToRemove.push(key);
+        }
+      }
+      
+      // Remove in separate loop to avoid index issues
+      keysToRemove.forEach(key => {
+        localStorage.removeItem(key);
+      });
+      
+      // Also clear session storage
+      sessionStorage.clear();
+      
+      return true;
+    } catch (e) {
+      console.error('Error clearing auth storage:', e);
+      return false;
+    }
+  }
+  
+  // Expose storage fix function
+  window.__fixAuthStorage = function() {
+    let fixed = false;
+    
+    try {
+      // Find problematic items
+      const keysToFix = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        
+        if (key && key.startsWith('sb-')) {
+          try {
+            // Try to parse the item
+            const item = localStorage.getItem(key);
+            JSON.parse(item);
+          } catch (e) {
+            console.warn('Found corrupted storage item:', key);
+            keysToFix.push(key);
+            fixed = true;
+          }
+        }
+      }
+      
+      // Fix problematic items
+      keysToFix.forEach(key => {
+        localStorage.removeItem(key);
+      });
+      
+      return fixed;
+    } catch (e) {
+      console.error('Error fixing auth storage:', e);
+      return false;
+    }
+  };
+  
+  // Singleton GoTrueClient - detect and fix issues with multiple instances
+  let detectedMultipleClients = false;
+  const originalGoTrueClient = window.GoTrueClient;
+  
+  if (typeof originalGoTrueClient === 'function') {
+    console.log('Patching GoTrueClient to prevent multiple instances');
+    
+    let clientInstance = null;
+    
+    // Override the constructor to ensure singleton pattern
+    window.GoTrueClient = function(...args) {
+      if (!clientInstance) {
+        clientInstance = new originalGoTrueClient(...args);
+        console.log('Created singleton GoTrueClient instance');
+      } else if (!detectedMultipleClients) {
+        console.warn('Multiple GoTrueClient instances detected - using singleton instance');
+        detectedMultipleClients = true;
+        
+        // Fix storage just in case
+        window.__fixAuthStorage();
+      }
+      
+      return clientInstance;
+    };
+    
+    // Copy prototype
+    window.GoTrueClient.prototype = originalGoTrueClient.prototype;
+  }
+  
+  // Run initial auth storage check
+  window.__fixAuthStorage();
+  
+  // Read pre-existing auth failures
+  try {
+    const storedFailCount = localStorage.getItem('auth_fail_count');
+    if (storedFailCount) {
+      authFailCount = parseInt(storedFailCount, 10) || 0;
+    }
+  } catch (e) {
+    console.error('Error reading stored auth failures:', e);
+  }
+})();\`;
+    
+    fs.writeFileSync(authClientFixPath, content);
+    console.log('Created auth client fix script');
+    return true;
+  } catch (error) {
+    console.error('Error creating auth client fix script:', error);
+    return false;
+  }
+}
+
+// Start server
+function startServer() {
+  // Log initial memory
+  initialMemoryUsage = getMemoryUsage().rss;
+  console.log(\`[${new Date().toISOString()}] Initial memory: ${initialMemoryUsage}MB RSS, ${getMemoryUsage().heapUsed}MB heap used\`);
+  
+  const server = createServer(async (req, res) => {
+    try {
+      // Parse request URL
+      const parsedUrl = parse(req.url, true);
+      
+      // Special case for auth-client-fix.js to ensure it's always served correctly
+      if (req.url === '/auth-client-fix.js') {
+        const filePath = path.join(process.cwd(), 'public', 'auth-client-fix.js');
+        if (fs.existsSync(filePath)) {
+          const content = fs.readFileSync(filePath, 'utf8');
+          res.writeHead(200, { 'Content-Type': 'application/javascript' });
+          res.end(content);
+          return;
+        }
+      }
+      
+      // Let Next.js handle the request
+      await handle(req, res, parsedUrl);
+    } catch (err) {
+      console.error('Error processing request:', err);
+      res.statusCode = 500;
+      res.end('Internal Server Error');
+    }
+  });
+  
+  // Start listening
+  server.listen(port, (err) => {
+    if (err) throw err;
+    console.log(\`[${new Date().toISOString()}] > Ready on http://\${hostname}:\${port}\`);
+    console.log(\`[${new Date().toISOString()}] Memory: \${getMemoryUsage().rss}MB RSS, \${getMemoryUsage().heapUsed}MB heap used, \${getMemoryUsage().heapTotal}MB heap total\`);
+  });
+  
+  // Set up memory monitoring every 30 seconds
+  setInterval(monitorMemory, 30000);
+}
+
+// Run garbage collection if available
+if (global.gc) {
+  global.gc();
+  console.log(\`[${new Date().toISOString()}] Manual garbage collection performed\`);
+}
+
+// Check if we're in development or Vercel
+if (dev) {
+  console.log(\`[${new Date().toISOString()}] Starting ultra-lightweight server in development mode\`);
+} else {
+  console.log(\`[${new Date().toISOString()}] Starting ultra-lightweight server in production mode\`);
+}
+
+// Create auth-client-fix.js
+createAuthClientFix();
+
+// Create request handler
+const handle = app.getRequestHandler();
+
+// Prepare the application
+app.prepare()
+  .then(() => {
+    startServer();
+  })
+  .catch((err) => {
+    console.error('Error preparing the application:', err);
+    process.exit(1);
+  });
+`;
+    
+    fs.writeFileSync(serverPath, serverContent);
+    log('✅ Created lightweight-server.js', 'green');
+  } else {
+    log('✅ lightweight-server.js already exists', 'green');
+  }
+  
+  return true;
+}
+
 // Main function to run all fixes
 async function runAllFixes() {
-  log('🚑 STARTING EMERGENCY APP REPAIR', 'blue');
-  log('==============================', 'blue');
+  log('🚀 Starting comprehensive app fixes...', 'magenta');
   
-  // Kill any processes that might be using our ports
-  await runFix('Killing conflicting processes', killPortProcesses);
-  
-  // Clean build artifacts
-  await runFix('Cleaning build artifacts', cleanBuildArtifacts);
-  
-  // Fix the API analyze-image route
-  await runFix('Fixing analyze-image API route', fixAnalyzeImageRoute);
-  
-  // Fix FoodAnalysis component
-  await runFix('Fixing FoodAnalysis component', fixFoodAnalysis);
-  
-  // Ensure SimpleFoodAnalysis component
-  await runFix('Ensuring SimpleFoodAnalysis component', ensureSimpleFoodAnalysis);
-  
-  // Fix service worker issues
-  await runFix('Fixing service worker issues', fixServiceWorkerIssues);
-  
-  // Fix port conflicts more aggressively
-  await runFix('Resolving port conflicts', fixPortConflicts);
+  await runFix('Kill port processes', killPortProcesses);
+  await runFix('Clean build artifacts', cleanBuildArtifacts);
+  await runFix('Fix auth issues', fixAuthIssues);
+  await runFix('Fix lightweight server', fixLightweightServer);
+  await runFix('Fix analyze-image API route', fixAnalyzeImageRoute);
+  await runFix('Fix FoodAnalysis component', fixFoodAnalysis);
+  await runFix('Ensure SimpleFoodAnalysis component', ensureSimpleFoodAnalysis);
+  await runFix('Fix service worker issues', fixServiceWorkerIssues);
+  await runFix('Fix port conflicts', fixPortConflicts);
   
   log('\n✅ ALL REPAIRS COMPLETED', 'green');
   log('======================', 'green');

@@ -13,6 +13,16 @@ const { createServer } = require('http');
 // Check if the --force flag is provided
 const useForce = process.argv.includes('--force');
 
+// Check if we're running in Vercel environment
+const isVercelEnv = process.env.VERCEL === '1' || 
+                    process.env.NEXT_PUBLIC_VERCEL_DEPLOYMENT === 'true';
+
+// When running in Vercel environment, just pass through without trying to kill ports
+if (isVercelEnv) {
+  console.log('Running in Vercel environment, skipping port checks');
+  process.exit(0);
+}
+
 console.log('🔪 Enhanced Port Killer Script');
 console.log(`Mode: ${useForce ? 'Force kill (aggressive)' : 'Standard kill'}`);
 

@@ -30,7 +30,8 @@
     "fix:auth": "node scripts/fix-auth.js",
     "fix:gotrue": "node scripts/fix-auth.js --gotrue",
     "lint": "next lint",
-    "vercel-build": "node scripts/fix-vercel-deployment.js && node scripts/prisma-vercel-fix.js && NEXT_PUBLIC_VERCEL_DEPLOYMENT=true NODE_OPTIONS='--max-old-space-size=4096' NEXT_PUBLIC_BUILD_TIMESTAMP=$(date -u +\"%Y-%m-%dT%H:%M:%SZ\") NODE_ENV=production next build || (echo 'Build failed - running emergency fixes' && node scripts/fix-all-issues.js && NEXT_PUBLIC_VERCEL_DEPLOYMENT=true NODE_OPTIONS='--max-old-space-size=4096' NEXT_PUBLIC_BUILD_TIMESTAMP=$(date -u +\"%Y-%m-%dT%H:%M:%SZ\") NODE_ENV=production next build)",
+    "vercel-build": "npm run fix-ports-vercel && node scripts/fix-vercel-deployment.js && NODE_OPTIONS='--max-old-space-size=4096' NEXT_PUBLIC_VERCEL_DEPLOYMENT=true NEXT_PUBLIC_BUILD_TIMESTAMP=$(date +\"%Y-%m-%dT%H:%M:%SZ\") next build || (echo 'Build failed - running emergency fixes' && NODE_OPTIONS='--max-old-space-size=4096' NEXT_PUBLIC_VERCEL_DEPLOYMENT=true node scripts/fix-all-issues.js && NODE_OPTIONS='--max-old-space-size=4096' NEXT_PUBLIC_VERCEL_DEPLOYMENT=true NEXT_PUBLIC_BUILD_TIMESTAMP=$(date +\"%Y-%m-%dT%H:%M:%SZ\") next build --no-lint)",
+    "fix-ports-vercel": "node scripts/kill-ports-improved.js --force || true",
     "prepare-vercel": "node scripts/prepare-for-vercel.js",
     "prisma:generate": "prisma generate",
     "postinstall": "prisma generate || echo 'Skipping Prisma generation'"

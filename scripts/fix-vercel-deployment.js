@@ -277,111 +277,173 @@ export default fixAuthIssues;
 `
   },
   { 
-    // Add auth-client-fix.js to public directory
-    importPath: 'auth-client-fix',
+    // Add auth-client-fix to missingModules
+    importPath: 'auth-client-fix', 
     filePath: 'public/auth-client-fix.js',
-    content: `/**
- * Supabase Auth Client Fix
- * Prevents the "Multiple GoTrueClient instances detected" error
- * and fixes authentication persistence issues
+    content: `
+/**
+ * Auth Client Fix Script
+ * Fixes auth storage issues and prevents multiple GoTrueClient instances
  */
 
 (function() {
-  // Track initialization state
-  window.__SUPABASE_AUTH_INITIALIZED = false;
+  console.log('Auth Client Fix loaded');
   
-  // Track auth failures
-  window.__AUTH_FAILURES = 0;
+  // Track authentication failures
+  let authFailCount = 0;
+  const MAX_AUTH_FAILURES = 3;
   
-  // Create auth storage management
-  window.__fixAuthStorage = function() {
-    console.log('Running auth storage fix...');
-    let fixed = false;
-    
+  // Store a reference to the original localStorage methods
+  const originalGetItem = localStorage.getItem;
+  const originalSetItem = localStorage.setItem;
+  const originalRemoveItem = localStorage.removeItem;
+  
+  // Expose function to record authentication failures
+  window.__recordAuthFailure = function() {
+    authFailCount++;
     try {
-      // Clear auth-related localStorage items that might be corrupted
+      localStorage.setItem('auth_fail_count', authFailCount.toString());
+      
+      if (authFailCount >= MAX_AUTH_FAILURES) {
+        console.warn('Multiple authentication failures detected - clearing auth storage');
+        clearAuthStorage();
+        window.location.href = '/auth-fix';
+      }
+    } catch (e) {
+      console.error('Error recording auth failure:', e);
+    }
+    return authFailCount;
+  };
+  
+  // Expose function to clear auth failures
+  window.__clearAuthFailures = function() {
+    authFailCount = 0;
+    try {
+      localStorage.removeItem('auth_fail_count');
+    } catch (e) {
+      console.error('Error clearing auth failures:', e);
+    }
+    return true;
+  };
+  
+  // Clear all auth-related storage
+  function clearAuthStorage() {
+    try {
+      // Clear local storage supabase items
       const keysToRemove = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && (
-            key.startsWith('supabase.auth.token') || 
-            key.startsWith('supabase.auth.refresh') ||
-            key.includes('supa') && key.includes('auth')
-          )) {
+        if (key && (key.includes('supabase') || key.includes('auth') || key.includes('sb-'))) {
           keysToRemove.push(key);
         }
       }
       
-      // Remove identified keys
+      // Remove in separate loop to avoid index issues
       keysToRemove.forEach(key => {
-        console.log('Removing problematic auth key:', key);
         localStorage.removeItem(key);
       });
       
-      // Clear session cookies
-      document.cookie.split(';').forEach(cookie => {
-        const [name] = cookie.trim().split('=');
-        if (name && (name.includes('supabase') || name.includes('sb-'))) {
-          document.cookie = \`\${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;\`;
+      // Also clear session storage
+      sessionStorage.clear();
+      
+      return true;
+    } catch (e) {
+      console.error('Error clearing auth storage:', e);
+      return false;
+    }
+  }
+  
+  // Expose storage fix function
+  window.__fixAuthStorage = function() {
+    let fixed = false;
+    
+    try {
+      // Find problematic items
+      const keysToFix = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        
+        if (key && key.startsWith('sb-')) {
+          try {
+            // Try to parse the item
+            const item = localStorage.getItem(key);
+            JSON.parse(item);
+          } catch (e) {
+            console.warn('Found corrupted storage item:', key);
+            keysToFix.push(key);
+            fixed = true;
+          }
         }
+      }
+      
+      // Fix problematic items
+      keysToFix.forEach(key => {
+        localStorage.removeItem(key);
       });
       
-      fixed = true;
-      window.__AUTH_FAILURES = 0;
-    } catch (err) {
-      console.error('Auth fix error:', err);
-    }
-    
-    return fixed;
-  };
-  
-  // Record authentication failures
-  window.__recordAuthFailure = function() {
-    window.__AUTH_FAILURES = (window.__AUTH_FAILURES || 0) + 1;
-    console.log(\`Auth failure recorded: \${window.__AUTH_FAILURES} total\`);
-    
-    // If we have multiple failures, try clearing storage
-    if (window.__AUTH_FAILURES >= 3) {
-      window.__fixAuthStorage();
-      window.__AUTH_FAILURES = 0;
+      return fixed;
+    } catch (e) {
+      console.error('Error fixing auth storage:', e);
+      return false;
     }
   };
   
-  // Clear auth failures counter
-  window.__clearAuthFailures = function() {
-    window.__AUTH_FAILURES = 0;
-    console.log('Auth failure count reset');
-  };
+  // Singleton GoTrueClient - detect and fix issues with multiple instances
+  let detectedMultipleClients = false;
+  const originalGoTrueClient = window.GoTrueClient;
   
-  // Initialize on page load
-  document.addEventListener('DOMContentLoaded', function() {
-    console.log('Auth client fix initialized');
+  if (typeof originalGoTrueClient === 'function') {
+    console.log('Patching GoTrueClient to prevent multiple instances');
     
-    // Try to detect redirects from auth pages and fix storage if needed
-    const url = new URL(window.location.href);
-    const errorParam = url.searchParams.get('error');
-    const authError = url.searchParams.get('authError');
+    let clientInstance = null;
     
-    if (errorParam || authError || 
-        url.pathname === '/login' || 
-        url.pathname === '/auth-fix') {
-      // Run storage fix in case we're in an auth error loop
-      setTimeout(() => window.__fixAuthStorage(), 100);
+    // Override the constructor to ensure singleton pattern
+    window.GoTrueClient = function(...args) {
+      if (!clientInstance) {
+        clientInstance = new originalGoTrueClient(...args);
+        console.log('Created singleton GoTrueClient instance');
+      } else if (!detectedMultipleClients) {
+        console.warn('Multiple GoTrueClient instances detected - using singleton instance');
+        detectedMultipleClients = true;
+        
+        // Fix storage just in case
+        window.__fixAuthStorage();
+      }
+      
+      return clientInstance;
+    };
+    
+    // Copy prototype
+    window.GoTrueClient.prototype = originalGoTrueClient.prototype;
+  }
+  
+  // Run initial auth storage check
+  window.__fixAuthStorage();
+  
+  // Read pre-existing auth failures
+  try {
+    const storedFailCount = localStorage.getItem('auth_fail_count');
+    if (storedFailCount) {
+      authFailCount = parseInt(storedFailCount, 10) || 0;
     }
-  });
-})();`
+  } catch (e) {
+    console.error('Error reading stored auth failures:', e);
+  }
+})();
+`
   },
   { 
     // Add auth-fix page
     importPath: 'auth-fix',
     filePath: 'app/(auth)/auth-fix/page.tsx',
-    content: `'use client';
+    content: `
+'use client';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-// Type declaration for window methods
+// Add window type declaration
 declare global {
   interface Window {
     __fixAuthStorage?: () => boolean;
@@ -392,211 +454,228 @@ declare global {
 
 export default function AuthFixPage() {
   const router = useRouter();
-  const [message, setMessage] = useState('');
-  const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const [storageInfo, setStorageInfo] = useState<any>(null);
-  
-  useEffect(() => {
-    // Load storage info on mount
-    updateStorageInfo();
-  }, []);
-  
-  // Get browser storage info for debugging
+  const [storageInfo, setStorageInfo] = useState<any>({});
+  const [fixApplied, setFixApplied] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string>('');
+
+  // Get information about local storage
   const updateStorageInfo = () => {
+    const info: any = {
+      totalItems: 0,
+      authItems: 0,
+      otherItems: 0,
+      itemsList: []
+    };
+
     try {
-      const authLocalStorage = Object.keys(localStorage)
-        .filter(key => 
-          key.includes('supabase') || 
-          key.includes('auth') || 
-          key.includes('sb-') ||
-          key.includes('gotrue')
-        )
-        .map(key => {
-          const value = localStorage.getItem(key);
-          return {
-            key,
-            value: value ? (value.length > 50 ? value.substring(0, 50) + '...' : value) : null
-          };
-        });
+      // Count items
+      info.totalItems = localStorage.length;
       
-      const authCookies = document.cookie.split(';')
-        .filter(c => c.trim())
-        .map(c => c.trim())
-        .filter(c => 
-          c.includes('supabase') || 
-          c.includes('auth') || 
-          c.includes('sb-')
-        );
-      
-      setStorageInfo({
-        localStorage: authLocalStorage,
-        cookies: authCookies
-      });
-    } catch (error) {
-      console.error('Error getting storage info:', error);
-      setStorageInfo('Could not retrieve storage information');
-    }
-  };
-  
-  // Clear auth storage and redirect to login
-  const clearAuthStorage = () => {
-    try {
-      setStatus('idle');
-      setMessage('Clearing authentication storage...');
-      
-      if (window.__fixAuthStorage) {
-        const cleared = window.__fixAuthStorage();
+      // Examine auth-related items
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key) continue;
         
-        if (cleared) {
-          setStatus('success');
-          setMessage('Authentication storage cleared successfully! Redirecting to login page...');
-          
-          // Clear auth-related cookies
-          document.cookie.split(';').forEach(cookie => {
-            const [name] = cookie.trim().split('=');
-            if (name && (
-              name.includes('supabase') || 
-              name.includes('sb-') || 
-              name.includes('auth')
-            )) {
-              document.cookie = \`\${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;\`;
-            }
-          });
-          
-          // Update storage info display
-          updateStorageInfo();
-          
-          // Redirect after a delay
-          setTimeout(() => {
-            router.push('/login');
-          }, 2000);
+        let value = '(unable to read)';
+        try {
+          value = localStorage.getItem(key) || '';
+          if (value.length > 50) {
+            value = value.substring(0, 50) + '...';
+          }
+        } catch (e) {
+          // Ignore read errors
+        }
+        
+        const item = { key, value };
+        
+        if (key.includes('supabase') || key.includes('auth') || key.includes('sb-')) {
+          info.authItems++;
+          info.itemsList.push({ ...item, type: 'auth' });
         } else {
-          setStatus('error');
-          setMessage('Failed to clear authentication storage. Please try again or restart your browser.');
+          info.otherItems++;
+          info.itemsList.push({ ...item, type: 'other' });
         }
-      } else {
-        setStatus('error');
-        setMessage('Authentication fix function not available. Please try refreshing the page.');
       }
-    } catch (error) {
-      console.error('Error clearing auth storage:', error);
-      setStatus('error');
-      setMessage(\`Error: \${error instanceof Error ? error.message : 'Unknown error'}\`);
-    }
-  };
-  
-  // Reset auth state and redirect to login
-  const resetAndRedirect = () => {
-    try {
-      setStatus('idle');
-      setMessage('Resetting authentication state...');
       
-      // Clear localStorage
-      Object.keys(localStorage).forEach(key => {
-        if (
-          key.includes('supabase') || 
-          key.includes('auth') || 
-          key.includes('sb-') ||
-          key.includes('gotrue')
-        ) {
-          localStorage.removeItem(key);
-        }
-      });
-      
-      // Clear all cookies
-      document.cookie.split(';').forEach(cookie => {
-        const [name] = cookie.trim().split('=');
-        if (name) {
-          document.cookie = \`\${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;\`;
-        }
-      });
-      
-      // Clear session storage
-      sessionStorage.clear();
-      
-      setStatus('success');
-      setMessage('Authentication state reset successful! Redirecting to login page...');
-      
-      // Update storage info display
-      updateStorageInfo();
-      
-      // Redirect after a delay with forced refresh
-      setTimeout(() => {
-        window.location.href = '/login?refresh=' + Date.now();
-      }, 1500);
-    } catch (error) {
-      console.error('Error resetting auth:', error);
-      setStatus('error');
-      setMessage(\`Error: \${error instanceof Error ? error.message : 'Unknown error'}\`);
+      setStorageInfo(info);
+    } catch (e) {
+      setDebugInfo('Error reading storage: ' + (e as Error).message);
     }
   };
 
+  // Apply the auth storage fix
+  const clearAuthStorage = () => {
+    try {
+      let success = false;
+      
+      // Use the window helper if available
+      if (typeof window !== 'undefined' && window.__fixAuthStorage) {
+        success = window.__fixAuthStorage();
+        
+        if (window.__clearAuthFailures) {
+          window.__clearAuthFailures();
+        }
+      } else {
+        // Fallback manual implementation
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (key.includes('supabase') || key.includes('auth') || key.includes('sb-'))) {
+            keysToRemove.push(key);
+          }
+        }
+        
+        // Remove in separate loop to avoid index issues
+        keysToRemove.forEach(key => {
+          localStorage.removeItem(key);
+        });
+        
+        success = true;
+      }
+      
+      setFixApplied(success);
+      updateStorageInfo();
+      setDebugInfo('Auth storage cleared successfully');
+    } catch (e) {
+      setDebugInfo('Error clearing auth storage: ' + (e as Error).message);
+    }
+  };
+
+  // Reset and redirect to login
+  const resetAndRedirect = () => {
+    try {
+      // Clear all storage
+      localStorage.clear();
+      sessionStorage.clear();
+      
+      // Set a flag to indicate we're coming from the auth fix page
+      localStorage.setItem('auth_fixed', 'true');
+      
+      // Clear failures if possible
+      if (typeof window !== 'undefined' && window.__clearAuthFailures) {
+        window.__clearAuthFailures();
+      }
+      
+      setDebugInfo('Storage cleared, redirecting to login page...');
+      
+      // Redirect after a short delay
+      setTimeout(() => {
+        router.push('/login');
+      }, 1000);
+    } catch (e) {
+      setDebugInfo('Error during reset: ' + (e as Error).message);
+    }
+  };
+
+  // Hard reset - reload the page with a cache-busting parameter
+  const hardReset = () => {
+    try {
+      // Clear all storage
+      localStorage.clear();
+      sessionStorage.clear();
+      
+      // Set a flag to indicate we're coming from the auth fix page
+      localStorage.setItem('auth_fixed', 'true');
+      
+      setDebugInfo('Hard reset initiated, page will reload...');
+      
+      // Reload the page with a cache-busting parameter
+      setTimeout(() => {
+        window.location.href = '/login?t=' + Date.now();
+      }, 1000);
+    } catch (e) {
+      setDebugInfo('Error during hard reset: ' + (e as Error).message);
+    }
+  };
+
+  // Update storage info on mount
+  useEffect(() => {
+    updateStorageInfo();
+  }, []);
+
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center p-4">
-      <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow-md dark:bg-slate-900">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold">Authentication Recovery</h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">Fix issues with your authentication</p>
+    <div className="mx-auto max-w-md px-4 py-8">
+      <div className="mb-6 text-center">
+        <h1 className="text-2xl font-bold mb-2">Authentication Storage Fix</h1>
+        <p className="text-sm text-gray-500">
+          This page helps recover from authentication storage issues
+        </p>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-lg font-medium mb-4">Browser Storage Information</h2>
+        
+        <div className="space-y-2 mb-4">
+          <div className="flex justify-between">
+            <span>Total items:</span>
+            <span className="font-medium">{storageInfo.totalItems || 0}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Auth-related items:</span>
+            <span className="font-medium">{storageInfo.authItems || 0}</span>
+          </div>
         </div>
         
-        {message && (
-          <div className={\`p-3 border rounded-md \${
-            status === 'success' ? 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-300' : 
-            status === 'error' ? 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300' : 
-            'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300'
-          }\`}>
-            {message}
-          </div>
-        )}
-        
-        <div className="space-y-4">
-          <div className="p-4 bg-gray-50 rounded-md dark:bg-slate-800">
-            <h2 className="font-semibold">Authentication Issues?</h2>
-            <p className="text-sm text-gray-600 mt-1 dark:text-gray-400">
-              If you're having trouble signing in, the buttons below can help fix common authentication problems.
-            </p>
-          </div>
-          
+        <div className="flex space-x-2 mb-4">
           <button 
             onClick={clearAuthStorage}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded"
-            disabled={status !== 'idle' && status !== 'error'}
+            className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-md"
           >
-            Fix Authentication Storage
+            Clear Auth Storage
           </button>
-          
           <button 
-            onClick={resetAndRedirect}
-            className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 px-4 rounded dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200"
-            disabled={status !== 'idle' && status !== 'error'}
+            onClick={updateStorageInfo}
+            className="bg-gray-200 hover:bg-gray-300 py-2 px-3 rounded-md"
           >
-            Reset and Return to Login
+            Refresh
           </button>
-          
-          <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-            <Link href="/login" className="text-blue-600 hover:underline dark:text-blue-400 text-sm">
-              Return to Login
-            </Link>
-          </div>
         </div>
         
-        {storageInfo && (
-          <div className="mt-6 p-4 bg-gray-50 rounded-md text-xs dark:bg-slate-800">
-            <h3 className="font-bold mb-2">Authentication Storage Information</h3>
-            <details>
-              <summary className="cursor-pointer text-blue-600 dark:text-blue-400 hover:underline">
-                View Storage Details
-              </summary>
-              <pre className="overflow-x-auto mt-2 max-h-60 p-2 bg-gray-100 rounded dark:bg-slate-700">
-                {JSON.stringify(storageInfo, null, 2)}
-              </pre>
-            </details>
+        {fixApplied && (
+          <div className="bg-green-50 text-green-700 p-3 rounded-md mb-4">
+            Auth storage fix has been applied.
           </div>
         )}
       </div>
+
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-lg font-medium mb-4">Authentication Reset</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          Use these options if you're still experiencing login issues.
+        </p>
+        
+        <div className="space-y-3">
+          <button 
+            onClick={resetAndRedirect}
+            className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-md"
+          >
+            Reset & Go To Login
+          </button>
+          
+          <button 
+            onClick={hardReset}
+            className="w-full bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-md"
+          >
+            Hard Reset (Clear All Data)
+          </button>
+        </div>
+      </div>
+      
+      <div className="text-center">
+        <Link href="/" className="text-blue-500 hover:text-blue-700">
+          Return to Home Page
+        </Link>
+      </div>
+      
+      {debugInfo && (
+        <div className="mt-4 p-2 bg-gray-100 rounded text-xs text-gray-700">
+          {debugInfo}
+        </div>
+      )}
     </div>
   );
-}`
+}
+`
   },
   { 
     // Add login page to fix any import issues
