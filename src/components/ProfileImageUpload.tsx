@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Database } from '@/types/supabase';
 import { Loader2, Camera } from 'lucide-react';
+import { getSupabaseClient } from '@/src/lib/supabase-singleton';
 
 interface ProfileImageUploadProps {
   user: any;
@@ -17,7 +18,7 @@ export function ProfileImageUpload({ user, onImageUploaded }: ProfileImageUpload
   const [avatarUrl, setAvatarUrl] = useState<string | null>(
     user?.user_metadata?.avatar_url || null
   );
-  const supabase = createClientComponentClient<Database>();
+  const supabase = getSupabaseClient();
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

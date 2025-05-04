@@ -1,15 +1,10 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useAuth } from '@/context/auth';
-import { supabase } from '@/lib/supabaseClient';
-import LoadingSpinner from '@/components/LoadingSpinner';
-import ProfileDashboard from '@/components/ProfileDashboard';
+import { useAuth } from '@/src/context/auth';
 import { useRouter } from 'next/navigation';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { Database } from '@/types/supabase';
-import { ProfileImageUpload } from '@/components/ProfileImageUpload';
-import { shouldUseLocalAuth, updateLocalUser } from '@/app/(auth)/login/auth-workaround';
+import { getSupabaseClient } from '@/src/lib/supabase-singleton';
+import { Spinner } from '@/src/components/ui/spinner';
 import { getCookie } from 'cookies-next';
 
 interface ProfileFormData {
@@ -41,62 +36,77 @@ interface User {
   };
 }
 
+// Component that will be fixed or created in a separate edit if needed
+const UserHealthSummary = () => {
+  const { user } = useAuth();
+  return (
+    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+      <h3 className="text-lg font-medium mb-2">Your Health Data</h3>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {user?.user_metadata?.height && (
+          <div className="bg-white rounded p-3 shadow-sm">
+            <div className="text-xs text-gray-500">Height</div>
+            <div className="font-bold">{user.user_metadata.height}″</div>
+          </div>
+        )}
+        {user?.user_metadata?.weight && (
+          <div className="bg-white rounded p-3 shadow-sm">
+            <div className="text-xs text-gray-500">Weight</div>
+            <div className="font-bold">{user.user_metadata.weight} lbs</div>
+          </div>
+        )}
+        {user?.user_metadata?.age && (
+          <div className="bg-white rounded p-3 shadow-sm">
+            <div className="text-xs text-gray-500">Age</div>
+            <div className="font-bold">{user.user_metadata.age}</div>
+          </div>
+        )}
+        {user?.user_metadata?.gender && (
+          <div className="bg-white rounded p-3 shadow-sm">
+            <div className="text-xs text-gray-500">Gender</div>
+            <div className="font-bold">{user.user_metadata.gender}</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export default function ProfilePage() {
-  const { user, isLoading: authLoading, reloadUser } = useAuth();
+  const { user, isLoading, reloadUser } = useAuth();
   const router = useRouter();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
-  const [supabase] = useState(() => createClientComponentClient<Database>());
-  const [isSetupMode, setIsSetupMode] = useState(false);
   
-  const [formData, setFormData] = useState<ProfileFormData>({
+  // Get the singleton Supabase client
+  const supabase = getSupabaseClient();
+  
+  const [isSaving, setIsSaving] = useState(false);
+  const [notification, setNotification] = useState(null);
+  const [isUsingLocalAuth, setIsUsingLocalAuth] = useState(false);
+  const [showSetup, setShowSetup] = useState(false);
+  
+  const [healthData, setHealthData] = useState<ProfileFormData>({
     username: '',
     defaultGoal: 'General Wellness',
+    height: '',
+    weight: '',
+    age: '',
+    gender: '',
+    activityLevel: '',
   });
 
-  const [isLocalAuth, setIsLocalAuth] = useState(false);
-
-  // Add a script element to hide BMI elements
-  useEffect(() => {
-    // Create and add a script that will run on the client
-    const script = document.createElement('script');
-    script.innerHTML = `
-      // Find and hide any BMI elements
-      setTimeout(function() {
-        document.querySelectorAll('div').forEach(function(el) {
-          if (el.textContent && el.textContent.trim() === 'BMI') {
-            // Find the closest parent that's likely the entire BMI row
-            var parent = el;
-            for (var i = 0; i < 3; i++) {
-              if (parent.parentElement) parent = parent.parentElement;
-            }
-            if (parent) parent.style.display = 'none';
-          }
-        });
-      }, 500);
-    `;
-    document.body.appendChild(script);
-    
-    return () => {
-      document.body.removeChild(script);
-    };
-  }, []);
-
-  // Check if using local auth and if in setup mode
+  // Check if using local auth and setup mode
   useEffect(() => {
     const localAuth = getCookie('use-local-auth') === 'true';
-    setIsLocalAuth(localAuth);
+    setIsUsingLocalAuth(localAuth);
     
-    // Check URL for setup parameter
     const params = new URLSearchParams(window.location.search);
-    setIsSetupMode(params.get('setup') === 'true');
+    setShowSetup(params.get('setup') === 'true');
   }, []);
 
-  // Load user data when the component mounts
+  // Load user data when available
   useEffect(() => {
     if (user) {
-      // Initialize form with user data
-      setFormData({
+      setHealthData({
         username: user.user_metadata?.username || '',
         defaultGoal: user.user_metadata?.defaultGoal || 'General Wellness',
         height: user.user_metadata?.height || '',
@@ -108,95 +118,104 @@ export default function ProfilePage() {
     }
   }, [user]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  // Handle form input changes
+  const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setHealthData(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Handle form submission
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    setMessage(null);
-
+    setIsSaving(true);
+    setNotification(null);
+    
     try {
-      if (isLocalAuth) {
-        // Use local auth workaround for updates
-        const success = updateLocalUser({
-          username: formData.username,
-          defaultGoal: formData.defaultGoal,
-          height: formData.height,
-          weight: formData.weight,
-          age: formData.age,
-          gender: formData.gender,
-          activityLevel: formData.activityLevel,
-          profile_completed: true // Mark profile as completed
-        });
-
-        if (!success) throw new Error('Failed to update local profile');
-
-        // Reload user data in the auth context
-        await reloadUser();
-
-        setMessage({
-          text: 'Profile updated successfully!',
-          type: 'success',
+      if (isUsingLocalAuth) {
+        // Local auth mode - update local storage
+        const success = updateLocalProfile({
+          username: healthData.username,
+          defaultGoal: healthData.defaultGoal,
+          height: healthData.height,
+          weight: healthData.weight,
+          age: healthData.age,
+          gender: healthData.gender, 
+          activityLevel: healthData.activityLevel,
+          profile_completed: true
         });
         
-        // After successful update, refresh the page to ensure we have the latest data
+        if (!success) {
+          throw new Error('Failed to update local profile');
+        }
+        
+        // Reload user from context to reflect changes
+        await reloadUser();
+        
+        setNotification({
+          text: 'Profile updated successfully!',
+          type: 'success'
+        });
+        
+        // Redirect after successful update if in setup mode
         setTimeout(() => {
-          // Remove setup parameter when reloading
-          const url = new URL(window.location.href);
-          url.searchParams.delete('setup');
-          router.replace(url.toString());
+          if (showSetup) {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('setup');
+            router.replace(url.toString());
+          }
         }, 1500);
       } else {
-        // Use Supabase auth for updates
+        // Regular auth mode - update Supabase user metadata
         const { error } = await supabase.auth.updateUser({
           data: {
-            username: formData.username,
-            defaultGoal: formData.defaultGoal,
-            height: formData.height,
-            weight: formData.weight,
-            age: formData.age,
-            gender: formData.gender,
-            activityLevel: formData.activityLevel,
-            profile_completed: true // Mark profile as completed
-          },
-        });
-
-        if (error) throw error;
-
-        // After Supabase update, also reload user
-        await reloadUser();
-
-        setMessage({
-          text: 'Profile updated successfully!',
-          type: 'success',
+            username: healthData.username,
+            defaultGoal: healthData.defaultGoal,
+            height: healthData.height,
+            weight: healthData.weight,
+            age: healthData.age,
+            gender: healthData.gender,
+            activityLevel: healthData.activityLevel,
+            profile_completed: true
+          }
         });
         
-        // After successful update, refresh the page to ensure we have the latest data
+        if (error) throw error;
+        
+        // Reload user from context to reflect changes
+        await reloadUser();
+        
+        setNotification({
+          text: 'Profile updated successfully!',
+          type: 'success'
+        });
+        
+        // Redirect after successful update if in setup mode
         setTimeout(() => {
-          // Remove setup parameter when reloading
-          const url = new URL(window.location.href);
-          url.searchParams.delete('setup');
-          router.replace(url.toString());
+          if (showSetup) {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('setup');
+            router.replace(url.toString());
+          }
         }, 1500);
       }
-    } catch (err: any) {
-      console.error('Error updating profile:', err);
-      setMessage({
-        text: err.message || 'Failed to update profile',
-        type: 'error',
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      setNotification({
+        text: error.message || 'Failed to update profile',
+        type: 'error'
       });
     } finally {
-      setIsSubmitting(false);
+      setIsSaving(false);
     }
   };
 
-  if (authLoading) {
+  if (isLoading) {
     return (
       <div className="container mx-auto px-4 py-12 flex justify-center">
-        <LoadingSpinner size={36} />
+        <Spinner size="lg" />
       </div>
     );
   }
@@ -214,8 +233,8 @@ export default function ProfilePage() {
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       <h1 className="text-3xl font-bold mb-4">Your Health Profile</h1>
-
-      {/* Main Info Box - Make it very visible */}
+      
+      {/* User info card */}
       <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg shadow-lg p-6 mb-6">
         <div className="flex items-center mb-4">
           <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mr-4">
@@ -233,44 +252,39 @@ export default function ProfilePage() {
           <span className="font-bold">For the most accurate nutrition analysis</span>, please complete your health profile below.
         </p>
         
-        <p className="mb-1">
-          ✓ All your uploads and history are securely stored in your account
-        </p>
-        <p className="mb-1">
-          ✓ Your health data is used to provide personalized nutrition recommendations
-        </p>
-        <p>
-          ✓ Complete all fields for the most tailored analysis results
-        </p>
+        <p className="mb-1">✓ All your uploads and history are securely stored in your account</p>
+        <p className="mb-1">✓ Your health data is used to provide personalized nutrition recommendations</p>
+        <p>✓ Complete all fields for the most tailored analysis results</p>
       </div>
-
-      {isLocalAuth && (
+      
+      {/* Local auth warning */}
+      {isUsingLocalAuth && (
         <div className="mb-6 bg-yellow-50 border-l-4 border-yellow-500 p-3 rounded">
           <p className="text-yellow-700 text-sm">
             <strong>Note:</strong> You're using simplified authentication. Your profile changes will be saved locally.
           </p>
         </div>
       )}
-
-      {/* Profile Dashboard - Only show if profile is partially or fully complete */}
-      {formData.height || formData.weight || formData.age || formData.gender ? (
+      
+      {/* Health summary card if data exists */}
+      {(healthData.height || healthData.weight || healthData.age || healthData.gender) && (
         <div className="mb-6">
-          <ProfileDashboard />
+          <UserHealthSummary />
         </div>
-      ) : null}
-
-      {/* Profile Form - More compact layout */}
+      )}
+      
+      {/* Profile form */}
       <div className="bg-white rounded-lg shadow-md p-6">
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Health Information Section - Main focus */}
+          {/* Health information section */}
           <div className="border-2 border-blue-100 rounded-lg p-4 bg-blue-50">
             <h2 className="text-xl font-semibold text-blue-800 mb-3">Health Information</h2>
             <p className="text-blue-700 mb-4 font-medium">
               This is the data used to analyze your food photos and provide personalized recommendations.
             </p>
-
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-              {/* Height */}
+              {/* Height field */}
               <div>
                 <label htmlFor="height" className="block text-sm font-medium text-gray-700 mb-1">
                   Height <span className="text-blue-600 font-semibold">(important)</span>
@@ -280,7 +294,7 @@ export default function ProfilePage() {
                     id="height"
                     name="height"
                     type="text"
-                    value={formData.height}
+                    value={healthData.height}
                     onChange={handleChange}
                     className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-black"
                     placeholder="Height in inches"
@@ -291,8 +305,8 @@ export default function ProfilePage() {
                 </div>
                 <p className="mt-1 text-xs text-gray-600">5'10" = 70 inches</p>
               </div>
-
-              {/* Weight */}
+              
+              {/* Weight field */}
               <div>
                 <label htmlFor="weight" className="block text-sm font-medium text-gray-700 mb-1">
                   Weight <span className="text-blue-600 font-semibold">(important)</span>
@@ -302,7 +316,7 @@ export default function ProfilePage() {
                     id="weight"
                     name="weight"
                     type="text"
-                    value={formData.weight}
+                    value={healthData.weight}
                     onChange={handleChange}
                     className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-black"
                     placeholder="Weight in pounds"
@@ -312,8 +326,8 @@ export default function ProfilePage() {
                   </div>
                 </div>
               </div>
-
-              {/* Age */}
+              
+              {/* Age field */}
               <div>
                 <label htmlFor="age" className="block text-sm font-medium text-gray-700 mb-1">
                   Age <span className="text-blue-600 font-semibold">(important)</span>
@@ -322,14 +336,14 @@ export default function ProfilePage() {
                   id="age"
                   name="age"
                   type="text"
-                  value={formData.age}
+                  value={healthData.age}
                   onChange={handleChange}
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-black"
                   placeholder="Your age"
                 />
               </div>
-
-              {/* Gender */}
+              
+              {/* Gender field */}
               <div>
                 <label htmlFor="gender" className="block text-sm font-medium text-gray-700 mb-1">
                   Gender <span className="text-blue-600 font-semibold">(important)</span>
@@ -337,7 +351,7 @@ export default function ProfilePage() {
                 <select
                   id="gender"
                   name="gender"
-                  value={formData.gender}
+                  value={healthData.gender}
                   onChange={handleChange}
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-700"
                 >
@@ -348,8 +362,8 @@ export default function ProfilePage() {
                   <option value="Prefer not to say">Prefer not to say</option>
                 </select>
               </div>
-
-              {/* Activity Level */}
+              
+              {/* Activity level field */}
               <div>
                 <label htmlFor="activityLevel" className="block text-sm font-medium text-gray-700 mb-1">
                   Activity Level <span className="text-blue-600 font-semibold">(important)</span>
@@ -357,7 +371,7 @@ export default function ProfilePage() {
                 <select
                   id="activityLevel"
                   name="activityLevel"
-                  value={formData.activityLevel}
+                  value={healthData.activityLevel}
                   onChange={handleChange}
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-700"
                 >
@@ -372,9 +386,9 @@ export default function ProfilePage() {
             </div>
           </div>
           
-          {/* Username and Goals Section */}
+          {/* Other profile fields */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Username */}
+            {/* Username field */}
             <div>
               <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
                 Username
@@ -383,14 +397,14 @@ export default function ProfilePage() {
                 id="username"
                 name="username"
                 type="text"
-                value={formData.username}
+                value={healthData.username}
                 onChange={handleChange}
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-black"
                 placeholder="Your username"
               />
             </div>
-
-            {/* Default Goal */}
+            
+            {/* Goal field */}
             <div>
               <label htmlFor="defaultGoal" className="block text-sm font-medium text-gray-700 mb-1">
                 Nutritional Goal
@@ -398,7 +412,7 @@ export default function ProfilePage() {
               <select
                 id="defaultGoal"
                 name="defaultGoal"
-                value={formData.defaultGoal}
+                value={healthData.defaultGoal}
                 onChange={handleChange}
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-700"
               >
@@ -411,24 +425,24 @@ export default function ProfilePage() {
               </select>
             </div>
           </div>
-
-          {/* Submit Button */}
+          
+          {/* Submit button and notification */}
           <div>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSaving}
               className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-lg font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
-              {isSubmitting ? 'Saving...' : 'Save Health Profile'}
+              {isSaving ? 'Saving...' : 'Save Health Profile'}
             </button>
             
-            {message && (
-              <div
-                className={`mt-4 p-3 rounded ${
-                  message.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
-                }`}
-              >
-                {message.text}
+            {notification && (
+              <div className={`mt-4 p-3 rounded ${
+                notification.type === 'success' 
+                  ? 'bg-green-50 text-green-800' 
+                  : 'bg-red-50 text-red-800'
+              }`}>
+                {notification.text}
               </div>
             )}
           </div>
@@ -436,4 +450,31 @@ export default function ProfilePage() {
       </div>
     </div>
   );
+}
+
+// Helper function for local profile updates
+function updateLocalProfile(profileData) {
+  try {
+    // Get current user data from localStorage or initialize empty object
+    const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+    
+    // Update user metadata
+    userData.user_metadata = {
+      ...userData.user_metadata,
+      ...profileData
+    };
+    
+    // Save updated user data
+    localStorage.setItem('userData', JSON.stringify(userData));
+    
+    // Dispatch event to notify other components
+    window.dispatchEvent(new CustomEvent('userProfileUpdated', { 
+      detail: { userData } 
+    }));
+    
+    return true;
+  } catch (error) {
+    console.error('Error updating local profile:', error);
+    return false;
+  }
 } 

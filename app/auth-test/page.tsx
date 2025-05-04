@@ -1,51 +1,49 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { getSupabaseClient } from '@/src/lib/supabase-singleton';
 import Link from 'next/link';
 
 export default function AuthTestPage() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const supabase = createClientComponentClient();
+  const [error, setError] = useState(null);
   
-  // Check auth status on mount
+  // Get the singleton Supabase client
+  const supabase = getSupabaseClient();
+
   useEffect(() => {
-    async function getSession() {
+    async function checkAuth() {
       try {
         setLoading(true);
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
-        if (error) {
-          throw error;
-        }
+        if (sessionError) throw sessionError;
         
         if (session) {
           setUser(session.user);
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error('Auth error:', err);
         setError(err.message || 'Authentication error');
       } finally {
         setLoading(false);
       }
     }
-    
-    getSession();
+
+    checkAuth();
   }, [supabase]);
-  
-  // Handle sign out
-  const handleSignOut = async () => {
+
+  const signOut = async () => {
     try {
       await supabase.auth.signOut();
       setUser(null);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Sign out error:', err);
       setError(err.message || 'Error signing out');
     }
   };
-  
+
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -53,7 +51,7 @@ export default function AuthTestPage() {
       </div>
     );
   }
-  
+
   return (
     <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded-lg shadow-md">
       <h1 className="text-2xl font-bold mb-6">Authentication Test Page</h1>
@@ -73,8 +71,8 @@ export default function AuthTestPage() {
           </div>
           
           <div className="mt-4">
-            <button 
-              onClick={handleSignOut}
+            <button
+              onClick={signOut}
               className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded"
             >
               Sign Out
@@ -88,10 +86,16 @@ export default function AuthTestPage() {
           </div>
           
           <div className="flex flex-col space-y-2 mt-4">
-            <Link href="/login" className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded text-center">
+            <Link
+              href="/login"
+              className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded text-center"
+            >
               Go to Login
             </Link>
-            <Link href="/signup" className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded text-center">
+            <Link
+              href="/signup"
+              className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded text-center"
+            >
               Create Account
             </Link>
           </div>
@@ -101,16 +105,28 @@ export default function AuthTestPage() {
       <div className="mt-6 pt-6 border-t border-gray-200">
         <h2 className="text-lg font-semibold mb-2">Navigation Test</h2>
         <div className="grid grid-cols-2 gap-2">
-          <Link href="/dashboard" className="bg-blue-100 hover:bg-blue-200 text-blue-800 py-2 px-4 rounded text-center">
+          <Link
+            href="/dashboard"
+            className="bg-blue-100 hover:bg-blue-200 text-blue-800 py-2 px-4 rounded text-center"
+          >
             Dashboard (Protected)
           </Link>
-          <Link href="/profile" className="bg-blue-100 hover:bg-blue-200 text-blue-800 py-2 px-4 rounded text-center">
+          <Link
+            href="/profile"
+            className="bg-blue-100 hover:bg-blue-200 text-blue-800 py-2 px-4 rounded text-center"
+          >
             Profile (Protected)
           </Link>
-          <Link href="/" className="bg-gray-100 hover:bg-gray-200 text-gray-800 py-2 px-4 rounded text-center">
+          <Link
+            href="/"
+            className="bg-gray-100 hover:bg-gray-200 text-gray-800 py-2 px-4 rounded text-center"
+          >
             Home (Public)
           </Link>
-          <Link href="/test-image" className="bg-gray-100 hover:bg-gray-200 text-gray-800 py-2 px-4 rounded text-center">
+          <Link
+            href="/test-image"
+            className="bg-gray-100 hover:bg-gray-200 text-gray-800 py-2 px-4 rounded text-center"
+          >
             Test Image (Public)
           </Link>
         </div>

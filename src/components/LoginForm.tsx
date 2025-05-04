@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { getSupabaseClient } from '@/src/lib/supabase-singleton';
 import Link from 'next/link';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -21,7 +21,7 @@ export default function LoginForm() {
   const redirectParam = searchParams?.get('redirect');
   const redirectPath = redirectParam ? '/dashboard' : undefined;
   
-  const supabase = createClientComponentClient();
+  const supabase = getSupabaseClient();
   
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

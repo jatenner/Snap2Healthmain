@@ -133,6 +133,21 @@ export function AuthProvider({ children }) {
     }
   };
   
+  // Reload user data
+  const reloadUser = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setUser(session.user);
+        setIsAuthenticated(true);
+      }
+      return { success: true };
+    } catch (error) {
+      console.error('Error reloading user:', error);
+      return { success: false, error };
+    }
+  };
+  
   // Context value
   const value = {
     user,
@@ -143,7 +158,7 @@ export function AuthProvider({ children }) {
     signUp,
     signOut,
     setMockUser,
-    // Expose supabase client for direct access when needed
+    reloadUser,
     supabase
   };
   
