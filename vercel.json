@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "npm run clean-build",
+  "buildCommand": "npm run vercel-build",
   "outputDirectory": ".next",
   "installCommand": "npm install",
   "framework": "nextjs",
@@ -8,7 +8,8 @@
     "sfo1"
   ],
   "env": {
-    "NEXT_PUBLIC_VERCEL_DEPLOYMENT": "true"
+    "NEXT_PUBLIC_VERCEL_DEPLOYMENT": "true",
+    "NODE_OPTIONS": "--max-old-space-size=4096 --expose-gc"
   },
   "headers": [
     {
@@ -51,14 +52,14 @@
       ]
     },
     {
-      "source": "/(emergency-fix\\.js|data-troubleshooter\\.js|cache-buster\\.js)",
+      "source": "/(auth-client-fix\\.js|clear-browser-storage\\.js|cache-invalidate\\.js)",
       "headers": [
         {
           "key": "Cache-Control",
           "value": "no-store, max-age=0"
         },
         {
-          "key": "X-Emergency-Script",
+          "key": "X-Auth-Fix-Script",
           "value": "true"
         }
       ]
