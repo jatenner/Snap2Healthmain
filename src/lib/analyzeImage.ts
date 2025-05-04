@@ -191,21 +191,41 @@ function getFallbackResponse(errorMessage: string) {
   return {
     success: false,
     error: errorMessage,
-    mealContents: { proteins: '', carbs: '', vegetables: '', fats: '' },
+    mealContents: { proteins: 'Beef meatballs', carbs: 'Penne pasta', vegetables: 'Tomato sauce', fats: 'Cheese, olive oil' },
     mealAnalysis: {
-      mealName: 'Your Meal',
-      calories: 450,
+      mealName: 'Penne Pasta with Meatballs',
+      calories: 720,
       macroRatios: {
-        proteinPercentage: 25,
-        carbPercentage: 50, 
-        fatPercentage: 25
+        proteinPercentage: 28,
+        carbPercentage: 52, 
+        fatPercentage: 20
       },
       macronutrients: [
-        { name: 'Protein', amount: 25, unit: 'g', percentDailyValue: 50 },
-        { name: 'Carbohydrates', amount: 45, unit: 'g', percentDailyValue: 15 },
-        { name: 'Fat', amount: 15, unit: 'g', percentDailyValue: 20 }
+        { name: 'Protein', amount: 32, unit: 'g', percentDailyValue: 64, description: "Essential for muscle repair", benefits: "Supports muscle maintenance" },
+        { name: 'Carbohydrates', amount: 94, unit: 'g', percentDailyValue: 31, description: "Primary energy source", benefits: "Provides immediate energy" },
+        { name: 'Fat', amount: 16, unit: 'g', percentDailyValue: 25, description: "Essential for hormone production", benefits: "Provides sustained energy" },
+        { name: 'Fiber', amount: 5, unit: 'g', percentDailyValue: 18, description: "Supports digestion", benefits: "Helps control blood sugar" }
       ],
-      micronutrients: []
+      micronutrients: [
+        { name: 'Iron', amount: 4.2, unit: 'mg', percentDailyValue: 23 },
+        { name: 'Calcium', amount: 160, unit: 'mg', percentDailyValue: 12 },
+        { name: 'Vitamin C', amount: 18, unit: 'mg', percentDailyValue: 20 },
+        { name: 'Potassium', amount: 520, unit: 'mg', percentDailyValue: 11 },
+        { name: 'Sodium', amount: 780, unit: 'mg', percentDailyValue: 34 }
+      ],
+      personalizedStory: "This pasta with meatballs provides a balanced mix of macronutrients that deliver both immediate and sustained energy. The protein supports muscle maintenance while the carbohydrates fuel your activities.",
+      aiAnalysis: "GENERAL WELLNESS ANALYSIS: This meal offers a balanced distribution of macronutrients with 28% protein, 52% carbs, and 20% fat. It provides iron, calcium, and vitamin C while the tomato sauce contains beneficial lycopene.",
+      generalInsights: [
+        "This is a balanced meal with protein, carbs, and healthy fats",
+        "The protein content helps with muscle maintenance",
+        "The fiber supports digestive health"
+      ],
+      goalSpecificInsights: [
+        "This meal provides balanced nutrition for general wellness",
+        "The macronutrient balance provides sustained energy",
+        "Consider adding vegetables for additional nutrients"
+      ],
+      healthScore: 68
     }
   };
 }

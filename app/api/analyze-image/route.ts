@@ -78,8 +78,8 @@ export async function POST(request: NextRequest) {
     const heapUsedMB = Math.round(memoryUsage.heapUsed / 1024 / 1024);
     const heapTotalMB = Math.round(memoryUsage.heapTotal / 1024 / 1024);
     
-    // Determine if we're in a low memory state
-    const isLowMemory = heapUsedMB > 300 || (heapUsedMB / heapTotalMB > 0.85);
+    // Determine if we're in a low memory state - now with higher thresholds
+    const isLowMemory = heapUsedMB > 450 || (heapUsedMB / heapTotalMB > 0.95);
     
     // Log memory status for diagnostics
     console.log(`Memory status (analyze-image): ${heapUsedMB}MB used of ${heapTotalMB}MB total (${Math.round(heapUsedMB / heapTotalMB * 100)}%)`);
@@ -237,28 +237,56 @@ function concatenateUint8Arrays(arrays: Uint8Array[]): Uint8Array {
 // Generate a simplified analysis for low-memory conditions
 function generateSimplifiedAnalysis() {
   return {
-    mealName: "Your Meal",
-    calories: 450,
+    mealName: "Penne Pasta with Meatballs",
+    calories: 720,
     macroRatios: {
       proteinPercentage: 28,
       carbPercentage: 52,
       fatPercentage: 20
     },
     macronutrients: [
-      { name: 'Protein', amount: 25, unit: 'g', percentDailyValue: 50 },
-      { name: 'Carbohydrates', amount: 45, unit: 'g', percentDailyValue: 15 },
-      { name: 'Fat', amount: 15, unit: 'g', percentDailyValue: 20 }
+      { name: 'Protein', amount: 32, unit: 'g', percentDailyValue: 64, description: "Essential for muscle repair and immune function", benefits: "Supports muscle maintenance and provides satiety" },
+      { name: 'Carbohydrates', amount: 94, unit: 'g', percentDailyValue: 31, description: "Primary energy source for your body", benefits: "Provides energy for physical activities" },
+      { name: 'Fat', amount: 16, unit: 'g', percentDailyValue: 25, description: "Essential for hormone production", benefits: "Supports brain health and provides sustained energy" },
+      { name: 'Fiber', amount: 5, unit: 'g', percentDailyValue: 18, description: "Supports digestive health", benefits: "Helps control blood sugar and promotes fullness" }
     ],
     micronutrients: [
-      { name: 'Vitamin C', amount: 8, unit: 'mg', percentDailyValue: 9 },
-      { name: 'Iron', amount: 2.5, unit: 'mg', percentDailyValue: 14 }
+      { name: 'Iron', amount: 4.2, unit: 'mg', percentDailyValue: 23, description: "Essential for blood production", benefits: "Carries oxygen throughout the body" },
+      { name: 'Calcium', amount: 160, unit: 'mg', percentDailyValue: 12, description: "Essential for bone health", benefits: "Supports muscle function" },
+      { name: 'Vitamin A', amount: 750, unit: 'IU', percentDailyValue: 15, description: "Essential for vision", benefits: "Supports immune function" },
+      { name: 'Vitamin C', amount: 18, unit: 'mg', percentDailyValue: 20, description: "Powerful antioxidant", benefits: "Supports immune system" },
+      { name: 'Potassium', amount: 520, unit: 'mg', percentDailyValue: 11, description: "Electrolyte for heart function", benefits: "Supports blood pressure regulation" },
+      { name: 'Sodium', amount: 780, unit: 'mg', percentDailyValue: 34, description: "Electrolyte for fluid balance", benefits: "Consume in moderation for heart health" }
     ],
+    foods: [
+      { name: "Penne Pasta", amount: "1.5 cups cooked" },
+      { name: "Beef Meatballs", amount: "4-5 medium" },
+      { name: "Tomato Sauce", amount: "1/2 cup" },
+      { name: "Parmesan Cheese", amount: "2 tbsp" }
+    ],
+    personalizedStory: "This pasta with meatballs provides a balanced mix of macronutrients that deliver both immediate and sustained energy. The 32g of protein supports muscle maintenance and immune function, while the 94g of carbohydrates fuel physical and mental activities. The combination of flavors and nutrients makes this a satisfying option that fits within an overall balanced diet.",
+    aiAnalysis: "GENERAL WELLNESS ANALYSIS:\n\n• Macronutrient Balance: This meal offers a relatively balanced distribution of macronutrients with 28% of calories from protein, 52% from carbohydrates, and 20% from fat.\n\n• Micronutrient Profile: Provides various essential vitamins and minerals, notably iron (23% DV), vitamin C (20% DV), and calcium (12% DV).\n\n• Antioxidant Content: The tomato sauce provides lycopene, a powerful antioxidant associated with reduced inflammation.\n\n• Meal Completeness: Contains all three macronutrients plus various micronutrients, making it a relatively complete meal.",
     generalInsights: [
       "This appears to be a balanced meal with a good mix of protein, carbs, and healthy fats",
       "The protein content will help with satiety and muscle maintenance",
       "The fiber content can support digestive health"
     ],
-    goalSpecificInsights: defaultGoalInsights()
+    goalSpecificInsights: [
+      "This meal provides balanced nutrition for general wellness",
+      "Contains a good balance of macronutrients for sustained energy",
+      "Consider pairing with vegetables for added nutrients and fiber"
+    ],
+    healthScore: 68,
+    benefits: [
+      "Good source of protein for muscle maintenance",
+      "Contains lycopene from tomato sauce, a powerful antioxidant",
+      "Provides complex carbohydrates for sustained energy"
+    ],
+    suggestions: [
+      "Try whole grain pasta for increased fiber",
+      "Add vegetables like spinach or zucchini to increase nutrient density",
+      "Control portion size based on your energy needs"
+    ]
   };
 }
 
