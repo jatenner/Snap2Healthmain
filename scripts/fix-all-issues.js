@@ -79,6 +79,24 @@ function ensureFile(filePath, content) {
 async function killPortProcesses() {
   log('🔍 Checking for processes using ports 3000-3010...', 'blue');
   
+  // Check if we're in Vercel or a restricted environment
+  const isVercelEnv = process.env.VERCEL === '1' || 
+                      process.env.NEXT_PUBLIC_VERCEL_DEPLOYMENT === 'true';
+  
+  if (isVercelEnv) {
+    log('Running in Vercel environment, skipping port checks...', 'yellow');
+    return true;
+  }
+  
+  // Check if lsof is available
+  let lsofAvailable = false;
+  try {
+    execSync('which lsof', { stdio: 'ignore' });
+    lsofAvailable = true;
+  } catch (error) {
+    log('lsof command not available, using alternate port checking methods', 'yellow');
+  }
+  
   // Handle platform-specific commands
   if (process.platform === 'win32') {
     try {
@@ -92,17 +110,49 @@ async function killPortProcesses() {
       // Try to kill all node processes on ports 3000-3010
       for (let port = 3000; port <= 3010; port++) {
         try {
-          const pids = runCommand(`lsof -ti:${port}`).trim().split('\n').filter(Boolean);
-          if (pids.length > 0) {
-            log(`Found ${pids.length} processes using port ${port}, killing...`, 'yellow');
-            pids.forEach(pid => {
-              try {
-                runCommand(`kill -9 ${pid}`);
-                log(`✅ Process ${pid} on port ${port} killed`, 'green');
-              } catch (e) {
-                // Ignore if process can't be killed
+          if (lsofAvailable) {
+            const pids = runCommand(`lsof -ti:${port}`).trim().split('\n').filter(Boolean);
+            if (pids.length > 0) {
+              log(`Found ${pids.length} processes using port ${port}, killing...`, 'yellow');
+              pids.forEach(pid => {
+                try {
+                  runCommand(`kill -9 ${pid}`);
+                  log(`✅ Process ${pid} on port ${port} killed`, 'green');
+                } catch (e) {
+                  // Ignore if process can't be killed
+                }
+              });
+            }
+          } else {
+            // Alternative approach using netstat if available
+            try {
+              const netstatOutput = execSync(`netstat -tulpn 2>/dev/null | grep :${port}`, 
+                { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
+              
+              const netstatPids = [];
+              netstatOutput.split('\n').forEach(line => {
+                const match = line.match(/\s(\d+)\/\w+\s*$/);
+                if (match && match[1]) {
+                  netstatPids.push(match[1]);
+                }
+              });
+              
+              if (netstatPids.length > 0) {
+                log(`Found ${netstatPids.length} processes using port ${port} (netstat), killing...`, 'yellow');
+                netstatPids.forEach(pid => {
+                  try {
+                    runCommand(`kill -9 ${pid}`);
+                    log(`✅ Process ${pid} on port ${port} killed`, 'green');
+                  } catch (e) {
+                    // Ignore if process can't be killed
+                  }
+                });
               }
-            });
+            } catch (netstatError) {
+              // Ignore netstat errors and try pkill
+              log('Netstat failed, trying pkill...', 'yellow');
+              runCommand(`pkill -f "node.*:${port}" || true`);
+            }
           }
         } catch (e) {
           // Ignore if lsof fails or no processes found
@@ -111,21 +161,34 @@ async function killPortProcesses() {
       
       // Additional cleanup for stubborn processes
       try {
-        runCommand('pkill -f "node.*3000" || true');
-      } catch (e) {
-        // Ignore errors
+        if (lsofAvailable) {
+          runCommand('kill -9 $(lsof -t -i:3000) 2>/dev/null || true');
+          runCommand('lsof -ti:3000 | xargs kill -9 2>/dev/null || true');
+        } else {
+          runCommand('pkill -f "node.*3000" || true');
+        }
+      } catch (error) {
+        log('Error killing processes, trying alternative method...', 'yellow');
+        try {
+          runCommand('killall -9 node || true');
+        } catch (e) {
+          // Ignore if no processes to kill
+        }
       }
     } catch (error) {
-      log('Error killing processes, trying alternative method...', 'yellow');
+      log('Error killing processes, using generic approach...', 'yellow');
+      // Generic approach
       try {
-        runCommand('killall -9 node || true');
+        runCommand('pkill -f node || true');
       } catch (e) {
-        // Ignore if no processes to kill
+        // Ignore errors
+        log('All port-killing approaches failed, but continuing anyway', 'yellow');
       }
     }
   }
   
   log('🎉 Ports cleanup completed!', 'green');
+  return true;
 }
 
 // Clean build and cache artifacts
@@ -577,6 +640,21 @@ self.addEventListener('fetch', (event) => {
 async function fixPortConflicts() {
   log('🔧 Fixing port conflicts more aggressively...', 'blue');
   
+  // Skip this step in Vercel environment
+  if (process.env.VERCEL === '1' || process.env.NEXT_PUBLIC_VERCEL_DEPLOYMENT === 'true') {
+    log('Skipping port conflict fix in Vercel environment', 'yellow');
+    return true;
+  }
+  
+  // Check if lsof is available
+  let lsofAvailable = false;
+  try {
+    execSync('which lsof', { stdio: 'ignore' });
+    lsofAvailable = true;
+  } catch (error) {
+    log('lsof command not available, using alternate port fixing methods', 'yellow');
+  }
+  
   // Kill any process on port 3000 using more aggressive methods
   if (process.platform === 'win32') {
     try {
@@ -587,9 +665,11 @@ async function fixPortConflicts() {
   } else {
     try {
       // Try multiple commands to ensure ports are freed
-      runCommand('kill -9 $(lsof -t -i:3000) 2>/dev/null || true');
+      if (lsofAvailable) {
+        runCommand('kill -9 $(lsof -t -i:3000) 2>/dev/null || true');
+        runCommand('lsof -ti:3000 | xargs kill -9 2>/dev/null || true');
+      }
       runCommand('pkill -f "node.*3000" || true');
-      runCommand('lsof -ti:3000 | xargs kill -9 2>/dev/null || true');
     } catch (e) {
       // Ignore errors
     }

@@ -13,13 +13,39 @@ const { createServer } = require('http');
 // Check if the --force flag is provided
 const useForce = process.argv.includes('--force');
 
-// Check if we're running in Vercel environment
-const isVercelEnv = process.env.VERCEL === '1' || 
-                    process.env.NEXT_PUBLIC_VERCEL_DEPLOYMENT === 'true';
+// Enhanced detection for Vercel and other restricted environments
+function isRestrictedEnvironment() {
+  // Check for explicit Vercel environment variables
+  if (process.env.VERCEL === '1' || 
+      process.env.NEXT_PUBLIC_VERCEL_DEPLOYMENT === 'true') {
+    return true;
+  }
+
+  // Check if we're in CI/CD environment
+  if (process.env.CI || process.env.CONTINUOUS_INTEGRATION) {
+    return true;
+  }
+
+  // Try to detect if lsof is available (will handle serverless environments lacking system tools)
+  try {
+    // Use 'which' on Unix or 'where' on Windows to check if lsof exists
+    if (process.platform === 'win32') {
+      execSync('where lsof', { stdio: 'ignore' });
+    } else {
+      execSync('which lsof', { stdio: 'ignore' });
+    }
+    // If we get here, lsof is available
+    return false;
+  } catch (error) {
+    // lsof command not found, likely in a restricted environment
+    console.log('lsof command not available - assuming restricted environment');
+    return true;
+  }
+}
 
 // When running in Vercel environment, just pass through without trying to kill ports
-if (isVercelEnv) {
-  console.log('Running in Vercel environment, skipping port checks');
+if (isRestrictedEnvironment()) {
+  console.log('Running in restricted environment (Vercel/CI/CD), skipping port checks');
   process.exit(0);
 }
 
@@ -123,6 +149,14 @@ async function killPorts() {
     } else {
       // macOS and Linux commands
       try {
+        // First check if lsof is available
+        try {
+          execSync('which lsof', { stdio: 'ignore' });
+        } catch (error) {
+          // lsof not available, try alternative approach with netstat
+          throw new Error('lsof not available');
+        }
+
         const findCmd = `lsof -i :${port} | grep LISTEN`;
         console.log(`${colors.blue}Finding processes on port ${port}...${colors.reset}`);
         
@@ -147,13 +181,33 @@ async function killPorts() {
       } catch (error) {
         console.log(`${colors.yellow}Error with standard Unix approach: ${colors.reset}${error.message}`);
         
-        if (useForce) {
-          // More aggressive approach for Unix systems
-          console.log(`${colors.magenta}Using aggressive method to kill port ${port}...${colors.reset}`);
-          runCommand(`kill -9 $(lsof -t -i:${port})`, true);
+        // Try alternative Unix approaches that might not require lsof
+        try {
+          console.log(`${colors.blue}Trying alternative approach with netstat...${colors.reset}`);
+          const netstatOutput = execSync(`netstat -tulpn 2>/dev/null | grep :${port}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
           
-          // Fallback to pkill if needed
-          runCommand(`pkill -f "node.*:${port}"`, true);
+          const pids = new Set();
+          netstatOutput.split('\n').forEach(line => {
+            const match = line.match(/\s(\d+)\/\w+\s*$/);
+            if (match && match[1]) {
+              pids.add(match[1]);
+            }
+          });
+          
+          for (const pid of pids) {
+            if (pid && pid !== '') {
+              console.log(`${colors.blue}Killing process with PID ${pid}...${colors.reset}`);
+              runCommand(`kill -9 ${pid}`);
+            }
+          }
+        } catch (netstatError) {
+          console.log(`${colors.yellow}Alternative approach failed: ${colors.reset}${netstatError.message}`);
+          
+          if (useForce) {
+            console.log(`${colors.magenta}Using last resort pkill approach...${colors.reset}`);
+            // Try pkill which might be available in more environments
+            runCommand(`pkill -f "node.*:${port}"`, true);
+          }
         }
       }
     }
