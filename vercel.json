@@ -1,9 +1,7 @@
 {
   "version": 2,
   "cleanUrls": true,
-  "buildCommand": "NEXT_PUBLIC_VERCEL_DEPLOYMENT=true next build",
-  "outputDirectory": "out",
-  "trailingSlash": true,
+  "buildCommand": "next build",
   "headers": [
     {
       "source": "/(.*)",
@@ -44,8 +42,5 @@
         }
       ]
     }
-  ],
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/$1" }
   ]
 }
