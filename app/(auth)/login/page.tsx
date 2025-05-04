@@ -11,6 +11,13 @@ import { setCookie } from 'cookies-next';
 import { runCacheMaintenance } from '@/lib/cache-manager';
 import Script from 'next/script';
 
+// Add this type declaration for the global window object
+declare global {
+  interface Window {
+    __fixAuthStorage?: () => void;
+  }
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -306,6 +313,50 @@ export default function LoginPage() {
               </div>
             </div>
           )}
+        </div>
+        
+        <div className="mt-4 w-full max-w-md">
+          <details className="text-sm text-center text-gray-400">
+            <summary className="cursor-pointer hover:text-gray-500">Having trouble logging in?</summary>
+            <div className="mt-2 p-4 bg-white rounded-lg shadow-md">
+              <p className="text-sm text-gray-600 mb-2">
+                If you're experiencing login issues, try clearing your cache:
+              </p>
+              <button
+                onClick={() => {
+                  // Clear localStorage
+                  if (typeof window !== 'undefined') {
+                    try {
+                      // Clear auth-related items
+                      for (const key of Object.keys(localStorage)) {
+                        if (key.includes('supabase') || 
+                            key.includes('gotrue') || 
+                            key.includes('sb-')) {
+                          localStorage.removeItem(key);
+                        }
+                      }
+                      
+                      // Clear sessionStorage
+                      sessionStorage.clear();
+                      
+                      // Force refresh
+                      window.location.href = '/login?refresh=' + Date.now();
+                      
+                      // Call the global auth fix function if available
+                      if (window.__fixAuthStorage) {
+                        window.__fixAuthStorage();
+                      }
+                    } catch (e) {
+                      console.error('Error clearing storage:', e);
+                    }
+                  }
+                }}
+                className="w-full bg-blue-100 hover:bg-blue-200 text-blue-800 font-medium py-2 px-4 rounded transition-colors"
+              >
+                Clear Browser Cache & Refresh
+              </button>
+            </div>
+          </details>
         </div>
       </div>
     </>
