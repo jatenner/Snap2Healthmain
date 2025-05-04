@@ -1,6 +1,17 @@
+const path = require('path');
 /** @type {import('next').NextConfig} */
 
 const nextConfig = {
+  transpilePackages: ['@supabase/auth-helpers-nextjs'],
+
+  webpack: (config, { isServer }) => {
+    // Fix issues with the app directory imports
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@': path.join(__dirname),
+    };
+    return config;
+  },
   output: 'standalone',
   experimental: {
     optimizeCss: true,
