@@ -1,5 +1,5 @@
 /**
- * Enhanced Auth Client Fix Script v2
+ * Enhanced Auth Client Fix Script v3
  * 
  * This script fixes issues with multiple GoTrueClient instances by:
  * 1. Aggressively clearing storage to reset auth state
@@ -7,16 +7,22 @@
  * 3. Patching the GoTrueClient constructor
  * 4. Monitoring and cleaning up auth-related resources proactively
  * 5. Implementing last-resort protection at the global level
+ * 6. Adding initialization delay to prevent race conditions
  */
 
 (function() {
-  console.log('🔒 Enhanced auth client fix script v2 loaded');
+  console.log('🔒 Enhanced auth client fix script v3 loaded');
   
   // Global vars for tracking
   window.__supabaseClientCount = window.__supabaseClientCount || 0;
   window.__supabaseClientInstance = window.__supabaseClientInstance || null;
   window.__lastAuthCleanupTime = window.__lastAuthCleanupTime || 0;
   window.__authClientFixActive = true;
+  window.__authInitialized = false;
+  window.__authFixExecutionTimeMs = Date.now();
+  
+  // Add a special version flag to distinguish this version
+  window.__authClientFixVersion = 3;
   
   // Check for flags indicating issues
   const hasMultipleInstances = window.localStorage.getItem('multiple-gotrue-instances') === 'true';
@@ -60,6 +66,7 @@
       // Set flags indicating cleanup
       localStorage.setItem('auth-storage-cleared', 'true');
       localStorage.setItem('auth-storage-cleared-time', Date.now().toString());
+      localStorage.setItem('auth-client-fix-version', '3');
       window.__lastAuthCleanupTime = Date.now();
       
       // Try to clean cookies as well
@@ -77,6 +84,7 @@
       // Reset instance counter
       window.__supabaseClientCount = 0;
       window.__supabaseClientInstance = null;
+      window.__authInitialized = false;
       
       // Check if our global patch for GoTrueClient exists
       if (!window.__patchedGoTrueClient) {
@@ -101,6 +109,27 @@
         memoryHungryArray.length = 0;
       }
       
+      // Trigger a manual reload if this is a repeated issue
+      if (localStorage.getItem('auth-client-fix-reload-count')) {
+        const reloadCount = parseInt(localStorage.getItem('auth-client-fix-reload-count')) + 1;
+        
+        if (reloadCount >= 3) {
+          // Reset the counter
+          localStorage.setItem('auth-client-fix-reload-count', '0');
+          
+          // Hard reload the page
+          console.log('Multiple auth issues detected, forcing page reload');
+          window.location.reload(true);
+          
+          // Prevent further execution
+          return true;
+        }
+        
+        localStorage.setItem('auth-client-fix-reload-count', reloadCount.toString());
+      } else {
+        localStorage.setItem('auth-client-fix-reload-count', '1');
+      }
+      
       return true;
     } catch (err) {
       console.error('Error clearing auth storage:', err);
@@ -108,7 +137,7 @@
     }
   }
   
-  // Deep inspection and fix for multiple GoTrueClient instances
+  // Enhanced version with timeout fix for race conditions
   function patchGoTrueClient() {
     try {
       // Look for GoTrueClient in global scope or in modules
@@ -151,11 +180,25 @@
             // Add special headers for debugging
             if (!init) init = {};
             if (!init.headers) init.headers = {};
-            init.headers['X-Auth-Client-Fix'] = 'active';
+            init.headers['X-Auth-Client-Fix'] = 'v3';
+            init.headers['X-Auth-Client-Fix-Time'] = window.__authFixExecutionTimeMs;
           }
           
           return window.__originalFetch(input, init);
         };
+      }
+      
+      // Add a special delay to prevent race conditions during initialization
+      // This is critical for fixing the multiple GoTrueClient instances issue
+      if (!window.__authInitialDelayComplete) {
+        window.__authInitialDelayComplete = true;
+        
+        // Delay initialization slightly to allow the page to fully load
+        // This helps prevent race conditions with multiple modules creating clients
+        setTimeout(() => {
+          console.log('Auth client initialization delay complete');
+          window.__authInitialized = true;
+        }, 100);
       }
       
       console.log('GoTrueClient patching complete');
@@ -169,6 +212,17 @@
     const originalConstructor = GoTrueClass.prototype.constructor;
     
     GoTrueClass.prototype.constructor = function(...args) {
+      // Wait a tiny bit for initialization if we're in the page load phase
+      if (!window.__authInitialized && window.__authFixExecutionTimeMs && (Date.now() - window.__authFixExecutionTimeMs < 2000)) {
+        console.log('Delaying GoTrueClient creation to prevent race conditions');
+        
+        // Small sleep to allow other initialization to complete
+        const start = Date.now();
+        while (Date.now() - start < 50) {
+          // Intentional tight loop to force a small delay
+        }
+      }
+      
       console.log('GoTrueClient constructor called');
       
       // Check if we already have an instance
@@ -274,6 +328,36 @@
     console.error('Error setting up observer:', err);
   }
   
+  // Add a special retry mechanism for auth
+  window.__retryAuthOperation = function(operation, maxRetries = 3) {
+    let retries = 0;
+    
+    return new Promise((resolve, reject) => {
+      function attempt() {
+        operation()
+          .then(resolve)
+          .catch(error => {
+            if (retries < maxRetries) {
+              retries++;
+              console.log(`Auth operation failed, retrying (${retries}/${maxRetries})...`);
+              
+              // Clear storage before retrying
+              if (error.message && error.message.includes('GoTrueClient')) {
+                clearAuthStorage(true);
+              }
+              
+              // Wait a bit before retrying
+              setTimeout(attempt, 200 * retries);
+            } else {
+              reject(error);
+            }
+          });
+      }
+      
+      attempt();
+    });
+  };
+  
   // Override console.warn to detect and fix GoTrueClient warnings
   const originalConsoleWarn = console.warn;
   console.warn = function() {
@@ -298,7 +382,8 @@
   
   // Monitor page load completion
   window.addEventListener('load', function() {
-    console.log('Window loaded, auth-client-fix v2 is active and monitoring');
+    console.log('Window loaded, auth-client-fix v3 is active and monitoring');
+    window.__authInitialized = true;
     
     // Attempt to patch GoTrueClient
     patchGoTrueClient();

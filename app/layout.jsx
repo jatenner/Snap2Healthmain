@@ -18,7 +18,7 @@ const getVersionId = () => {
 };
 
 export default function RootLayout({ children }) {
-  // Generate a unique cache-busting version
+  // Generate a unique cache-busting version for this page load
   const version = getVersionId();
   const timestamp = Date.now();
   
@@ -33,13 +33,16 @@ export default function RootLayout({ children }) {
         {/* Add version for debugging */}
         <meta name="app-version" content={version} />
         <meta name="app-timestamp" content={timestamp} />
+        <meta name="auth-fix-version" content="3" />
         
-        {/* Preload auth fix script */}
+        {/* Preload auth fix script with highest priority */}
         <link 
           rel="preload" 
           href={`/auth-client-fix.js?v=${version}&t=${timestamp}`} 
           as="script" 
           importance="high" 
+          priority="high"
+          fetchpriority="high"
           crossOrigin="anonymous"
         />
         
@@ -49,6 +52,51 @@ export default function RootLayout({ children }) {
           src={`/auth-client-fix.js?v=${version}&t=${timestamp}`}
           strategy="beforeInteractive"
           fetchPriority="high"
+          onLoad={() => {
+            // Add a global marker that the script has loaded
+            if (typeof window !== 'undefined') {
+              window.__authFixLoaded = true;
+              
+              // Clear any previous instances flag to ensure clean state
+              try {
+                if (window.localStorage) {
+                  window.localStorage.setItem('auth-fix-loaded-at', Date.now().toString());
+                }
+              } catch (e) {
+                console.error('Error setting auth fix load timestamp:', e);
+              }
+            }
+          }}
+        />
+        
+        {/* Clear browser caches on load - helps prevent stale auth data */}
+        <Script
+          id="cache-invalidator"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                // Clear stale caches that might affect auth
+                if ('caches' in window) {
+                  caches.keys().then(keyList => {
+                    return Promise.all(keyList.map(key => {
+                      if (key.includes('auth') || key.includes('supabase')) {
+                        return caches.delete(key);
+                      }
+                    }));
+                  });
+                }
+                
+                // Set a flag to indicate cache was cleared
+                if (window.sessionStorage) {
+                  window.sessionStorage.setItem('cache-cleared', 'true');
+                  window.sessionStorage.setItem('cache-cleared-at', new Date().toISOString());
+                }
+              } catch (e) {
+                console.error('Cache invalidation error:', e);
+              }
+            `
+          }}
         />
       </head>
       <body>
