@@ -33,7 +33,31 @@ export default function RootLayout({ children }) {
         {/* Add version for debugging */}
         <meta name="app-version" content={version} />
         <meta name="app-timestamp" content={timestamp} />
-        <meta name="auth-fix-version" content="3" />
+        <meta name="auth-fix-version" content="4" />
+        
+        {/* Force early initialization */}
+        <Script
+          id="auth-init"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                // Clear auth storage immediately on page load
+                if (window.localStorage) {
+                  // Clear any stale instances flag
+                  window.localStorage.removeItem('multiple-gotrue-instances');
+                  window.localStorage.setItem('auth-init-time', Date.now().toString());
+                  
+                  // Force cache refresh
+                  const cacheParam = '?v=' + Date.now();
+                  window.__cacheBustingParam = cacheParam;
+                }
+              } catch (e) {
+                console.error('Auth init error:', e);
+              }
+            `
+          }}
+        />
         
         {/* Preload auth fix script with highest priority */}
         <link 
@@ -84,6 +108,18 @@ export default function RootLayout({ children }) {
                         return caches.delete(key);
                       }
                     }));
+                  });
+                }
+                
+                // Service worker cleanup if needed
+                if ('serviceWorker' in navigator) {
+                  navigator.serviceWorker.getRegistrations().then(registrations => {
+                    for (let registration of registrations) {
+                      if (registration.scope.includes(window.location.origin)) {
+                        // Unregister any service workers that might be caching auth data
+                        registration.unregister();
+                      }
+                    }
                   });
                 }
                 

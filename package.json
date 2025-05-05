@@ -15,6 +15,7 @@
     "dev:clean": "node scripts/kill-ports-improved.js --force && rm -rf .next && next dev",
     "build": "next build",
     "build:optimized": "NODE_OPTIONS='--max-old-space-size=4096' NEXT_PUBLIC_BUILD_TIMESTAMP=$(date -u +\"%Y-%m-%dT%H:%M:%SZ\") NODE_ENV=production next build",
+    "build:vercel": "NEXT_PUBLIC_BUILD_TIMESTAMP=$(date -u +\"%Y-%m-%dT%H:%M:%SZ\") NODE_ENV=production next build",
     "clean-build": "rm -rf .next && next build",
     "start": "next start",
     "start:prod": "node clean-standalone-server.js",
@@ -32,6 +33,8 @@
     "vercel-build": "node vercel-build.js",
     "fix-ports-vercel": "echo 'Skipping port check in Vercel environment'",
     "prepare-vercel": "node scripts/prepare-for-vercel.js",
+    "deploy:vercel": "npm run build:vercel && npx vercel --prod",
+    "deploy:vercel-fix-auth": "NEXT_PUBLIC_AUTH_FIX_VERSION=4 npm run build:vercel && npx vercel --prod",
     "prisma:generate": "prisma generate",
     "postinstall": "prisma generate || echo 'Skipping Prisma generation'",
     "dev:medium": "node scripts/kill-ports-improved.js --force && rm -rf .next node_modules/.cache && NODE_OPTIONS='--max-old-space-size=3072' next dev"

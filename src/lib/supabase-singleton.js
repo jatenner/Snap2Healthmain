@@ -1,5 +1,5 @@
 /**
- * Enhanced Supabase Client Singleton v3
+ * Enhanced Supabase Client Singleton v4
  * Prevents the "Multiple GoTrueClient instances detected" error 
  * with aggressive safeguards and monitoring
  */
@@ -14,12 +14,22 @@ let lastCreationTime = 0;
 let isCreatingInstance = false;
 let initializationAttempts = 0;
 const MAX_INITIALIZATION_ATTEMPTS = 3;
+const CREATION_TIMEOUT = 2000; // ms
+const DELAY_BEFORE_CREATE = 20; // ms
 
-// Track globally to prevent race conditions
+// Used to forcibly suspend additional creation attempts
+let forceSuspend = false;
+
+// Mark that we're using the v4 singleton
 if (typeof window !== 'undefined') {
+  window.__supabaseSingletonVersion = 4;
   window.__supabaseClientCreationLock = window.__supabaseClientCreationLock || false;
   window.__supabaseClientInstance = window.__supabaseClientInstance || null;
   window.__supabaseInitStartTime = window.__supabaseInitStartTime || Date.now();
+  window.__supabaseInstanceCount = window.__supabaseInstanceCount || 0;
+  
+  // Notify auth-client-fix about our singleton
+  console.log('Supabase singleton v4 initialized');
 }
 
 /**
@@ -28,7 +38,8 @@ if (typeof window !== 'undefined') {
  */
 function isInitializing() {
   return isCreatingInstance || 
-         (typeof window !== 'undefined' && window.__supabaseClientCreationLock);
+         (typeof window !== 'undefined' && window.__supabaseClientCreationLock) ||
+         forceSuspend;
 }
 
 /**
@@ -36,7 +47,7 @@ function isInitializing() {
  * @param {number} timeout - Maximum wait time in ms
  * @returns {Promise<boolean>} - Resolves true if initialization completed, false if timed out
  */
-function waitForInitialization(timeout = 2000) {
+function waitForInitialization(timeout = CREATION_TIMEOUT) {
   if (!isInitializing()) {
     return Promise.resolve(true);
   }
@@ -51,6 +62,7 @@ function waitForInitialization(timeout = 2000) {
       } else if (Date.now() - startTime > timeout) {
         clearInterval(checkInterval);
         console.error('Timed out waiting for Supabase initialization');
+        forceSuspend = false; // Reset forceSuspend on timeout
         resolve(false);
       }
     }, 50);
@@ -62,10 +74,19 @@ function waitForInitialization(timeout = 2000) {
  * @returns {Object} Supabase client instance
  */
 export function getSupabaseClient() {
-  // First, check for global instance if in browser
-  if (typeof window !== 'undefined' && window.__supabaseClientInstance) {
-    console.log('Using globally stored Supabase instance');
-    return window.__supabaseClientInstance;
+  // Try to get the globally stored instance first (highest priority)
+  // This is set by auth-client-fix.js for cross-module access
+  if (typeof window !== 'undefined') {
+    // Check if auth-client-fix has already created a GoTrueClient
+    if (window.__goTrueClientInstance) {
+      console.log('GoTrueClient instance already exists from auth-client-fix');
+    }
+    
+    // Check for an existing supabase client instance
+    if (window.__supabaseClientInstance) {
+      console.log('Using globally stored Supabase instance');
+      return window.__supabaseClientInstance;
+    }
   }
   
   // Then check for module-level instance
@@ -93,6 +114,7 @@ export function getSupabaseClient() {
         return instance || window.__supabaseClientInstance;
       } else {
         console.warn('Initialization wait timed out, creating new instance');
+        forceSuspend = false; // Reset forceSuspend to allow a new attempt
         return createSupabaseClientInstance();
       }
     });
@@ -108,12 +130,27 @@ export function getSupabaseClient() {
 function createSupabaseClientInstance() {
   // Set the creation lock
   isCreatingInstance = true;
+  forceSuspend = true; // Force suspend any other creation attempts
+  
   if (typeof window !== 'undefined') {
     window.__supabaseClientCreationLock = true;
     window.__supabaseInitStartTime = Date.now();
   }
   
   try {
+    // First check if someone else created it while we were preparing
+    if (typeof window !== 'undefined' && window.__supabaseClientInstance) {
+      console.log('Another thread created the supabase instance, using it');
+      instance = window.__supabaseClientInstance;
+      return instance;
+    }
+    
+    // Check if module instance exists
+    if (instance) {
+      console.log('Module-level instance already exists');
+      return instance;
+    }
+    
     // Create fresh client only once
     if (typeof window !== 'undefined') {
       // Browser environment - use client component
@@ -122,30 +159,39 @@ function createSupabaseClientInstance() {
         
         // Add a small delay before client creation to prevent race conditions
         // This is critical for fixing the "Multiple GoTrueClient instances" error
-        if (typeof window !== 'undefined' && window.setTimeout) {
+        if (typeof window !== 'undefined') {
           const startTime = Date.now();
-          while (Date.now() - startTime < 20) {
+          console.log('Adding pre-creation delay to prevent race conditions');
+          while (Date.now() - startTime < DELAY_BEFORE_CREATE) {
             // Intentional tight loop to introduce a small delay
             // This gives a chance for any existing client creation to complete
           }
         }
         
+        // Check one last time if someone else created it during our delay
+        if (typeof window !== 'undefined' && window.__supabaseClientInstance) {
+          console.log('Instance was created during delay, using it');
+          instance = window.__supabaseClientInstance;
+          return instance;
+        }
+        
+        // Now create our instance
         instance = createClientComponentClient();
         
         // Store globally for cross-module access
         if (typeof window !== 'undefined') {
           window.__supabaseClientInstance = instance;
           
-          // Track for debugging
-          instanceCount++;
-          window.__supabaseInstanceCount = instanceCount;
-          lastCreationTime = Date.now();
-          
           // Set a flag to indicate successful initialization
           window.__supabaseInitialized = true;
+          
+          // Track for debugging
+          instanceCount++;
+          window.__supabaseInstanceCount = (window.__supabaseInstanceCount || 0) + 1;
+          lastCreationTime = Date.now();
+          
+          console.log('Created Supabase singleton (count:', instanceCount, ')');
         }
-        
-        console.log('Created Supabase singleton (count:', instanceCount, ')');
       } catch (err) {
         console.error('Error creating Supabase client:', err);
         
@@ -154,6 +200,7 @@ function createSupabaseClientInstance() {
         const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
         
         if (supabaseUrl && supabaseKey) {
+          console.log('Using fallback direct Supabase creation');
           instance = createClient(supabaseUrl, supabaseKey, {
             auth: {
               persistSession: true,
@@ -167,6 +214,10 @@ function createSupabaseClientInstance() {
           if (typeof window !== 'undefined') {
             window.__supabaseClientInstance = instance;
             window.__supabaseInitialized = true;
+            
+            // Increment global counter
+            instanceCount++;
+            window.__supabaseInstanceCount = (window.__supabaseInstanceCount || 0) + 1;
           }
           
           console.log('Created fallback Supabase client');
@@ -176,6 +227,7 @@ function createSupabaseClientInstance() {
       }
     } else {
       // Server environment - use direct creation
+      console.log('Creating server-side Supabase client');
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
       const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
       
@@ -199,6 +251,7 @@ function createSupabaseClientInstance() {
   } finally {
     // Release the lock
     isCreatingInstance = false;
+    forceSuspend = false;
     if (typeof window !== 'undefined') {
       window.__supabaseClientCreationLock = false;
     }
@@ -221,6 +274,7 @@ export function resetSupabaseClient(force = false) {
   instanceCount = 0;
   lastCreationTime = 0;
   isCreatingInstance = false;
+  forceSuspend = false;
   initializationAttempts = 0;
   
   if (typeof window !== 'undefined') {
@@ -250,29 +304,35 @@ export function resetSupabaseClient(force = false) {
         localStorage.removeItem(key);
       });
       
-      // Set flag indicating reset happened
-      localStorage.setItem('supabase-client-reset-time', Date.now().toString());
-      
-      console.log('Auth storage cleared during reset');
-    } catch (err) {
-      console.error('Error clearing auth storage:', err);
+      // Set flag indicating cleanup
+      localStorage.setItem('supabase-reset', 'true');
+      localStorage.setItem('supabase-reset-time', Date.now().toString());
+    } catch (e) {
+      console.error('Error clearing auth storage:', e);
     }
   }
   
-  console.log('Supabase client singleton reset');
+  console.log('Supabase client reset complete');
+  return true;
 }
 
 /**
- * Get the current instance info for debugging
+ * Get information about the Supabase client instance
+ * @returns {Object} Information about the instance
  */
 export function getInstanceInfo() {
   return {
+    instanceExists: !!instance,
+    globalInstanceExists: typeof window !== 'undefined' && !!window.__supabaseClientInstance,
     instanceCount,
+    globalInstanceCount: typeof window !== 'undefined' ? window.__supabaseInstanceCount : 0,
     lastCreationTime,
     initializationAttempts,
-    hasInstance: !!instance,
-    hasGlobalInstance: typeof window !== 'undefined' && !!window.__supabaseClientInstance,
-    creationLock: isCreatingInstance || (typeof window !== 'undefined' && window.__supabaseClientCreationLock),
-    initialized: typeof window !== 'undefined' && !!window.__supabaseInitialized
+    isCreatingInstance,
+    globalCreationLock: typeof window !== 'undefined' ? window.__supabaseClientCreationLock : false,
+    initialized: typeof window !== 'undefined' ? window.__supabaseInitialized : false,
+    version: 4,
+    authClientFixVersion: typeof window !== 'undefined' ? window.__authClientFixVersion : null,
+    goTrueClientCount: typeof window !== 'undefined' ? window.__goTrueClientCount : 0
   };
 } 
