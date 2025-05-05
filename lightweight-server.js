@@ -5,11 +5,13 @@
  * This server implements memory management features to prevent OOM crashes
  */
 
-const { createServer } = require('http');
-const { parse } = require('url');
+const http = require('http');
+const { exec, spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const { spawn, execSync } = require('child_process');
+const util = require('util');
+const execAsync = util.promisify(exec);
+const { parse } = require('url');
 const dotenv = require('dotenv');
 const next = require('next');
 
@@ -19,9 +21,11 @@ const isDev = process.env.NODE_ENV !== 'production';
 
 // Memory settings
 const MEMORY_LIMIT = 1200; // Maximum RSS memory (MB) before forced GC
-const HEAP_LIMIT = 800;   // Maximum heap memory (MB) before forced GC
-const LOW_MEMORY_THRESHOLD = 128; // Low memory MB threshold for emergency GC
-const GC_INTERVAL = 30000; // Run GC every 30 seconds if needed
+const WARNING_THRESHOLD = 800; // High memory MB threshold for warning
+const CRITICAL_THRESHOLD = 1000; // High memory MB threshold for critical
+const GC_THRESHOLD = 700;   // Maximum heap memory (MB) before forced GC
+const LOG_INTERVAL = 30000; // Run GC every 30 seconds if needed
+const MIN_HEAP_MEMORY = 16; // Minimum semi-space size in MB
 
 // Create a timestamp-based logger
 function createLogger() {
@@ -65,41 +69,6 @@ function loadEnv() {
   logger.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 }
 
-// Create auth client fix script
-function createAuthClientFix() {
-  try {
-    // Generate a dedicated auth client fix script for client-side use
-    const fixScriptPath = path.join(process.cwd(), 'public', 'auth-client-fix.js');
-    
-    if (!fs.existsSync(path.dirname(fixScriptPath))) {
-      fs.mkdirSync(path.dirname(fixScriptPath), { recursive: true });
-    }
-    
-    // Check if file exists and is recent
-    const exists = fs.existsSync(fixScriptPath);
-    
-    // Always create a fresh copy to ensure latest fixes are applied
-    // The actual content of this file should be maintained separately in version control
-    if (!exists) {
-      // Create a placeholder if the file doesn't exist in the repo
-      const placeholderScript = `
-      /**
-       * Auth Client Fix Script (Placeholder)
-       * This is a placeholder for the auth client fix. The actual script should be maintained in version control.
-       */
-       console.log('Auth client fix script loaded (placeholder)');
-      `;
-      
-      fs.writeFileSync(fixScriptPath, placeholderScript);
-      logger.log('Created auth client fix script placeholder');
-    } else {
-      logger.log('Auth client fix script exists');
-    }
-  } catch (error) {
-    logger.error(`Error creating auth client fix script: ${error.message}`);
-  }
-}
-
 // Get memory usage in MB
 function getMemoryUsage() {
   const memUsage = process.memoryUsage();
@@ -111,20 +80,13 @@ function getMemoryUsage() {
 }
 
 // Force garbage collection if available
-function forceGarbageCollection() {
+function forceGC() {
   if (global.gc) {
-    try {
-      global.gc();
-      logger.log('Manual garbage collection performed');
-      return true;
-    } catch (error) {
-      logger.error(`Error during manual garbage collection: ${error.message}`);
-      return false;
-    }
-  } else {
-    logger.warn('Garbage collection not available. Start with --expose-gc flag.');
-    return false;
+    logger.log('Manual garbage collection performed');
+    global.gc();
+    return true;
   }
+  return false;
 }
 
 // Memory management system
@@ -133,7 +95,7 @@ function setupMemoryManagement() {
   logger.log(`Initial memory: ${initialMemory.rss}MB RSS, ${initialMemory.heapUsed}MB heap used`);
   
   // Perform initial garbage collection
-  forceGarbageCollection();
+  forceGC();
   
   // Set up periodic memory monitoring and garbage collection
   const memoryInterval = setInterval(() => {
@@ -146,7 +108,7 @@ function setupMemoryManagement() {
       // Check if memory usage is high
       if (memory.rss > MEMORY_LIMIT) {
         logger.warn(`Critical memory usage (${memory.rss}MB > ${MEMORY_LIMIT}MB), forcing GC`);
-        forceGarbageCollection();
+        forceGC();
         
         // If still high after GC, take emergency measures
         const postGcMemory = getMemoryUsage();
@@ -173,25 +135,19 @@ function setupMemoryManagement() {
         }
       } 
       // Warn if getting close to limit
-      else if (memory.rss > MEMORY_LIMIT * 0.8) {
-        logger.warn(`High memory usage (${memory.rss}MB > ${MEMORY_LIMIT * 0.8}MB)`);
-        forceGarbageCollection();
+      else if (memory.rss > WARNING_THRESHOLD) {
+        logger.warn(`High memory usage (${memory.rss}MB > ${WARNING_THRESHOLD}MB)`);
+        forceGC();
       }
       // Run GC if heap is getting large
-      else if (memory.heapUsed > HEAP_LIMIT) {
-        logger.warn(`High heap usage (${memory.heapUsed}MB > ${HEAP_LIMIT}MB), running GC`);
-        forceGarbageCollection();
-      }
-      // Run GC if system memory is low
-      const availableMemory = getAvailableSystemMemory();
-      if (availableMemory && availableMemory < LOW_MEMORY_THRESHOLD) {
-        logger.warn(`Low system memory (${availableMemory}MB), running emergency GC`);
-        forceGarbageCollection();
+      else if (memory.heapUsed > GC_THRESHOLD) {
+        logger.warn(`High heap usage (${memory.heapUsed}MB > ${GC_THRESHOLD}MB), running GC`);
+        forceGC();
       }
     } catch (error) {
       logger.error(`Error in memory management: ${error.message}`);
     }
-  }, GC_INTERVAL);
+  }, LOG_INTERVAL);
   
   // Clean up interval on exit
   process.on('exit', () => {
@@ -298,10 +254,10 @@ async function startServer() {
   await killProcessesOnPort(PORT);
   
   // Force garbage collection before starting
-  forceGarbageCollection();
+  forceGC();
   
-  // Create the auth fix script
-  createAuthClientFix();
+  // Load environment variables
+  loadEnv();
   
   try {
     // Create the Next.js app
@@ -311,7 +267,7 @@ async function startServer() {
     await app.prepare();
     
     // Create custom server
-    const server = createServer((req, res) => {
+    const server = http.createServer((req, res) => {
       try {
         const parsedUrl = parse(req.url, true);
         handle(req, res, parsedUrl);

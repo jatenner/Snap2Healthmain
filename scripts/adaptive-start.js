@@ -7,169 +7,315 @@
  * and starts the appropriate server configuration to prevent memory issues.
  */
 
-const { execSync, spawn } = require('child_process');
-const os = require('os');
+const { exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const util = require('util');
+const execAsync = util.promisify(exec);
+const os = require('os');
 
-// Configure thresholds (in GB)
-const HIGH_MEMORY_THRESHOLD = 6.0;  // 6GB or more available
-const MEDIUM_MEMORY_THRESHOLD = 3.0; // 3GB or more available
-const LOW_MEMORY_THRESHOLD = 1.5;    // 1.5GB or more available
+// Configuration
+const PORT = 3000;
+const MEMORY_THRESHOLDS = {
+  ultraLight: 2, // GB - Use ultra-lightweight if less than this is available
+  light: 4,      // GB - Use lightweight if less than this is available
+  medium: 8      // GB - Use medium if less than this is available
+};
 
-// Log function with timestamps
+const SERVER_CONFIGS = {
+  ultraLight: {
+    cmd: 'npm run dev:ultra-light',
+    desc: 'ultra-lightweight',
+    memoryLimit: 1536, // MB
+    maxProcesses: 2,
+    concurrency: 1
+  },
+  light: {
+    cmd: 'npm run dev:light',
+    desc: 'lightweight',
+    memoryLimit: 2048, // MB
+    maxProcesses: 4,
+    concurrency: 2
+  },
+  medium: {
+    cmd: 'npm run dev:medium',
+    desc: 'medium weight',
+    memoryLimit: 3072, // MB
+    maxProcesses: 6,
+    concurrency: 3
+  },
+  standard: {
+    cmd: 'npm run dev',
+    desc: 'standard',
+    memoryLimit: 4096, // MB
+    maxProcesses: 8,
+    concurrency: 4
+  }
+};
+
+// Log with timestamp
 function log(message) {
-  console.log(`[${new Date().toISOString()}] ${message}`);
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] ${message}`);
 }
 
-// Function to clean up any existing processes
-function cleanupProcesses() {
-  log('Cleaning up any existing processes...');
-  try {
-    // Kill any processes using port 3000
-    const killPortsScript = path.join(__dirname, 'kill-ports-improved.js');
-    if (fs.existsSync(killPortsScript)) {
-      execSync(`node ${killPortsScript} --force`, { stdio: 'ignore' });
-    } else {
-      // Fallback to direct kill (platform-specific)
-      if (process.platform === 'win32') {
-        execSync('taskkill /F /IM node.exe /T', { stdio: 'ignore' });
-      } else {
-        execSync('pkill -f "node.*3000" || true', { stdio: 'ignore' });
-      }
-    }
-  } catch (error) {
-    // Ignore errors as processes might not be running
-  }
-}
-
-// Function to clean build cache
-function cleanBuildCache() {
-  log('Cleaning build cache...');
-  try {
-    // Remove .next and node_modules/.cache
-    execSync('rm -rf .next node_modules/.cache', { stdio: 'ignore' });
-  } catch (error) {
-    log(`Error cleaning cache: ${error.message}`);
-  }
-}
-
-// Function to get available system memory in GB
-function getAvailableMemory() {
-  const totalMemoryGB = os.totalmem() / 1024 / 1024 / 1024;
-  let freeMemoryGB = os.freemem() / 1024 / 1024 / 1024;
+// Get available system memory
+async function getSystemMemory() {
+  const totalMemGB = Math.round((os.totalmem() / (1024 * 1024 * 1024)) * 10) / 10;
   
-  // On some systems like macOS, additional memory check can be helpful
   try {
-    if (process.platform === 'darwin') {
-      const vmStatOutput = execSync('vm_stat').toString();
-      const pageSize = 4096; // Default page size on macOS in bytes
-      const lines = vmStatOutput.split('\n');
+    // Different commands based on OS
+    if (process.platform === 'linux') {
+      const { stdout } = await execAsync('free -g');
+      const lines = stdout.trim().split('\n');
+      const memInfo = lines[1].split(/\s+/);
+      const availableGB = parseInt(memInfo[6], 10);
+      return { total: totalMemGB, available: availableGB };
+    } 
+    else if (process.platform === 'darwin') { // macOS
+      const { stdout } = await execAsync('vm_stat');
+      const pageSize = 4096; // Default macOS page size
+      const lines = stdout.split('\n');
       
-      let freePages = 0;
+      let free = 0;
+      
       for (const line of lines) {
-        if (line.includes('Pages free')) {
-          const match = line.match(/Pages free:\s+(\d+)/);
-          if (match && match[1]) {
-            freePages += parseInt(match[1], 10);
-          }
+        if (line.includes('Pages free:')) {
+          free += parseInt(line.split(':')[1].trim().replace('.', ''), 10) * pageSize;
         }
-        if (line.includes('Pages inactive')) {
-          const match = line.match(/Pages inactive:\s+(\d+)/);
-          if (match && match[1]) {
-            freePages += parseInt(match[1], 10) * 0.5; // Count inactive pages as half available
-          }
+        if (line.includes('Pages inactive:')) {
+          free += parseInt(line.split(':')[1].trim().replace('.', ''), 10) * pageSize;
         }
       }
       
-      const macOSFreeMemoryGB = (freePages * pageSize) / 1024 / 1024 / 1024;
-      // Use the lower value for a more conservative estimate
-      freeMemoryGB = Math.min(freeMemoryGB, macOSFreeMemoryGB);
+      // Convert to GB
+      const availableGB = Math.round((free / (1024 * 1024 * 1024)) * 10) / 10;
+      return { total: totalMemGB, available: availableGB };
     }
+    else if (process.platform === 'win32') { // Windows
+      const { stdout } = await execAsync('wmic OS get FreePhysicalMemory /Value');
+      const freeMemKB = parseInt(stdout.trim().split('=')[1], 10);
+      const availableGB = Math.round((freeMemKB / (1024 * 1024)) * 10) / 10;
+      return { total: totalMemGB, available: availableGB };
+    }
+    
+    // Fallback if OS not recognized
+    return { total: totalMemGB, available: totalMemGB * 0.2 }; // Assume 20% available as fallback
   } catch (error) {
-    // Fallback to standard method if the macOS specific check fails
+    log(`Error getting system memory: ${error.message}`);
+    return { total: totalMemGB, available: totalMemGB * 0.2 }; // Conservative fallback
   }
-  
-  return {
-    totalGB: totalMemoryGB,
-    freeGB: freeMemoryGB
-  };
 }
 
-// Function to start the server with the appropriate configuration
-function startServer() {
-  // Check available memory
-  const memory = getAvailableMemory();
-  log(`System memory: ${memory.totalGB.toFixed(1)}GB total, ${memory.freeGB.toFixed(1)}GB available`);
+// Kill any lingering processes on the dev port
+async function cleanupProcesses() {
+  log('Cleaning up any existing processes...');
   
-  // Clean up processes and cache first
-  cleanupProcesses();
-  cleanBuildCache();
-  
-  let command = '';
-  
-  // Choose the appropriate server configuration based on available memory
-  if (memory.freeGB >= HIGH_MEMORY_THRESHOLD) {
-    log('High memory available. Using standard configuration.');
-    command = 'npm run dev';
-  } else if (memory.freeGB >= MEDIUM_MEMORY_THRESHOLD) {
-    log('Medium memory available. Using optimized configuration.');
-    command = 'npm run dev:light';
-  } else if (memory.freeGB >= LOW_MEMORY_THRESHOLD) {
-    log('Limited memory available. Using lightweight configuration.');
-    command = 'npm run dev:stable';
-  } else {
-    log('Low memory detected. Using ultra-lightweight configuration.');
-    command = 'npm run dev:ultra-light';
-  }
-  
-  // Start the chosen server configuration
-  log(`Starting with command: ${command}`);
-  
-  // Spawn the process and pipe output
-  const proc = spawn(command, { 
-    shell: true, 
-    stdio: 'inherit',
-    env: {
-      ...process.env,
-      // Set memory limits based on available memory
-      NODE_OPTIONS: `--max-old-space-size=${Math.floor(memory.freeGB * 1024)} --max-semi-space-size=16 --expose-gc`
+  try {
+    if (process.platform === 'win32') {
+      await execAsync(`for /f "tokens=5" %a in ('netstat -ano ^| find ":${PORT}" ^| find "LISTENING"') do taskkill /f /pid %a`);
+    } else {
+      await execAsync(`lsof -ti:${PORT} | xargs kill -9`);
     }
-  });
+  } catch (err) {
+    // Ignore errors as they likely mean no processes were found
+  }
+}
+
+// Clean build cache to free up resources
+async function cleanBuildCache() {
+  log('Cleaning build cache...');
   
-  // Handle process exit
-  proc.on('exit', (code) => {
-    if (code !== 0) {
+  try {
+    await execAsync('rm -rf .next node_modules/.cache');
+  } catch (err) {
+    log(`Error cleaning cache: ${err.message}`);
+  }
+}
+
+// Determine which configuration to use based on available memory
+function selectConfiguration(availableMem) {
+  if (availableMem < MEMORY_THRESHOLDS.ultraLight) {
+    return SERVER_CONFIGS.ultraLight;
+  } else if (availableMem < MEMORY_THRESHOLDS.light) {
+    return SERVER_CONFIGS.light;
+  } else if (availableMem < MEMORY_THRESHOLDS.medium) {
+    return SERVER_CONFIGS.medium;
+  } else {
+    return SERVER_CONFIGS.standard;
+  }
+}
+
+// Run the development server with selected configuration
+async function runServer(config) {
+  log(`Starting with command: ${config.cmd}`);
+  
+  return new Promise((resolve, reject) => {
+    const serverProcess = exec(config.cmd);
+    
+    serverProcess.stdout.on('data', (data) => {
+      process.stdout.write(data);
+    });
+    
+    serverProcess.stderr.on('data', (data) => {
+      process.stderr.write(data);
+    });
+    
+    serverProcess.on('exit', (code) => {
       log(`Error: Server exited with code ${code}`);
       
-      // If server crashed due to memory issues, try again with a more lightweight configuration
-      if (code === 137 || code === 9) { // SIGKILL or "Killed: 9"
-        log('Server was killed due to memory issues. Retrying with ultra-lightweight configuration...');
-        
-        // Force ultra-lightweight mode
-        const ultraLightProc = spawn('npm run dev:ultra-light', {
-          shell: true,
-          stdio: 'inherit'
-        });
-        
-        ultraLightProc.on('exit', (ultraLightCode) => {
-          if (ultraLightCode !== 0) {
-            log(`Error: Ultra-lightweight server exited with code ${ultraLightCode}`);
-            process.exit(ultraLightCode);
-          }
+      if (code === 137 || code === 9) { // OOM kill
+        resolve({
+          success: false,
+          message: 'Server was killed due to memory issues'
         });
       } else {
-        process.exit(code);
+        resolve({
+          success: false,
+          message: `Server process exited with code ${code}`
+        });
       }
-    }
-  });
-  
-  // Handle errors
-  proc.on('error', (error) => {
-    log(`Error: ${error.message}`);
-    process.exit(1);
+    });
+    
+    // Allow cancelling the server with Ctrl+C
+    process.on('SIGINT', () => {
+      serverProcess.kill('SIGINT');
+      process.exit(0);
+    });
   });
 }
 
-// Start the server
-startServer(); 
+// Create optimized next.config files
+function createOptimizedConfigs() {
+  // Ultra-lightweight config
+  const ultraLightConfig = `
+module.exports = {
+  swcMinify: true,
+  images: {
+    // Don't format images during development
+    disableStaticImages: true,
+    minimumCacheTTL: 60,
+    dangerouslyAllowSVG: true,
+    // Remote patterns for images
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+    ],
+  },
+  // Optimize build
+  optimizeFonts: false,
+  reactStrictMode: false, 
+  experimental: {
+    optimizeCss: true,
+    // Adjust concurrency for lower memory usage
+    cpus: 1,
+    workerThreads: false,
+    // Optimize for development speed
+    optimizePackageImports: ['react', 'react-dom', '@radix-ui'],
+  }
+};`;
+
+  // Lightweight config
+  const lightConfig = `
+module.exports = {
+  swcMinify: true,
+  images: {
+    minimumCacheTTL: 60,
+    dangerouslyAllowSVG: true,
+    // Remote patterns for images
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+    ],
+  },
+  // Optimize build
+  optimizeFonts: false,
+  reactStrictMode: false,
+  experimental: {
+    optimizeCss: true,
+    // Adjust concurrency for memory usage
+    cpus: 2,
+    // Optimize for development speed
+    optimizePackageImports: ['react', 'react-dom', '@radix-ui'],
+  }
+};`;
+
+  try {
+    fs.writeFileSync(
+      path.join(process.cwd(), 'next.config.ultra-light.js'), 
+      ultraLightConfig
+    );
+    
+    fs.writeFileSync(
+      path.join(process.cwd(), 'next.config.light.js'), 
+      lightConfig
+    );
+    
+    return true;
+  } catch (err) {
+    log(`Error creating optimized configs: ${err.message}`);
+    return false;
+  }
+}
+
+// Main function
+async function main() {
+  try {
+    // Get available system memory
+    const { total, available } = await getSystemMemory();
+    log(`System memory: ${total}GB total, ${available}GB available`);
+    
+    // Clean up processes and cache
+    await cleanupProcesses();
+    await cleanBuildCache();
+    
+    // Create optimized configs
+    createOptimizedConfigs();
+    
+    // Select configuration based on available memory
+    const config = selectConfiguration(available);
+    
+    if (available < MEMORY_THRESHOLDS.ultraLight) {
+      log('Low memory detected. Using ultra-lightweight configuration.');
+    }
+    
+    // Run the server with the selected configuration
+    let result = await runServer(config);
+    
+    // If ultra-lightweight server failed, try again with even more aggressive settings
+    if (!result.success && config === SERVER_CONFIGS.ultraLight) {
+      log(`${result.message}. Retrying with ultra-lightweight configuration...`);
+      
+      // Update package.json script for ultra-lightweight mode
+      try {
+        const packageJsonPath = path.join(process.cwd(), 'package.json');
+        const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+        
+        // Ensure ultra-lightweight script exists
+        if (!packageJson.scripts['dev:ultra-light']) {
+          packageJson.scripts['dev:ultra-light'] = 'node scripts/kill-ports-improved.js --force && rm -rf .next node_modules/.cache && NODE_OPTIONS=\'--max-old-space-size=1536 --expose-gc --max-semi-space-size=16\' node lightweight-server.js';
+          fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2));
+        }
+      } catch (err) {
+        log(`Error updating package.json: ${err.message}`);
+      }
+      
+      result = await runServer(SERVER_CONFIGS.ultraLight);
+      
+      if (!result.success) {
+        log('Error: Ultra-lightweight server failed. Please try again with even less memory usage.');
+        process.exit(1);
+      }
+    }
+  } catch (error) {
+    log(`Fatal error: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+// Start the script
+main(); 
