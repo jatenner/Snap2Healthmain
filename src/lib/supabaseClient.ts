@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import { createClient } from '@supabase/supabase-js';
 
 // Initialize Supabase client
@@ -131,7 +130,4 @@ if (shouldRunVerification) {
     // Also verify storage buckets
     await verifyStorageBuckets();
   }, 3000);
-} 
-=======
- 
->>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
+}
