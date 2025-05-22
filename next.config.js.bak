@@ -1,0 +1,40 @@
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: false,
+  experimental: {},
+  
+  // Disable build caching to avoid ENOENT errors
+  distDir: '.next',
+  
+  // Configure system for image usage
+  images: {
+    domains: ['cyrztlmzanhfybqsakgc.supabase.co', 'images.unsplash.com'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'cyrztlmzanhfybqsakgc.supabase.co',
+        pathname: '/storage/v1/object/public/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+        pathname: '/**',
+      },
+    ],
+  },
+  
+  // Simplify webpack config to avoid caching
+  webpack: (config) => {
+    // Disable caching completely to avoid ENOENT errors
+    config.cache = false;
+    
+    // Remove any problematic plugins that might cause hydration issues
+    config.plugins = config.plugins.filter(plugin => {
+      return plugin.constructor.name !== 'ForkTsCheckerWebpackPlugin';
+    });
+    
+    return config;
+  },
+}
+
+module.exports = nextConfig;

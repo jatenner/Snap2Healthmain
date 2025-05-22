@@ -1,0 +1,177 @@
+-- Add dedicated columns to meal_analyses table
+-- This migration adds specialized columns to extract data from the JSONB
+-- for better query performance and frontend integration
+
+-- First check if the meal_analyses table exists
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT FROM pg_tables 
+    WHERE schemaname = 'public' 
+    AND tablename = 'meal_analyses'
+  ) THEN
+    RAISE EXCEPTION 'The meal_analyses table does not exist. Please run the previous migrations first.';
+  END IF;
+END
+$$;
+
+-- Add the micronutrients column if it doesn't exist
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT FROM information_schema.columns 
+    WHERE table_schema = 'public' 
+    AND table_name = 'meal_analyses' 
+    AND column_name = 'micronutrients'
+  ) THEN
+    ALTER TABLE public.meal_analyses ADD COLUMN micronutrients JSONB DEFAULT '[]'::jsonb;
+    RAISE NOTICE 'Added micronutrients JSONB column';
+  END IF;
+END
+$$;
+
+-- Add the insights column if it doesn't exist
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT FROM information_schema.columns 
+    WHERE table_schema = 'public' 
+    AND table_name = 'meal_analyses' 
+    AND column_name = 'insights'
+  ) THEN
+    ALTER TABLE public.meal_analyses ADD COLUMN insights TEXT;
+    RAISE NOTICE 'Added insights TEXT column';
+  END IF;
+END
+$$;
+
+-- Add the goal column if it doesn't exist
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT FROM information_schema.columns 
+    WHERE table_schema = 'public' 
+    AND table_name = 'meal_analyses' 
+    AND column_name = 'goal'
+  ) THEN
+    ALTER TABLE public.meal_analyses ADD COLUMN goal TEXT;
+    RAISE NOTICE 'Added goal TEXT column';
+  END IF;
+END
+$$;
+
+-- Add the caption column if it doesn't exist
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT FROM information_schema.columns 
+    WHERE table_schema = 'public' 
+    AND table_name = 'meal_analyses' 
+    AND column_name = 'caption'
+  ) THEN
+    ALTER TABLE public.meal_analyses ADD COLUMN caption TEXT;
+    RAISE NOTICE 'Added caption TEXT column';
+  END IF;
+END
+$$;
+
+-- Add updated_at column if it doesn't exist
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT FROM information_schema.columns 
+    WHERE table_schema = 'public' 
+    AND table_name = 'meal_analyses' 
+    AND column_name = 'updated_at'
+  ) THEN
+    ALTER TABLE public.meal_analyses ADD COLUMN updated_at TIMESTAMPTZ DEFAULT now();
+    RAISE NOTICE 'Added updated_at TIMESTAMPTZ column';
+  END IF;
+END
+$$;
+
+-- Create or update the trigger for updated_at
+CREATE OR REPLACE FUNCTION update_meal_analyses_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+DROP TRIGGER IF EXISTS update_meal_analyses_updated_at ON public.meal_analyses;
+CREATE TRIGGER update_meal_analyses_updated_at
+BEFORE UPDATE ON public.meal_analyses
+FOR EACH ROW
+EXECUTE FUNCTION update_meal_analyses_updated_at();
+
+-- Populate the specialized columns from existing JSONB data
+UPDATE public.meal_analyses
+SET 
+  micronutrients = COALESCE(data->'micronutrients', '[]'::jsonb),
+  insights = CASE 
+    WHEN data->>'insights' IS NOT NULL THEN to_jsonb(data->>'insights')
+    ELSE NULL
+  END,
+  goal = CASE 
+    WHEN data->>'goal' IS NOT NULL THEN data->>'goal'
+    ELSE NULL
+  END,
+  caption = CASE 
+    WHEN data->>'caption' IS NOT NULL THEN data->>'caption'
+    WHEN data->>'mealName' IS NOT NULL THEN data->>'mealName'
+    WHEN data->>'dish_name' IS NOT NULL THEN data->>'dish_name'
+    ELSE name
+  END
+WHERE data IS NOT NULL;
+
+-- Update the direct_meal_insert function to use the new columns
+DROP FUNCTION IF EXISTS public.direct_meal_insert(uuid, uuid, text, text, integer, jsonb); -- For the 6-param jsonb one (error message)
+DROP FUNCTION IF EXISTS public.direct_meal_insert(uuid, uuid, text, text, text, integer, text); -- For the 7-param void one (pg_proc)
+DROP FUNCTION IF EXISTS public.direct_meal_insert(UUID, UUID, TEXT, TEXT, INTEGER, JSONB, TEXT, TEXT, TEXT, JSONB); -- For the 10-param one (just in case it exists with wrong return)
+CREATE FUNCTION public.direct_meal_insert(
+  p_id UUID,
+  p_user_id UUID,
+  p_name TEXT,
+  p_image_url TEXT,
+  p_calories INTEGER,
+  p_micronutrients JSONB DEFAULT '[]'::JSONB,
+  p_insights TEXT DEFAULT NULL,
+  p_goal TEXT DEFAULT NULL,
+  p_caption TEXT DEFAULT NULL,
+  p_data JSONB DEFAULT '{}'::JSONB
+) RETURNS UUID AS $$
+DECLARE
+  v_id UUID;
+BEGIN
+  INSERT INTO public.meal_analyses (
+    id, 
+    user_id, 
+    name, 
+    image_url, 
+    calories, 
+    micronutrients,
+    insights,
+    goal,
+    caption,
+    data, 
+    created_at
+  )
+  VALUES (
+    p_id, 
+    p_user_id, 
+    p_name, 
+    p_image_url, 
+    p_calories, 
+    p_micronutrients,
+    p_insights,
+    p_goal,
+    p_caption,
+    p_data, 
+    now()
+  )
+  RETURNING id INTO v_id;
+  
+  RETURN v_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER; 

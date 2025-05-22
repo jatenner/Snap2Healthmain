@@ -1,0 +1,75 @@
+/**
+ * Utilities for safer JSON handling
+ */
+
+/**
+ * Safely stringify objects to JSON, handling problematic values
+ * that would normally cause JSON parsing errors
+ */
+export function safeJsonStringify(obj: any): string {
+  return JSON.stringify(obj, (key, value) => {
+    // Handle values that cause JSON.parse errors
+    if (value === Infinity) return "Infinity";
+    if (value === -Infinity) return "-Infinity";
+    if (typeof value === 'number' && isNaN(value)) return "NaN";
+    if (value === undefined) return null;
+    return value;
+  });
+}
+
+/**
+ * Safely parse a JSON string with improved error handling for edge cases
+ * 
+ * Properly handles:
+ * 1. Invalid JSON (returns fallback value)
+ * 2. JSON with leading/trailing whitespace
+ * 3. Malformed JSON with negative numbers (e.g., "-123" without quotes)
+ * 4. Escaped characters
+ * 
+ * @param jsonString The JSON string to parse
+ * @param fallback Fallback value to return if parsing fails
+ * @returns Parsed JSON or fallback
+ */
+export function safeJsonParse(jsonString: string, fallback: any = null): any {
+  if (!jsonString) return fallback;
+  
+  try {
+    // First handle straightforward cases
+    try {
+      return JSON.parse(jsonString);
+    } catch (e) {
+      // Initial parse failed, attempt to fix common issues
+      console.log(`Initial JSON parse failed: ${e.message}. Trying fixes...`);
+    }
+    
+    // Fix for negative numbers at the start
+    if (jsonString.trim().startsWith('-')) {
+      console.log('Detected leading minus sign, fixing malformed JSON');
+      // Wrap the entire string in quotes if it starts with a negative sign
+      const fixedJson = `"${jsonString.replace(/"/g, '\\"')}"`;
+      return JSON.parse(fixedJson);
+    }
+    
+    // Try to handle malformed numbers in general
+    const fixedJson = jsonString.replace(/-(?=\D)/g, '"-"');
+    return JSON.parse(fixedJson);
+  } catch (error) {
+    console.error(`Failed to parse JSON safely: ${error.message}`);
+    console.error(`Problematic JSON string: ${jsonString.substring(0, 100)}${jsonString.length > 100 ? '...' : ''}`);
+    return fallback;
+  }
+}
+
+/**
+ * Safely convert an object to and from JSON to remove circular references,
+ * undefined values, and other problematic structures
+ */
+export function sanitizeObject(obj: any): any {
+  try {
+    const jsonString = safeJsonStringify(obj);
+    return JSON.parse(jsonString);
+  } catch (error) {
+    console.error('Failed to sanitize object:', error);
+    return { error: 'Failed to sanitize object' };
+  }
+} 

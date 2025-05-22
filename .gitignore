@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
@@ -41,3 +42,61 @@ next-env.d.ts
 **/webpack.cache.json
 **/*.pack.gz
 **/*.pack
+=======
+# Dependencies
+node_modules/
+/.pnp
+.pnp.js
+yarn.lock
+package-lock.json
+
+# Next.js build output
+.next/
+out/
+.swc/
+.turbo
+
+# Production
+/build
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local environment files
+.env
+.env.*
+.env*.local
+!.env.example
+
+# VS Code
+.vscode/
+
+# macOS
+.DS_Store
+*.pem
+
+# Cache
+.cache/
+
+# Testing
+/coverage
+
+# Logs
+logs
+*.log
+
+# Vercel
+.vercel/
+
+# Supabase
+supabase/.branches/
+supabase/.temp/
+
+# Large binaries
+*.node
+node_modules/supabase/bin/
+node_modules/**/*.bin
+node_modules/
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)

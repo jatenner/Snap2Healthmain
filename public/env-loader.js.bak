@@ -1,0 +1,66 @@
+// Browser-side environment setup
+// This file loads environment variables directly in the browser before React loads
+
+// Create both global ENV containers
+window.ENV = window.ENV || {};
+window.__ENV = window.__ENV || {};
+
+// Function to safely set values without overwriting existing ones
+function safeSetEnv(key, value) {
+  // Set on window.ENV if not already set
+  if (window.ENV[key] === undefined) {
+    window.ENV[key] = value;
+  }
+  
+  // Also set on window.__ENV if not already set
+  if (window.__ENV[key] === undefined) {
+    window.__ENV[key] = value;
+  }
+}
+
+// Set environment variables - these will be replaced by actual values from .env.local at build time
+// or overridden by the EnvLoader component when React mounts
+safeSetEnv('SUPABASE_URL', 'https://cyrztlmzanhfybqsakgc.supabase.co');
+safeSetEnv('SUPABASE_ANON_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5cnp0bG16YW5oZnlicXNha2djIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTY1NDY1ODMsImV4cCI6MjAzMjEyMjU4M30.5SsiIVuwIALRPEV_Y1YIu31UqxK4KrAcpxPZQrYzZHs');
+safeSetEnv('APP_ENV', 'development');
+safeSetEnv('AUTH_BYPASS', false);
+safeSetEnv('MOCK_AUTH', false);
+
+// Check for actual Next.js injected environment variables (these will be inlined at build time)
+// Format is like: __NEXT_DATA__.props.pageProps.ENV.NEXT_PUBLIC_SUPABASE_URL
+if (typeof window !== 'undefined' && window.__NEXT_DATA__ && 
+    window.__NEXT_DATA__.props && window.__NEXT_DATA__.props.pageProps && 
+    window.__NEXT_DATA__.props.pageProps.ENV) {
+  
+  const nextEnv = window.__NEXT_DATA__.props.pageProps.ENV;
+  
+  if (nextEnv.NEXT_PUBLIC_SUPABASE_URL) {
+    safeSetEnv('SUPABASE_URL', nextEnv.NEXT_PUBLIC_SUPABASE_URL);
+  }
+  
+  if (nextEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    safeSetEnv('SUPABASE_ANON_KEY', nextEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  }
+  
+  if (nextEnv.NEXT_PUBLIC_APP_ENV) {
+    safeSetEnv('APP_ENV', nextEnv.NEXT_PUBLIC_APP_ENV);
+  }
+  
+  if (nextEnv.NEXT_PUBLIC_AUTH_BYPASS) {
+    safeSetEnv('AUTH_BYPASS', nextEnv.NEXT_PUBLIC_AUTH_BYPASS === 'true');
+  }
+  
+  if (nextEnv.NEXT_PUBLIC_MOCK_AUTH) {
+    safeSetEnv('MOCK_AUTH', nextEnv.NEXT_PUBLIC_MOCK_AUTH === 'true');
+  }
+}
+
+console.log('Environment variables loaded in browser');
+
+// Add basic error handling to help catch issues early
+window.addEventListener('error', function(event) {
+  if (event.message && event.message.includes('Supabase')) {
+    console.error('Supabase error caught:', event.message);
+    // Don't prevent default to ensure the error still gets reported normally
+  }
+});

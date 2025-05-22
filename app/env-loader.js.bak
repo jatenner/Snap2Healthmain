@@ -1,0 +1,59 @@
+'use client';
+
+// Simple environment variable loader for client-side use
+
+export default function EnvLoader() {
+  // Only run in browser
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  // Initialize window.ENV and window.__ENV
+  if (!window.ENV) {
+    window.ENV = {};
+  }
+  
+  if (!window.__ENV) {
+    window.__ENV = {
+      SUPABASE_URL: '',
+      SUPABASE_ANON_KEY: '',
+      APP_ENV: 'development',
+      AUTH_BYPASS: false,
+      MOCK_AUTH: false
+    };
+  }
+
+  // Set environment variables - using the latest keys from your Supabase project
+  const url = 'https://cyrztlmzanhfybqsakgc.supabase.co';
+  const key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5cnp0bG16YW5oZnlicXNha2djIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU2MjE3OTUsImV4cCI6MjA2MTE5Nzc5NX0.weWEWeSASoOGhXC6Gg5diwCBffxdV2NjuaHjjHkq3SE';
+  
+  // Set values in both ENV objects
+  window.ENV.NEXT_PUBLIC_SUPABASE_URL = url;
+  window.ENV.NEXT_PUBLIC_SUPABASE_ANON_KEY = key;
+  window.ENV.SUPABASE_URL = url;
+  window.ENV.SUPABASE_ANON_KEY = key;
+  window.ENV.NEXT_PUBLIC_MOCK_AUTH = 'false';
+  window.ENV.NEXT_PUBLIC_AUTH_BYPASS = 'false';
+  window.ENV.NEXT_PUBLIC_APP_ENV = 'development';
+  
+  // Also set in __ENV which is used by some components
+  window.__ENV.SUPABASE_URL = url;
+  window.__ENV.SUPABASE_ANON_KEY = key;
+  window.__ENV.APP_ENV = 'development';
+  window.__ENV.AUTH_BYPASS = false;
+  window.__ENV.MOCK_AUTH = false;
+
+  console.log('Environment variables successfully loaded');
+  
+  // Expose a setup function for the console
+  window.setupEnv = function() {
+    console.log('Environment variables are set in window.ENV and window.__ENV');
+    return {
+      ENV_LOADED: true,
+      SUPABASE_URL_SET: !!window.ENV.NEXT_PUBLIC_SUPABASE_URL,
+      SUPABASE_KEY_SET: !!window.ENV.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    };
+  };
+
+  return null;
+} 

@@ -3,7 +3,11 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+<<<<<<< HEAD
 import { useAuth } from '@/context/auth';
+=======
+import { useAuth } from '../../../context/AuthContext';
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
 
 export default function SignUpPage() {
   const router = useRouter();

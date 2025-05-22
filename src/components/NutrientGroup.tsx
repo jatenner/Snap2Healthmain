@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import React from 'react';
 
 interface Nutrient {
@@ -35,3 +36,6 @@ export default function NutrientGroup({ title, nutrients }: NutrientGroupProps) 
     </div>
   );
 } 
+=======
+ 
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)

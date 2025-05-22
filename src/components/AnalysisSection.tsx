@@ -2,6 +2,7 @@ import React, { ReactNode } from 'react';
 
 interface AnalysisSectionProps {
   title: string;
+<<<<<<< HEAD
   items: string[];
   icon: string;
   className?: string;
@@ -23,3 +24,30 @@ export function AnalysisSection({ title, items, icon, className = '' }: Analysis
     </div>
   );
 }
+=======
+  icon?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}
+
+export const AnalysisSection: React.FC<AnalysisSectionProps> = ({
+  title,
+  icon,
+  children,
+  className = ''
+}) => {
+  return (
+    <section className={`mb-8 ${className}`}>
+      <div className="flex items-center mb-4">
+        {icon && (
+          <div className="mr-3">
+            {icon}
+          </div>
+        )}
+        <h2 className="text-xl font-bold text-gray-800">{title}</h2>
+      </div>
+      {children}
+    </section>
+  );
+}; 
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)

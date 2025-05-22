@@ -1,0 +1,46 @@
+
+'use client';
+
+import { useState } from 'react';
+
+export default function Home() {
+  const [status, setStatus] = useState('Working');
+  
+  return (
+    <div>
+      <h1 style={{ color: '#0070f3' }}>Snap2Health</h1>
+      
+      <div style={{
+        background: '#f0f7ff',
+        padding: '20px',
+        borderRadius: '8px',
+        marginTop: '20px'
+      }}>
+        <h2 style={{ color: '#00a86b' }}>✓ React App is Working</h2>
+        <p>This is a minimal version of the app to verify functionality.</p>
+        <p>Current status: <strong>{status}</strong></p>
+        
+        <button
+          onClick={() => setStatus('Interactive and Working!')}
+          style={{
+            background: '#0070f3',
+            color: 'white',
+            border: 'none',
+            padding: '10px 15px',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            marginTop: '10px'
+          }}
+        >
+          Click to Test Interactivity
+        </button>
+      </div>
+      
+      <div style={{ marginTop: '20px' }}>
+        <p>
+          <a href="/test.html" style={{ color: '#0070f3' }}>View Static Test Page</a>
+        </p>
+      </div>
+    </div>
+  );
+}

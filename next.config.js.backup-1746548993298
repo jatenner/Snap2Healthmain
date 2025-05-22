@@ -1,0 +1,59 @@
+/** @type {import('next').NextConfig} */
+
+// Minimal Next.js configuration with additional safety
+const nextConfig = {
+  // Basic configuration 
+  reactStrictMode: false,
+  poweredByHeader: false,
+  compress: true,
+  
+  // Images configuration
+  images: {
+    domains: ['images.unsplash.com', 'localhost'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+    ],
+  },
+  
+  // Experimental features
+  experimental: {
+    // Only enable features that are stable
+    optimizeCss: true,
+    scrollRestoration: true,
+  },
+  
+  // Environment variables
+  env: {
+    LOW_MEMORY_MODE: 'true',
+    WEBPACK_FIX_ENABLED: 'true',
+  },
+  
+  // Safe minimal webpack configuration
+  webpack: (config, { isServer, dev }) => {
+    // Add a banner plugin to add a header to all generated files
+    const webpack = require('webpack');
+    config.plugins.push(
+      new webpack.BannerPlugin({
+        banner: 'Snap2Health built with enhanced stability',
+        entryOnly: false
+      })
+    );
+    
+    // Client-side fallbacks
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        os: false,
+      };
+    }
+    
+    return config;
+  },
+};
+
+module.exports = nextConfig;

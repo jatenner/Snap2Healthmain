@@ -2,20 +2,34 @@ import React from 'react';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
+<<<<<<< HEAD
 import Link from 'next/link';
 import { AuthProvider } from '@/context/auth';
 import EnvLoader from '@/components/EnvLoader';
+=======
+import { AuthProvider } from '../context/AuthContext';
+import { SupabaseProvider } from '../context/SupabaseProvider';
+import Header from '../components/Header';
+// Import environment verification (only runs in development)
+import '../lib/verifyEnv';
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
 
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
+<<<<<<< HEAD
   title: 'Snap2Health - Food Nutrition Analysis',
   description: 'Upload food photos and get instant nutritional analysis and health insights',
+=======
+  title: 'Snap2Health - Nutritional Analysis with AI',
+  description: 'Upload food photos or describe meals for instant nutritional analysis powered by GPT-4o',
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
 };
 
 export default function RootLayout({
   children,
 }: {
+<<<<<<< HEAD
   children: React.ReactNode
 }) {
   return (
@@ -77,6 +91,24 @@ export default function RootLayout({
             </footer>
           </div>
         </AuthProvider>
+=======
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="en">
+      <body className={inter.className}>
+        <SupabaseProvider>
+          <AuthProvider>
+            <div className="flex flex-col min-h-screen">
+              <Header />
+              <main className="flex-grow">{children}</main>
+              <footer className="bg-gray-100 py-4 text-center text-sm text-gray-600">
+                &copy; {new Date().getFullYear()} Snap2Health. All rights reserved.
+              </footer>
+            </div>
+          </AuthProvider>
+        </SupabaseProvider>
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
       </body>
     </html>
   );

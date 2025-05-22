@@ -1,0 +1,120 @@
+/**
+ * Utilities for safer JSON handling
+ */
+
+/**
+ * Safely stringify objects to JSON, handling problematic values
+ * that would normally cause JSON parsing errors
+ */
+export function safeJsonStringify(obj: any): string {
+  return JSON.stringify(obj, (key, value) => {
+    // Handle values that cause JSON.parse errors
+    if (value === Infinity) return "Infinity";
+    if (value === -Infinity) return "-Infinity";
+    if (typeof value === 'number' && isNaN(value)) return "NaN";
+    if (value === undefined) return null;
+    return value;
+  });
+}
+
+/**
+ * Safely parse a JSON string with improved error handling for edge cases
+ * 
+ * Properly handles:
+ * 1. Invalid JSON (returns fallback value)
+ * 2. JSON with leading/trailing whitespace
+ * 3. Malformed JSON with negative numbers (e.g., "-123" without quotes)
+ * 4. Strings with leading dashes (e.g., "-test")
+ * 5. Escaped characters
+ * 
+ * @param jsonString The JSON string to parse
+ * @param fallback Fallback value to return if parsing fails
+ * @returns Parsed JSON or fallback
+ */
+export function safeJsonParse(jsonString: string, fallback: any = null): any {
+  if (!jsonString) return fallback;
+  
+  try {
+    // First handle straightforward cases
+    try {
+      return JSON.parse(jsonString);
+    } catch (e) {
+      // Initial parse failed, attempt to fix common issues
+      console.log(`Initial JSON parse failed: ${e.message}. Trying fixes...`);
+    }
+    
+    // Attempt multiple fixes in sequence
+    
+    // Trim whitespace first
+    const trimmed = jsonString.trim();
+    
+    // Fix 1: Handle strings with leading dashes causing "No number after minus sign" error
+    if (trimmed.startsWith('-') && !trimmed.startsWith('-{') && !trimmed.startsWith('-[') && !/^-\d/.test(trimmed)) {
+      console.log('Detected leading minus sign with non-numeric content, treating as string value');
+      // It's likely a string with a leading dash, not a negative number
+      return trimmed;
+    }
+    
+    // Fix 2: Handle negative sign followed by non-numeric content in general
+    let fixedJson = trimmed.replace(/-(?=\D)/g, '"-"');
+    try {
+      return JSON.parse(fixedJson);
+    } catch (e) {
+      console.log(`Fix attempt 2 failed: ${e.message}`);
+    }
+    
+    // Fix 3: Try wrapping the whole content in quotes if it seems like a plain string
+    if (!trimmed.startsWith('{') && !trimmed.startsWith('[') && !trimmed.startsWith('"')) {
+      try {
+        console.log('Attempting to parse as a raw string value');
+        const quotedJson = `"${trimmed.replace(/"/g, '\\"')}"`;
+        return JSON.parse(quotedJson);
+      } catch (e) {
+        console.log(`Fix attempt 3 failed: ${e.message}`);
+      }
+    }
+    
+    // Fix 4: Try to repair common JSON structural issues
+    try {
+      // Handle missing closing braces or brackets
+      if ((trimmed.match(/{/g) || []).length > (trimmed.match(/}/g) || []).length) {
+        console.log('Attempting to fix missing closing braces');
+        const missingBraces = (trimmed.match(/{/g) || []).length - (trimmed.match(/}/g) || []).length;
+        fixedJson = trimmed + '}'.repeat(missingBraces);
+        return JSON.parse(fixedJson);
+      }
+      
+      // Handle missing closing brackets
+      if ((trimmed.match(/\[/g) || []).length > (trimmed.match(/\]/g) || []).length) {
+        console.log('Attempting to fix missing closing brackets');
+        const missingBrackets = (trimmed.match(/\[/g) || []).length - (trimmed.match(/\]/g) || []).length;
+        fixedJson = trimmed + ']'.repeat(missingBrackets);
+        return JSON.parse(fixedJson);
+      }
+    } catch (e) {
+      console.log(`Fix attempt 4 failed: ${e.message}`);
+    }
+    
+    // If no fixes worked, return the fallback value
+    console.error('All JSON fix attempts failed');
+    return fallback;
+  } catch (error) {
+    console.error(`Failed to parse JSON safely: ${error.message}`);
+    console.error(`Problematic JSON string: ${jsonString.substring(0, 100)}${jsonString.length > 100 ? '...' : ''}`);
+    return fallback;
+  }
+}
+
+/**
+ * Safely convert an object to and from JSON to remove circular references,
+ * undefined values, and other problematic structures
+ */
+export function sanitizeObject(obj: any): any {
+  try {
+    const jsonString = safeJsonStringify(obj);
+    return JSON.parse(jsonString);
+  } catch (error) {
+    console.error('Failed to sanitize object:', error);
+    return { error: 'Failed to sanitize object' };
+  }
+} 

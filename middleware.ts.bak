@@ -1,0 +1,226 @@
+/*
+ * ⚠️ THIS FILE IS DEPRECATED ⚠️
+ * 
+ * This middleware file is no longer used.
+ * Please use the middleware.ts in the app directory instead.
+ * 
+ * The app/middleware.ts file has been updated to include all the public routes
+ * and path checking logic from this file.
+ */
+
+"use strict";
+
+import { NextRequest, NextResponse } from 'next/server';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
+
+// List of public routes that don't require authentication
+export const publicRoutes = [
+  // Auth routes
+  '/login', 
+  '/logout',
+  '/register',
+  '/auth/callback',
+  '/api/auth/callback',
+  // API routes
+  '/api/auth/check',
+  '/api/analyze-meal', // Mark analyze-meal as public
+  '/api/test-meal-fix',
+  // Public pages
+  '/',
+  '/about',
+  '/privacy',
+  '/terms',
+  '/test-upload.html',
+  '/basic-login.html',
+  '/test-meal-save',
+  // Static assets and scripts
+  '/bypass-meal-analysis.js',
+  '/fix-auth-cookies.js',
+  '/fix-upload-progress.js',
+  '/fix-all-routes.js',
+  '/auth-debug.js',
+  '/clean-app-state.js',
+  '/fix-image-analysis.js',
+  '/reset-profile-state.js',
+  '/fix-meal-url.js',
+  '/fix-meal-analysis.js',
+  '/profile-fix.js',
+  '/profile-debug.js',
+  '/fix-analysis-errors.js',
+  '/meal-analysis-fallback.js',
+  '/fix-meal-profile-connection.js',
+  '/debug-image-upload.js',
+  '/verify-auth-status.js',
+  '/fix-auth-detection.js',
+  '/fix-gpt4o-errors.js',
+  '/test-gpt4o.js',
+  // Images
+  '/placeholder-meal.jpg',
+];
+
+// Add these fix scripts to the public paths array
+const fixScripts = [
+  '/fix-auth-detection.js',
+  '/fix-auth-glitch.js',
+  '/emergency-fix.js',
+  '/fix-loader.js',
+  '/fix-meal-data-saving.js',
+  '/fix-all-routes.js',
+  '/verify-auth-status.js',
+  '/fix-initialization-glitch.js',
+  '/fix-analysis-routes.js',
+  '/fix-analysis-page.js',
+];
+
+// Middleware function to handle authentication
+export default async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+
+  // Check if the path is a public file
+  if (isPublicFile(pathname)) {
+    console.log(`[Middleware] Skipping auth check for public route: ${pathname}`);
+    return NextResponse.next();
+  }
+
+  // Check if this is one of our fix scripts
+  if (fixScripts.includes(pathname)) {
+    console.log(`[Middleware] Allowing fix script: ${pathname}`);
+    return NextResponse.next();
+  }
+
+  // Check if the client has sent our fix headers
+  const hasFixHeaders = req.headers.get('X-Client-Fix') === 'true' || 
+                       req.headers.get('X-Upload-Progress-Fix') === 'true';
+  
+  // For debugging - log fix headers
+  if (hasFixHeaders) {
+    console.log(`[Middleware] Request has fix headers: ${pathname}`);
+  }
+  
+  // Define public routes
+  const isPublicRoute = publicRoutes.some(route => {
+    // Handle exact matches
+    if (route === pathname) return true;
+    
+    // Handle wildcard matches like /api/public/*
+    if (route.includes('*')) {
+      const routePrefix = route.replace('*', '');
+      return pathname.startsWith(routePrefix);
+    }
+    
+    return false;
+  });
+  
+  // Skip auth check for public routes, but still add auth headers
+  if (isPublicRoute) {
+    console.log(`[Middleware] Skipping auth check for public route: ${pathname}`);
+    
+    // Add auth headers to API routes even if they're public
+    if (pathname.startsWith('/api/')) {
+      console.log(`[Middleware] Adding auth headers to ${pathname} even though it's public`);
+      return await addAuthHeaders(req);
+    }
+    
+    return NextResponse.next();
+  }
+  
+  // Handle authentication for protected routes
+  try {
+    const isApiRoute = pathname.startsWith('/api/');
+    
+    // Get auth session to check if user is logged in
+    const supabase = createRouteHandlerClient({ cookies });
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    const isAuthenticated = !!session?.user;
+    const redirectToLogin = () => {
+      console.log(`[Middleware] Redirecting unauthenticated user from ${pathname} to login`);
+      
+      // Create login URL with return_to parameter
+      const loginUrl = new URL('/login', req.url);
+      loginUrl.searchParams.set('return_to', pathname);
+      
+      // Redirect to login
+      return NextResponse.redirect(loginUrl);
+    };
+    
+    // If not authenticated, redirect to login
+    if (!isAuthenticated) {
+      return redirectToLogin();
+    }
+    
+    // At this point we know the user is authenticated
+    console.log(`[Middleware] ${isApiRoute ? 'Authenticated user accessing' : 'Authenticated user accessing'} ${pathname}: ${session.user.id}`);
+    
+    // Add auth headers to API requests
+    if (isApiRoute) {
+      console.log(`[Middleware] Adding auth headers to ${pathname}`);
+      return await addAuthHeaders(req, session);
+    }
+    
+    // For non-API routes, just proceed
+    return NextResponse.next();
+  } catch (error) {
+    console.error(`[Middleware] Error in auth middleware:`, error);
+    return NextResponse.next();
+  }
+}
+
+function isPublicFile(pathname: string): boolean {
+  // Add fix scripts to the list of public files
+  if (fixScripts.some(script => pathname.startsWith(script))) {
+    return true;
+  }
+
+  // Check for known public paths
+  if (pathname.startsWith('/_next') || 
+      pathname.startsWith('/public/') || 
+      pathname.startsWith('/fix-') || 
+      pathname.startsWith('/emergency-') || 
+      pathname.endsWith('.js') || 
+      pathname.endsWith('.css') || 
+      pathname.endsWith('.svg') || 
+      pathname.endsWith('.ico') || 
+      pathname.endsWith('.jpg') || 
+      pathname.endsWith('.png')) {
+    return true;
+  }
+
+  return false;
+}
+
+// Function to add auth headers to API requests
+async function addAuthHeaders(request: NextRequest, session?: any) {
+  // Clone the request headers
+  const headers = new Headers(request.headers);
+  
+  // If we have a session, add user ID
+  if (session?.user?.id) {
+    headers.set('x-auth-user-id', session.user.id);
+  }
+  
+  // Create the response with the new headers
+  const response = NextResponse.next({
+    request: {
+      headers,
+    },
+  });
+  
+  return response;
+}
+
+// Define which routes this middleware applies to
+export const config = {
+  matcher: [
+    /*
+     * Match all request paths except:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public (anything in the public directory)
+     * - .well-known (special paths like .well-known/appspecific/)
+     */
+    '/((?!_next/static|_next/image|favicon.ico|.well-known|manifest.json|robots.txt|sitemap.xml).+)',
+  ],
+};

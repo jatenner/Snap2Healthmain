@@ -1,0 +1,64 @@
+# Dependencies
+node_modules/
+/.pnp
+.pnp.js
+yarn.lock
+package-lock.json
+
+# Next.js build output
+.next/
+out/
+.swc/
+.turbo
+
+# Production
+/build
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local environment files
+.env
+.env.*
+# Allow .env.local for consistent environment setup
+!.env.local
+!.env.example
+
+# VS Code
+.vscode/
+
+# macOS
+.DS_Store
+*.pem
+
+# Cache
+.cache/
+
+# Testing
+/coverage
+
+# Logs
+logs
+*.log
+
+# Vercel
+.vercel/
+
+# Supabase
+supabase/.branches/
+supabase/.temp/
+
+# Large binaries
+*.node
+node_modules/supabase/bin/
+node_modules/**/*.bin
+
+# Public uploads (local dev)
+public/uploads/*
+!public/uploads/.gitkeep
+
+# Exclude some environment files but allow example
+.env.development
+.env.production

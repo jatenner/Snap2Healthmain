@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
 
 /**
@@ -114,3 +115,6 @@ export function formatMealDate(timestamp: string | Date | null | undefined): str
     return 'Date error';
   }
 } 
+=======
+ 
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)

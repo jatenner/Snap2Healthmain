@@ -1,0 +1,33 @@
+'use client';
+
+import React, { createContext, useContext } from 'react';
+import { useAuth } from './auth';
+
+// Create empty context with appropriate type
+const SafeAuthContext = createContext<any>(null);
+
+/**
+ * Safe Auth Provider - provides compatibility with code that expects this provider
+ */
+export const SafeAuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  console.warn('SafeAuthProvider is deprecated, please use AuthProvider from "./auth" instead');
+  return <>{children}</>;
+};
+
+/**
+ * Hook that redirects to the main useAuth hook
+ */
+export const useSafeAuth = () => {
+  console.warn('useSafeAuth is deprecated, please use useAuth from "./auth" instead');
+  return useAuth();
+};
+
+/**
+ * Default SafeAuth component
+ */
+const SafeAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  console.warn('Default SafeAuth import is deprecated, please use AuthProvider from "./auth" instead');
+  return <SafeAuthProvider>{children}</SafeAuthProvider>;
+};
+
+export default SafeAuth; 

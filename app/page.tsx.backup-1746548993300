@@ -1,0 +1,33 @@
+'use client';
+
+import { useState } from 'react';
+
+export default function Home() {
+  const [count, setCount] = useState(0);
+  
+  return (
+    <main className="flex min-h-screen flex-col items-center justify-between p-8">
+      <div className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full">
+        <h1 className="text-2xl font-bold text-center mb-4">Snap2Health</h1>
+        <p className="mb-4">
+          Welcome to Snap2Health! This is a minimal version of the page to test basic functionality.
+        </p>
+        
+        <div className="flex justify-center mb-4">
+          <button 
+            onClick={() => setCount(prev => prev + 1)}
+            className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded"
+          >
+            Clicked {count} times
+          </button>
+        </div>
+        
+        <div className="border-t pt-4 mt-4">
+          <p className="text-gray-600 text-sm">
+            If you can see this page and interact with the button, React is working correctly.
+          </p>
+        </div>
+      </div>
+    </main>
+  );
+} 

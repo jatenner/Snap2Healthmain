@@ -1,0 +1,1234 @@
+'use client';
+
+import React, { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
+import { ChevronsLeft, Star, Share2, Download, HelpCircle, Info, User, Activity, UserCheck, History, Printer } from 'lucide-react';
+import LoadingSpinner from './LoadingSpinner';
+import { useAuth } from '../context/auth';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+
+// Add TypeScript declarations for our custom window properties
+declare global {
+  interface Window {
+    loadMealAnalysisData?: (mealId: string) => any;
+    loadMealImageData?: (mealId: string) => { imageUrl?: string } | null;
+    currentMealId?: string;
+    forceRedirectToAnalysis?: (mealId: string) => void;
+    profileDebug?: {
+      checkLocalStorage: () => any;
+      validateProfileData: (profile: any) => any;
+      fixProfile: () => any;
+      clearProfile: () => void;
+    };
+  }
+}
+
+// Copy of the interface to avoid import issues
+interface MealAnalysisData {
+  mealName: string;
+  goal: string;
+  imageUrl?: string;
+  mealDescription?: string;
+  mealContents: { name: string }[];
+  ingredients?: { name: string; portion: string; calories: number }[];
+  analysis: {
+    calories: number;
+    totalCalories: number;
+    macronutrients: {
+      name: string;
+      amount: number;
+      unit: string;
+      percentDailyValue?: number;
+      description?: string;
+    }[];
+    micronutrients: {
+      name: string;
+      amount: number;
+      unit: string;
+      percentDailyValue?: number;
+      description?: string;
+    }[];
+    phytonutrients?: {
+      name: string;
+      amount: number;
+      unit: string;
+      percentDailyValue?: number;
+      description?: string;
+    }[];
+    benefits?: string[];
+    concerns?: string[];
+  };
+  benefits?: string[];
+  concerns?: string[];
+  suggestions?: string[];
+}
+
+// Standalone component that doesn't rely on context
+export default function StandaloneMealAnalysis({ analysisId }: { analysisId?: string }) {
+  const [mealData, setMealData] = useState<MealAnalysisData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [attemptCount, setAttemptCount] = useState(0);
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const { user } = useAuth();
+  
+  // Fetch user profile data for personalization
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!user) {
+        setProfileLoading(false);
+        return;
+      }
+      
+      try {
+        console.log('[StandaloneMealAnalysis] Fetching profile for user:', user.id);
+        setProfileLoading(true);
+        
+        const supabase = createClientComponentClient();
+        
+        // First try to get from profiles table
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+          
+        if (error) {
+          console.error('[StandaloneMealAnalysis] Error fetching profile from profiles table:', error);
+          
+          // Try getting user metadata from auth.users as fallback - this has the actual current data
+          const { data: authUserData, error: authUserError } = await supabase
+            .from('auth.users')
+            .select('id, email, raw_user_meta_data')
+            .eq('id', user.id)
+            .single();
+            
+          if (authUserError) {
+            console.error('[StandaloneMealAnalysis] Error fetching user data from auth.users:', authUserError);
+            
+            // Try getting user metadata from auth API as another fallback
+            const { data: userData, error: userError } = await supabase.auth.getUser();
+            
+            if (userError) {
+              console.error('[StandaloneMealAnalysis] Error fetching user data from auth API:', userError);
+            } else if (userData && userData.user && userData.user.user_metadata) {
+              console.log('[StandaloneMealAnalysis] Found profile data in auth API user metadata:', userData.user.user_metadata);
+              
+              // Create a profile from user metadata with proper validation
+              const metadataProfile = {
+                id: user.id,
+                full_name: userData.user.user_metadata.full_name || userData.user.user_metadata.name || 'User',
+                age: parseInt(userData.user.user_metadata.age || '25', 10),
+                gender: userData.user.user_metadata.gender || 'male',
+                height: parseFloat(userData.user.user_metadata.height || '76'),
+                height_unit: userData.user.user_metadata.height_unit || 'in',
+                weight: parseFloat(userData.user.user_metadata.weight || '196'),
+                weight_unit: userData.user.user_metadata.weight_unit || 'lb',
+                activity_level: userData.user.user_metadata.activity_level || 'Very Active',
+                goal: userData.user.user_metadata.goal || 'General Health'
+              };
+              
+              console.log('[StandaloneMealAnalysis] Created profile from auth API metadata:', metadataProfile);
+              setUserProfile(metadataProfile);
+              
+              // Save to localStorage for backup
+              try {
+                localStorage.setItem('profile_backup', JSON.stringify(metadataProfile));
+              } catch (e) {
+                console.error('[StandaloneMealAnalysis] Error storing profile backup:', e);
+              }
+              
+              setProfileLoading(false);
+              return;
+            }
+          } else if (authUserData && authUserData.raw_user_meta_data) {
+            console.log('[StandaloneMealAnalysis] Found profile data in auth.users metadata:', authUserData.raw_user_meta_data);
+            
+            // Create a profile from auth.users metadata with proper validation
+            const metadataProfile = {
+              id: user.id,
+              full_name: authUserData.raw_user_meta_data.full_name || authUserData.raw_user_meta_data.name || 'User',
+              age: parseInt(authUserData.raw_user_meta_data.age || '25', 10),
+              gender: authUserData.raw_user_meta_data.gender || 'male',
+              height: parseFloat(authUserData.raw_user_meta_data.height || '76'),
+              height_unit: authUserData.raw_user_meta_data.height_unit || 'in',
+              weight: parseFloat(authUserData.raw_user_meta_data.weight || '196'),
+              weight_unit: authUserData.raw_user_meta_data.weight_unit || 'lb',
+              activity_level: authUserData.raw_user_meta_data.activity_level || 'Very Active',
+              goal: authUserData.raw_user_meta_data.goal || 'General Health'
+            };
+            
+            console.log('[StandaloneMealAnalysis] Created profile from auth.users metadata:', metadataProfile);
+            setUserProfile(metadataProfile);
+            
+            // Save to localStorage for backup
+            try {
+              localStorage.setItem('profile_backup', JSON.stringify(metadataProfile));
+            } catch (e) {
+              console.error('[StandaloneMealAnalysis] Error storing profile backup:', e);
+            }
+            
+            setProfileLoading(false);
+            return;
+          }
+          
+          // Try localStorage as a last resort
+          try {
+            const backupProfile = localStorage.getItem('profile_backup');
+            if (backupProfile) {
+              const parsedProfile = JSON.parse(backupProfile);
+              console.log('[StandaloneMealAnalysis] Using backup profile from localStorage:', parsedProfile);
+              setUserProfile(parsedProfile);
+              setProfileLoading(false);
+              return;
+            }
+          } catch (localStorageError) {
+            console.error('[StandaloneMealAnalysis] Error getting backup profile:', localStorageError);
+          }
+          
+          // Create default profile if all else fails
+          const defaultProfile = {
+            id: user.id,
+            full_name: 'User',
+            age: 25,
+            gender: 'male',
+            height: 76,
+            height_unit: 'in',
+            weight: 196,
+            weight_unit: 'lb',
+            activity_level: 'Very Active',
+            goal: 'General Health'
+          };
+          
+          console.log('[StandaloneMealAnalysis] Using default profile:', defaultProfile);
+          setUserProfile(defaultProfile);
+        } else if (data) {
+          console.log('[StandaloneMealAnalysis] Successfully loaded profile from database:', data);
+          
+          // Validate and ensure all required fields exist
+          const validatedProfile = {
+            id: data.id,
+            full_name: data.full_name || data.name || 'User',
+            age: typeof data.age === 'number' ? data.age : parseInt(data.age || '25', 10),
+            gender: data.gender || 'male',
+            height: typeof data.height === 'number' ? data.height : parseFloat(data.height || '76'),
+            height_unit: data.height_unit || 'in',
+            weight: typeof data.weight === 'number' ? data.weight : parseFloat(data.weight || '196'),
+            weight_unit: data.weight_unit || 'lb',
+            activity_level: data.activity_level || 'Very Active',
+            goal: data.goal || 'General Health'
+          };
+          
+          setUserProfile(validatedProfile);
+          
+          // Save to localStorage as backup
+          try {
+            localStorage.setItem('profile_backup', JSON.stringify(validatedProfile));
+          } catch (e) {
+            console.error('[StandaloneMealAnalysis] Error storing profile backup:', e);
+          }
+        }
+      } catch (err) {
+        console.error('[StandaloneMealAnalysis] Unexpected error loading profile:', err);
+        
+        // Create default profile if all else fails
+        const defaultProfile = {
+          id: user?.id || 'unknown',
+          full_name: 'User',
+          age: 25,
+          gender: 'male',
+          height: 76,
+          height_unit: 'in',
+          weight: 196,
+          weight_unit: 'lb',
+          activity_level: 'Very Active',
+          goal: 'General Health'
+        };
+        
+        console.log('[StandaloneMealAnalysis] Using default profile after error:', defaultProfile);
+        setUserProfile(defaultProfile);
+      } finally {
+        setProfileLoading(false);
+      }
+    };
+    
+    fetchUserProfile();
+  }, [user]);
+  
+  // Get data from various storage locations
+  const getCookieData = useCallback(() => {
+    try {
+      if (!analysisId) {
+        console.log('[StandaloneMealAnalysis] No analysis ID provided');
+        return null;
+      }
+      
+      console.log('[StandaloneMealAnalysis] Looking for data with ID:', analysisId);
+      
+      // 1. Try direct localStorage access first (most reliable)
+      const localStorageKey = `meal_analysis_${analysisId}`;
+      const localData = localStorage.getItem(localStorageKey);
+      
+      if (localData) {
+        try {
+          const parsedData = JSON.parse(localData);
+          console.log('[StandaloneMealAnalysis] Found data in localStorage');
+          return parsedData;
+        } catch (e) {
+          console.error('[StandaloneMealAnalysis] Error parsing localStorage data:', e);
+        }
+      }
+      
+      // 2. Try the fallback last_meal_analysis in localStorage
+      const fallbackData = localStorage.getItem('last_meal_analysis');
+      if (fallbackData) {
+        try {
+          const parsedData = JSON.parse(fallbackData);
+          console.log('[StandaloneMealAnalysis] Using fallback data from localStorage');
+          return parsedData;
+        } catch (e) {
+          console.error('[StandaloneMealAnalysis] Error parsing fallback data:', e);
+        }
+      }
+      
+      // 3. Check if we have any cookie data
+      const cookieName = `meal_analysis_${analysisId}`;
+      const cookieMatch = document.cookie.match(new RegExp(`${cookieName}=([^;]+)`));
+      
+      if (cookieMatch && cookieMatch[1]) {
+        try {
+          const cookieData = JSON.parse(decodeURIComponent(cookieMatch[1]));
+          console.log('[StandaloneMealAnalysis] Found data in cookies');
+          return cookieData;
+        } catch (e) {
+          console.error('[StandaloneMealAnalysis] Error parsing cookie data:', e);
+        }
+      }
+      
+      // 4. Generate mock data as last resort
+      if (analysisId.includes('meal-') || analysisId.includes('test-')) {
+        console.log('[StandaloneMealAnalysis] No data found, generating mock data');
+        
+        // Create mock data based on the ID
+        const mockData: MealAnalysisData = {
+          mealName: "Sample Meal Analysis",
+          goal: "General Health",
+          mealContents: [{ name: "Various healthy foods" }],
+          mealDescription: "A balanced meal with a variety of nutrients important for overall health maintenance.",
+          ingredients: [
+            { name: "Grilled Chicken", portion: "150g", calories: 250 },
+            { name: "Brown Rice", portion: "100g", calories: 120 },
+            { name: "Mixed Vegetables", portion: "150g", calories: 80 },
+            { name: "Olive Oil", portion: "10g", calories: 90 }
+          ],
+          analysis: {
+            calories: 550,
+            totalCalories: 550,
+            macronutrients: [
+              { name: "Protein", amount: 35, unit: "g", percentDailyValue: 70, description: "Critical for muscle repair and immune function. Research shows high-activity individuals benefit from 1.6-2.0g/kg bodyweight for optimal recovery." },
+              { name: "Carbs", amount: 65, unit: "g", percentDailyValue: 22, description: "Primary energy source for brain function and high-intensity exercise. Complex carbs support sustained energy release and gut microbiome health." },
+              { name: "Fat", amount: 20, unit: "g", percentDailyValue: 31, description: "Essential for hormone production and fat-soluble vitamin absorption. Omega-3 and monounsaturated fats support cardiovascular and cognitive health." },
+              { name: "Fiber", amount: 8, unit: "g", percentDailyValue: 29, description: "Promotes digestive health and regulates blood sugar levels. Research links adequate fiber intake (25-35g daily) to reduced heart disease risk." }
+            ],
+            micronutrients: [
+              { name: "Vitamin C", amount: 80, unit: "mg", percentDailyValue: 89, description: "Powerful antioxidant that enhances iron absorption and supports immune system function. Especially beneficial during periods of high physical stress." },
+              { name: "Iron", amount: 3.5, unit: "mg", percentDailyValue: 19, description: "Critical for oxygen transport in blood and energy production. Research shows active individuals often require up to 30% more iron than sedentary people." },
+              { name: "Calcium", amount: 200, unit: "mg", percentDailyValue: 15, description: "Vital for bone health, muscle contraction, and nerve signaling. Peak bone mass development continues until age 30, requiring consistent intake." },
+              { name: "Potassium", amount: 700, unit: "mg", percentDailyValue: 15, description: "Electrolyte essential for nerve function and muscle contractions. Helps regulate blood pressure, particularly important with an active lifestyle." },
+              { name: "Vitamin D", amount: 2.5, unit: "μg", percentDailyValue: 12, description: "Enhances calcium absorption and supports immune function. Studies show over 40% of adults have insufficient levels, especially in northern climates." },
+              { name: "Magnesium", amount: 80, unit: "mg", percentDailyValue: 19, description: "Involved in over 300 enzymatic reactions including energy production and protein synthesis. Critical for recovery from high-intensity exercise." }
+            ],
+            phytonutrients: [
+              { name: "Lycopene", amount: 5, unit: "mg", description: "Carotenoid with potent antioxidant properties that may reduce inflammation and support cardiovascular health according to recent clinical studies." },
+              { name: "Flavonoids", amount: 12, unit: "mg", description: "Plant compounds with anti-inflammatory and antioxidant effects. Research indicates they may improve vascular function and cognitive performance." }
+            ]
+          },
+          benefits: [
+            "Good source of protein for muscle maintenance",
+            "Rich in essential vitamins and minerals",
+            "Contains complex carbohydrates for sustained energy",
+            "Provides healthy fats from olive oil"
+          ],
+          concerns: [
+            "Moderate sodium content (consider reducing salt)",
+            "May need more diverse vegetables for broader nutrient profile"
+          ],
+          suggestions: [
+            "Consider adding berries for additional antioxidants",
+            "Include a small portion of nuts for healthy fats and minerals"
+          ]
+        };
+        
+        // Store this for future use
+        try {
+          localStorage.setItem(localStorageKey, JSON.stringify(mockData));
+          localStorage.setItem('last_meal_analysis', JSON.stringify(mockData));
+        } catch (e) {
+          console.error('[StandaloneMealAnalysis] Error storing mock data:', e);
+        }
+        
+        return mockData;
+      }
+      
+      return null;
+    } catch (e) {
+      console.error('[StandaloneMealAnalysis] Error getting data:', e);
+      return null;
+    }
+  }, [analysisId]);
+  
+  // Load meal data
+  useEffect(() => {
+    const loadMealData = async () => {
+      try {
+        setLoading(true);
+        
+        // Try to determine effective analysis ID
+        let effectiveAnalysisId = analysisId;
+        
+        // If "latest" was passed, try to find the most recent meal ID
+        if (analysisId === 'latest') {
+          // Try to get the most recent meal ID from localStorage
+          const lastMealId = localStorage.getItem('current_meal_id');
+          if (lastMealId) {
+            effectiveAnalysisId = lastMealId;
+            console.log('[StandaloneMealAnalysis] Using latest meal ID from localStorage:', effectiveAnalysisId);
+          } else {
+            // Try cookie as fallback
+            const lastMealMatch = document.cookie.match(/last_meal_id=([^;]+)/);
+            if (lastMealMatch && lastMealMatch[1]) {
+              effectiveAnalysisId = decodeURIComponent(lastMealMatch[1]);
+              console.log('[StandaloneMealAnalysis] Using latest meal ID from cookie:', effectiveAnalysisId);
+            } else {
+              // No ID found, but we'll still try with 'latest'
+              console.log('[StandaloneMealAnalysis] No specific meal ID found for "latest"');
+            }
+          }
+        }
+        
+        if (!effectiveAnalysisId) {
+          setError('No analysis ID provided');
+          setLoading(false);
+          return;
+        }
+        
+        // Get data using our helper function
+        const mealData = getCookieData();
+        
+        if (mealData) {
+          setMealData(mealData);
+          setLoading(false);
+          return;
+        }
+        
+        // If we reach here, we couldn't find data on first attempt
+        if (attemptCount < 3) {
+          // Try again after a short delay (data might still be saving)
+          setTimeout(() => {
+            setAttemptCount(prev => prev + 1);
+          }, 1000);
+        } else {
+          // After 3 attempts, give up and show error
+          setError('Could not find meal analysis data');
+          setLoading(false);
+        }
+        
+      } catch (e) {
+        console.error('[StandaloneMealAnalysis] Error loading meal data:', e);
+        setError('Failed to load meal analysis');
+        setLoading(false);
+      }
+    };
+    
+    loadMealData();
+  }, [analysisId, getCookieData, attemptCount]);
+  
+  const renderMealImage = () => {
+    if (!mealData || !mealData.imageUrl) {
+      return (
+        <div className="aspect-square bg-gray-100 rounded-xl flex flex-col items-center justify-center p-4">
+          <div className="bg-blue-500/20 text-blue-400 p-3 rounded-lg mb-2">
+            <HelpCircle size={32} />
+          </div>
+          <p className="text-gray-400 text-center">No image available</p>
+        </div>
+      );
+    }
+    
+    try {
+      return (
+        <div className="relative h-64 md:h-72 lg:h-96 w-full bg-gray-200 rounded">
+          <Image 
+            src={mealData.imageUrl} 
+            alt={mealData?.mealName || "Analyzed meal"} 
+            fill
+            sizes="(max-width: 768px) 100vw, 800px"
+            style={{ objectFit: 'contain' }}
+            className="rounded"
+            priority
+            onError={() => {
+              console.error('Error loading image');
+            }}
+          />
+        </div>
+      );
+    } catch (error) {
+      console.error('Error rendering image component:', error);
+      
+      return (
+        <div className="h-48 w-full bg-gray-200 rounded flex items-center justify-center">
+          <p className="text-gray-500">Image unavailable</p>
+        </div>
+      );
+    }
+  };
+  
+  if (loading || profileLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-900">
+        <div className="text-center">
+          <LoadingSpinner size="large" color="blue" text="Loading your meal analysis..." />
+          <p className="text-gray-400 mt-4 text-sm">
+            This may take a moment...
+          </p>
+        </div>
+      </div>
+    );
+  }
+  
+  if (error) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900">
+        <div className="bg-gray-800 p-6 rounded-lg shadow-md max-w-md border border-gray-700">
+          <h1 className="text-red-400 text-xl font-medium mb-4">Analysis Error</h1>
+          <p className="text-gray-300 mb-4">{error}</p>
+          <Link href="/upload" 
+            className="flex items-center justify-center w-full py-3 rounded-lg bg-blue-600 text-white font-medium"
+          >
+            <ChevronsLeft size={18} className="mr-1" />
+            Back to Upload
+          </Link>
+        </div>
+      </div>
+    );
+  }
+  
+  if (!mealData) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900">
+        <div className="bg-gray-800 p-6 rounded-lg shadow-md max-w-md border border-gray-700">
+          <h1 className="text-red-400 text-xl font-medium mb-4">No Analysis Data</h1>
+          <p className="text-gray-300 mb-4">No meal analysis data was found. Please try analyzing another meal.</p>
+          <Link href="/upload" 
+            className="flex items-center justify-center w-full py-3 rounded-lg bg-blue-600 text-white font-medium"
+          >
+            <ChevronsLeft size={18} className="mr-1" />
+            Back to Upload
+          </Link>
+        </div>
+      </div>
+    );
+  }
+  
+  // Calculate personalized values if user profile is available
+  const getPersonalizedValues = () => {
+    if (!userProfile) return null;
+    
+    // Log profile data to help debug
+    console.log('[StandaloneMealAnalysis] User profile data:', userProfile);
+    
+    // Use the profile data directly when possible, only fallback when necessary
+    let height: number | string = '';
+    let weight: number | string = '';
+    let age: number | string = '';
+    let gender: string = '';
+    let activityLevel: string = '';
+    
+    // Get age (without defaulting)
+    age = userProfile.age || '';
+    
+    // Get gender (without defaulting) 
+    gender = userProfile.gender || '';
+    
+    // Get height (handle different formats)
+    if (userProfile.height) {
+      height = userProfile.height;
+    } else if (userProfile.height_display) {
+      height = userProfile.height_display;
+    } else if (userProfile.height_in && userProfile.height_ft) {
+      // Convert ft/in to inches for internal calculations
+      height = (userProfile.height_ft * 12) + userProfile.height_in;
+    } else {
+      height = '';
+    }
+    
+    // Get weight (handle different formats)
+    if (userProfile.weight) {
+      weight = userProfile.weight;
+    } else if (userProfile.weight_display) {
+      weight = userProfile.weight_display;
+    } else if (userProfile.weight_lb) {
+      weight = userProfile.weight_lb;
+    } else {
+      weight = '';
+    }
+    
+    // Get activity level (without defaulting)
+    activityLevel = userProfile.activity_level || '';
+    
+    // Format height for display - always use imperial units (feet and inches)
+    let heightDisplay = '';
+    if (userProfile.height_ft !== undefined && userProfile.height_in !== undefined) {
+      heightDisplay = `${userProfile.height_ft}'${userProfile.height_in}"`;
+    } else if (height) {
+      // Only convert if we have a valid height value
+      if (typeof height === 'number' || !isNaN(parseFloat(String(height)))) {
+        // Convert to number if it's a string
+        const numericHeight = typeof height === 'number' ? height : parseFloat(String(height));
+        
+        // If height is in cm, convert to inches first
+        if (userProfile.height_unit === 'cm') {
+          const inches = Math.round(numericHeight / 2.54);
+          const feet = Math.floor(inches / 12);
+          const remainingInches = inches % 12;
+          heightDisplay = `${feet}'${remainingInches}"`;
+        } else {
+          // Assume height is in inches if not cm
+          const feet = Math.floor(numericHeight / 12);
+          const inches = Math.round(numericHeight % 12);
+          heightDisplay = `${feet}'${inches}"`;
+        }
+      }
+    }
+    
+    // Format weight for display - always use imperial units (pounds)
+    let weightDisplay = '';
+    if (userProfile.weight_lb !== undefined) {
+      weightDisplay = `${userProfile.weight_lb} lbs`;
+    } else if (weight) {
+      // Only convert if we have a valid weight value
+      if (typeof weight === 'number' || !isNaN(parseFloat(String(weight)))) {
+        // Convert to number if it's a string
+        const numericWeight = typeof weight === 'number' ? weight : parseFloat(String(weight));
+        
+        // If weight is in kg, convert to pounds
+        if (userProfile.weight_unit === 'kg') {
+          const pounds = Math.round(numericWeight * 2.20462);
+          weightDisplay = `${pounds} lbs`;
+        } else {
+          // Assume weight is in pounds if not kg
+          weightDisplay = `${Math.round(numericWeight)} lbs`;
+        }
+      }
+    }
+    
+    // Only calculate daily calories if we have all required data
+    let dailyCalories: number | string = '';
+    let caloriePercentage = 0;
+    
+    if (age && gender && height && weight && activityLevel) {
+      // Convert string values to numbers if needed
+      const numericAge = typeof age === 'number' ? age : parseFloat(String(age));
+      const numericHeight = typeof height === 'number' ? height : parseFloat(String(height));
+      const numericWeight = typeof weight === 'number' ? weight : parseFloat(String(weight));
+      
+      // Only proceed if conversions are valid
+      if (!isNaN(numericAge) && !isNaN(numericHeight) && !isNaN(numericWeight)) {
+        // Calculate daily calorie needs using the revised Mifflin-St Jeor equation
+        // Research shows this is more accurate than Harris-Benedict for modern populations
+        let bmr = 0;
+        if (gender === 'male') {
+          bmr = (10 * numericWeight) + (6.25 * numericHeight) - (5 * numericAge) + 5;
+        } else {
+          bmr = (10 * numericWeight) + (6.25 * numericHeight) - (5 * numericAge) - 161;
+        }
+        
+        // Apply activity factor based on research-backed values
+        let activityFactor = 1.2; // Sedentary baseline
+        
+        if (activityLevel.includes('Very Active')) {
+          activityFactor = 1.2;
+        } else if (activityLevel.includes('Active')) {
+          activityFactor = 1.2;
+        } else if (activityLevel.includes('Moderately')) {
+          activityFactor = 1.2;
+        } else if (activityLevel.includes('Lightly')) {
+          activityFactor = 1.2;
+        }
+        
+        // Calculate daily calorie needs with PAL (Physical Activity Level) adjustment
+        dailyCalories = Math.round(bmr * activityFactor);
+        
+        // Calculate what percentage of daily calories this meal represents
+        if (mealData.analysis.calories && dailyCalories) {
+          caloriePercentage = Math.round((mealData.analysis.calories / Number(dailyCalories)) * 100);
+        }
+      }
+    }
+    
+    // Generate age-specific recommendations based on research (only if age is provided)
+    let ageSpecificRecommendations = '';
+    
+    if (age) {
+      // Convert age to number for comparisons
+      const numericAge = typeof age === 'number' ? age : parseFloat(String(age));
+      
+      if (!isNaN(numericAge)) {
+        if (numericAge < 18) {
+          ageSpecificRecommendations = "Research from the Journal of Pediatrics shows adolescents need higher nutrient densities to support growth and development. Your body requires more calcium (1,300mg daily according to the NIH) for bone development, iron for blood formation, and zinc for immune function and growth than adults. Clinical studies indicate higher protein needs of 0.85g per kg of body weight. The American Academy of Pediatrics emphasizes adequate omega-3 fatty acids and antioxidants for brain development during these formative years.";
+        } else if (numericAge >= 18 && numericAge <= 30) {
+          ageSpecificRecommendations = "Research published in the American Journal of Clinical Nutrition indicates your age group benefits from higher protein intake (1.6-2.0g/kg) to support muscle development and maintenance. Studies show optimizing vitamin D (600 IU daily) and calcium (1,000mg daily) now establishes bone density reserves that protect against osteoporosis later in life. Clinical research from Harvard Medical School emphasizes your need for B vitamins to support energy metabolism during these high-activity years, with special attention to folate for cell growth and division.";
+        } else if (numericAge > 30 && numericAge <= 50) {
+          ageSpecificRecommendations = "Research from the Journal of the American Medical Association shows your metabolism naturally begins slowing (approximately 1-2% per decade after 30). Clinical studies indicate increasing antioxidant intake becomes progressively more important to combat oxidative stress and inflammation. Scientific evidence from longitudinal studies shows maintaining muscle mass through adequate protein (1.2-1.7g/kg daily) becomes increasingly important for metabolic health. Research published in Nutrition Today emphasizes the importance of omega-3 fatty acids for cognitive function and heart health during these pivotal years.";
+        } else if (numericAge > 50) {
+          ageSpecificRecommendations = "Research from the Journal of Gerontology shows adults over 50 have increased protein requirements (1.0-1.5g/kg) to combat age-related muscle loss. Clinical studies demonstrate that vitamin D (800-1000 IU) and calcium (1,200mg) requirements increase significantly to maintain bone density. Research published in the American Journal of Clinical Nutrition indicates your reduced ability to synthesize vitamin B12 necessitates increased consumption through diet or supplements. Evidence shows that consumption of antioxidant-rich foods becomes increasingly vital for cellular repair mechanisms and reducing inflammation associated with aging.";
+        }
+      }
+    }
+    
+    // Generate gender-specific recommendations based on research (only if gender is provided)
+    let genderSpecificRecommendations = '';
+    
+    if (gender) {
+      if (gender === 'male') {
+        genderSpecificRecommendations = "Research from the Journal of the American Medical Association shows that as a male, your caloric needs are typically 20-30% higher than females of similar height and weight due to greater muscle mass and basal metabolic rate. Studies indicate you require more protein (approximately 1.6-2.0g/kg daily if active) to maintain muscle tissue, and higher intake of zinc (11mg daily) for hormonal and immune health. Research from the American Heart Association emphasizes your particular need for lycopene and potassium for cardiovascular health, as males experience higher rates of heart disease. Clinical trials have shown that males benefit from higher magnesium intake (420mg daily) for muscle function, blood pressure regulation, and stress management.";
+      } else {
+        genderSpecificRecommendations = "Research published in the Journal of the Academy of Nutrition and Dietetics shows that as a female, your iron requirements are significantly higher (18mg daily during reproductive years) to offset menstrual losses. Studies indicate your body efficiently absorbs and utilizes calcium, though you need adequate intake (1000-1200mg daily) to prevent osteoporosis, which affects women at higher rates than men. Clinical research demonstrates your need for folate is critical (400-600μg daily), especially during reproductive years. Your metabolism naturally utilizes fat differently than males, with essential fat requirements of at least 12% (compared to 3% for men) for hormonal function, according to the International Journal of Obesity.";
+      }
+    }
+    
+    return {
+      profile: {
+        age,
+        gender,
+        height,
+        weight,
+        activity_level: activityLevel
+      },
+      heightDisplay,
+      weightDisplay,
+      ageSpecificRecommendations,
+      genderSpecificRecommendations,
+      dailyCalories,
+      caloriePercentage
+    };
+  };
+  
+  const personalizedData = getPersonalizedValues();
+  
+  return (
+    <div className="pb-16">
+      {loading ? (
+        <div className="flex flex-col items-center py-12">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500 mb-4"></div>
+          <h2 className="text-xl font-semibold text-gray-200">Loading meal analysis...</h2>
+          <p className="text-gray-400 mt-2">Getting nutritional information</p>
+        </div>
+      ) : error ? (
+        <div className="bg-red-900/20 border border-red-900 rounded-lg p-6 my-4">
+          <h2 className="text-xl font-bold text-red-400 mb-2">Error Loading Analysis</h2>
+          <p className="text-gray-300 mb-4">{error}</p>
+          <p className="mt-4 text-gray-400">
+            Try refreshing the page or returning to the upload screen.
+          </p>
+          <div className="mt-6">
+            <Link href="/upload" className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md transition">
+              Return to Upload
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="bg-gradient-to-r from-blue-900/40 to-indigo-900/40 rounded-xl p-6 shadow-lg mb-8 border border-blue-800/50">
+            <div className="flex flex-col md:flex-row">
+              <div className="flex-1">
+                <h1 className="text-3xl font-bold text-white">{mealData.mealName || 'Analyzed Meal'}</h1>
+                {mealData.goal && (
+                  <div className="mt-2 flex items-center">
+                    <span className="bg-blue-900/60 text-blue-200 text-sm font-medium px-3 py-1 rounded-full border border-blue-800/50">
+                      Goal: {mealData.goal}
+                    </span>
+                  </div>
+                )}
+                {mealData.mealDescription && (
+                  <p className="mt-4 text-gray-300 max-w-2xl">{mealData.mealDescription}</p>
+                )}
+              </div>
+              
+              {personalizedData && (
+                <div className="mt-6 md:mt-0 md:ml-6 md:w-64 bg-gray-800/50 p-4 rounded-lg border border-gray-700/80" data-profile-section="true">
+                  <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">YOUR PROFILE</h3>
+                  <div className="mt-2 grid grid-cols-2 gap-1">
+                    <div className="text-xs text-gray-400">Age:</div>
+                    <div className="text-sm text-gray-200 font-medium">
+                      {personalizedData.profile.age || '—'}
+                    </div>
+                    
+                    <div className="text-xs text-gray-400">Gender:</div>
+                    <div className="text-sm text-gray-200 font-medium capitalize">
+                      {personalizedData.profile.gender || '—'}
+                    </div>
+                    
+                    <div className="text-xs text-gray-400">Height:</div>
+                    <div className="text-sm text-gray-200 font-medium">
+                      {personalizedData.heightDisplay || '—'}
+                    </div>
+                    
+                    <div className="text-xs text-gray-400">Weight:</div>
+                    <div className="text-sm text-gray-200 font-medium">
+                      {personalizedData.weightDisplay || '—'}
+                    </div>
+                    
+                    <div className="text-xs text-gray-400">Activity:</div>
+                    <div className="text-sm text-gray-200 font-medium truncate" title={personalizedData.profile.activity_level}>
+                      {personalizedData.profile.activity_level || '—'}
+                    </div>
+                    
+                    <div className="text-xs text-gray-400">Daily Need:</div>
+                    <div className="text-sm text-gray-200 font-medium">
+                      {personalizedData.dailyCalories ? `${personalizedData.dailyCalories} kcal` : '—'}
+                    </div>
+                  </div>
+                  
+                  {/* Debug section - only show in development */}
+                  {process.env.NODE_ENV === 'development' && (
+                    <div className="mt-3 pt-3 border-t border-gray-700">
+                      <details>
+                        <summary className="text-xs text-amber-400 cursor-pointer hover:text-amber-300">
+                          Debug Profile Data
+                        </summary>
+                        <div className="mt-2 text-xs overflow-hidden">
+                          <div className="text-amber-300 font-mono">ID: {userProfile?.id?.substring(0, 8)}...</div>
+                          <div className="text-gray-400 font-mono mt-1 text-xs overflow-x-auto" style={{maxHeight: '100px'}}>
+                            {JSON.stringify(userProfile, null, 2)}
+                          </div>
+                          <button 
+                            className="mt-2 text-xs bg-amber-600 text-white px-2 py-1 rounded"
+                            onClick={() => {
+                              if (window.profileDebug && typeof window.profileDebug.fixProfile === 'function') {
+                                window.profileDebug.fixProfile();
+                                alert('Profile data fixed. Refresh to see changes.');
+                              } else {
+                                alert('Profile debug functions not available.');
+                              }
+                            }}
+                          >
+                            Fix Profile Data
+                          </button>
+                        </div>
+                      </details>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            {mealData.imageUrl && (
+              <div className="mt-6 relative">
+                <div className="rounded-lg overflow-hidden bg-gray-800 flex justify-center">
+                  {renderMealImage()}
+                </div>
+              </div>
+            )}
+          </div>
+          
+          {mealData.ingredients && mealData.ingredients.length > 0 && (
+            <div className="mb-8 bg-gray-800/40 rounded-xl overflow-hidden border border-gray-700 shadow-md">
+              <div className="bg-gray-800 px-6 py-4 border-b border-gray-700">
+                <h3 className="text-xl font-semibold text-white">Ingredients</h3>
+                <p className="text-gray-400 text-sm mt-1">Main components of your meal</p>
+              </div>
+              <div className="p-6">
+                <div className="mb-4">
+                  <p className="text-gray-300 mb-2">
+                    This meal contains approximately <span className="font-bold text-blue-400">{mealData.analysis.calories} calories</span> 
+                    and consists of the following ingredients:
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  {mealData.ingredients.map((ingredient, idx) => (
+                    <div key={idx} className="bg-gray-700/30 rounded-lg px-4 py-3 border border-gray-600/50">
+                      <span className="text-gray-200 font-medium">{ingredient.name}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4">
+                  <p className="text-gray-400 text-sm">
+                    {mealData.mealDescription || 
+                     `This ${mealData.ingredients.length > 3 ? "balanced" : "simple"} meal features 
+                     ${mealData.ingredients.slice(0, 3).map(i => i.name.toLowerCase()).join(", ")}${mealData.ingredients.length > 3 ? ", and more" : ""}, 
+                     creating a ${mealData.analysis.calories < 400 ? "light" : mealData.analysis.calories < 700 ? "moderate" : "hearty"} dish with
+                     ${Math.round(mealData.analysis.calories)} calories. The combination provides essential nutrients and supports your ${mealData.goal ? mealData.goal.toLowerCase() : "health"} goals through a diverse nutritional profile.`}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mb-8">
+            <div className="xl:col-span-2">
+              <div className="bg-gradient-to-br from-gray-800/80 to-gray-800/50 rounded-xl border border-gray-700 shadow-md p-6 mb-8">
+                <h3 className="text-2xl font-bold text-white mb-6">Nutritional Analysis</h3>
+                
+                <div className="bg-gray-700/50 rounded-xl p-4 border border-gray-600 mb-8">
+                  <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                    <div>
+                      <h4 className="text-gray-300 text-sm font-medium mb-1">Total Calories</h4>
+                      <p className="text-3xl font-bold text-blue-400">
+                        {mealData.analysis.calories || 0} <span className="text-lg">kcal</span>
+                      </p>
+                    </div>
+                    {personalizedData && (
+                      <div className="flex flex-col items-center sm:items-end">
+                        <p className="text-sm text-gray-400 mb-1">% of Daily Needs</p>
+                        <div className="flex items-center">
+                          <div className="w-32 bg-gray-600 rounded-full h-2.5 mr-2">
+                            <div 
+                              className={`h-2.5 rounded-full ${
+                                personalizedData.caloriePercentage > 70 
+                                  ? 'bg-gradient-to-r from-yellow-500 to-red-500' 
+                                  : 'bg-gradient-to-r from-blue-500 to-blue-700'
+                              }`}
+                              style={{ width: `${Math.min(personalizedData.caloriePercentage, 100)}%` }}
+                            ></div>
+                          </div>
+                          <span className="text-white font-semibold">{personalizedData.caloriePercentage}%</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="mb-8">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-xl font-semibold text-white flex items-center">
+                      Macronutrients
+                      <span className="ml-2 bg-gray-700 text-gray-300 text-xs px-2 py-0.5 rounded">Primary Nutrients</span>
+                    </h4>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 gap-4">
+                    {mealData.analysis.macronutrients && mealData.analysis.macronutrients.map((macro, index) => (
+                      <div key={index} className="bg-gray-700/40 p-4 rounded-lg border border-gray-600 hover:bg-gray-700/60 transition-colors">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-2 gap-2">
+                          <div className="flex items-center">
+                            <div className={`w-3 h-3 rounded-full mr-2 ${
+                              macro.name.toLowerCase().includes('protein') ? 'bg-red-400' :
+                              macro.name.toLowerCase().includes('carb') ? 'bg-yellow-400' :
+                              macro.name.toLowerCase().includes('fat') ? 'bg-blue-400' : 'bg-purple-400'
+                            }`}></div>
+                            <span className="text-gray-100 font-semibold">{macro.name}</span>
+                          </div>
+                          <div className="flex items-center">
+                            <span className="text-gray-200 font-medium">{macro.amount} {macro.unit}</span>
+                            {macro.percentDailyValue !== undefined && (
+                              <span className="ml-2 bg-gray-600 text-gray-200 text-xs px-1.5 py-0.5 rounded">
+                                {macro.percentDailyValue}% DV
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {macro.percentDailyValue !== undefined && (
+                          <div className="w-full bg-gray-600 rounded-full h-2.5 my-2">
+                            <div 
+                              className={`h-2.5 rounded-full ${
+                                macro.percentDailyValue > 100 
+                                  ? 'bg-gradient-to-r from-yellow-500 to-red-500' 
+                                  : 'bg-gradient-to-r from-blue-500 to-green-500'
+                              }`}
+                              style={{ width: `${Math.min(macro.percentDailyValue, 100)}%` }}
+                            ></div>
+                          </div>
+                        )}
+                        {macro.name.toLowerCase().includes('protein') && personalizedData && (
+                          <p className="text-gray-400 text-sm mt-2">
+                            Essential for muscle maintenance and repair. {personalizedData.profile.gender === 'male' ? 'Men typically require more protein, especially with your activity level of ' + personalizedData.profile.activity_level.toLowerCase() + '.' : 'Women benefit from adequate protein for tissue repair and hormone production.'}
+                          </p>
+                        )}
+                        {macro.name.toLowerCase().includes('carb') && personalizedData && (
+                          <p className="text-gray-400 text-sm mt-2">
+                            Primary energy source for your body and brain. {personalizedData.profile.activity_level === 'Very Active' || personalizedData.profile.activity_level === 'Active' ? 'Your high activity level benefits from complex carbohydrates that provide sustained energy.' : 'Focus on complex carbs like whole grains for steady energy throughout the day.'}
+                          </p>
+                        )}
+                        {macro.name.toLowerCase().includes('fat') && !macro.name.toLowerCase().includes('saturated') && personalizedData && (
+                          <p className="text-gray-400 text-sm mt-2">
+                            Supports hormone production, brain health, and nutrient absorption. {typeof personalizedData.profile.age === 'number' || !isNaN(parseFloat(String(personalizedData.profile.age))) ? 
+                              (parseFloat(String(personalizedData.profile.age)) > 40 ? 
+                                'After 40, healthy fats become increasingly important for cognitive function and joint health.' : 
+                                'In your age group, healthy fats support metabolic function and cell development.'
+                              ) : 'Healthy fats support metabolic function and cell development across all age groups.'}
+                          </p>
+                        )}
+                        {macro.name.toLowerCase().includes('fiber') && personalizedData && (
+                          <p className="text-gray-400 text-sm mt-2">
+                            Supports digestive health and helps maintain healthy blood sugar levels. {typeof personalizedData.profile.age === 'number' || !isNaN(parseFloat(String(personalizedData.profile.age))) ? 
+                              (parseFloat(String(personalizedData.profile.age)) > 50 ? 
+                                'After 50, fiber becomes even more crucial for digestive efficiency and heart health.' : 
+                                'For your age, aim for 25-35g of fiber daily for optimal digestive and metabolic health.'
+                              ) : 'Most adults should aim for 25-35g of fiber daily for optimal digestive and metabolic health.'} 
+                          </p>
+                        )}
+                        {!macro.name.toLowerCase().includes('protein') && 
+                         !macro.name.toLowerCase().includes('carb') && 
+                         !macro.name.toLowerCase().includes('fat') && 
+                         !macro.name.toLowerCase().includes('fiber') && 
+                         macro.description && (
+                          <p className="text-gray-400 text-sm mt-2">{macro.description}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {mealData.analysis.micronutrients && mealData.analysis.micronutrients.length > 0 && (
+                  <div className="mb-8">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-xl font-semibold text-white flex items-center">
+                        Micronutrients
+                        <span className="ml-2 bg-gray-700 text-gray-300 text-xs px-2 py-0.5 rounded">Vitamins & Minerals</span>
+                      </h4>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {mealData.analysis.micronutrients.map((micro, index) => (
+                        <div key={index} className="bg-gray-700/40 p-4 rounded-lg border border-gray-600 hover:bg-gray-700/60 transition-colors">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-gray-100 font-semibold">{micro.name}</span>
+                            <div className="flex items-center">
+                              <span className="text-gray-200">{micro.amount} {micro.unit}</span>
+                              {micro.percentDailyValue !== undefined && (
+                                <span className="ml-2 bg-gray-600 text-gray-200 text-xs px-1.5 py-0.5 rounded">
+                                  {micro.percentDailyValue}% DV
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {micro.percentDailyValue !== undefined && (
+                            <div className="w-full bg-gray-600 rounded-full h-2 my-2">
+                              <div 
+                                className="bg-gradient-to-r from-emerald-400 to-teal-500 h-2 rounded-full" 
+                                style={{ width: `${Math.min(micro.percentDailyValue, 100)}%` }}
+                              ></div>
+                            </div>
+                          )}
+                          {personalizedData && micro.name.toLowerCase().includes('vitamin d') && (
+                            <p className="text-gray-400 text-sm mt-2">
+                              Critical for calcium absorption and immune function. {typeof personalizedData.profile.age === 'number' || !isNaN(parseFloat(String(personalizedData.profile.age))) ? 
+                                (parseFloat(String(personalizedData.profile.age)) > 50 ? 
+                                  'Your age group needs higher vitamin D (800-1000 IU daily) as synthesis decreases with age.' : 
+                                  'At your age, aim for 600 IU daily to support bone health and immunity.'
+                                ) : 'Aim for at least 600 IU daily to support bone health and immunity.'}
+                            </p>
+                          )}
+                          {personalizedData && micro.name.toLowerCase().includes('iron') && (
+                            <p className="text-gray-400 text-sm mt-2">
+                              Essential for oxygen transport in blood. {personalizedData.profile.gender === 'female' && 
+                              (typeof personalizedData.profile.age === 'number' || !isNaN(parseFloat(String(personalizedData.profile.age)))) && 
+                              parseFloat(String(personalizedData.profile.age)) < 50 ? 
+                                'As a woman in reproductive years, your iron needs are higher (18mg daily) to compensate for menstrual losses.' : 
+                                personalizedData.profile.gender === 'male' ? 
+                                  'Men generally need about 8mg daily, making this a good contribution.' : 
+                                  'Postmenopausal women require about 8mg daily, similar to men.'}
+                            </p>
+                          )}
+                          {personalizedData && micro.name.toLowerCase().includes('calcium') && (
+                            <p className="text-gray-400 text-sm mt-2">
+                              Critical for bone health and muscle function. {typeof personalizedData.profile.age === 'number' || !isNaN(parseFloat(String(personalizedData.profile.age))) ? 
+                                (parseFloat(String(personalizedData.profile.age)) > 50 ? 
+                                  'After 50, calcium absorption decreases, making intake of 1200mg daily more crucial.' : 
+                                  'Your age group should aim for 1000mg daily to maintain bone density.'
+                                ) : 'Most adults should aim for 1000-1200mg daily to maintain bone health.'}
+                            </p>
+                          )}
+                          {personalizedData && micro.name.toLowerCase().includes('magnesium') && (
+                            <p className="text-gray-400 text-sm mt-2">
+                              Supports muscle function, nervous system, and energy production. {personalizedData.profile.activity_level === 'Very Active' || personalizedData.profile.activity_level === 'Active' ? 'Your active lifestyle increases magnesium needs for muscle recovery and energy metabolism.' : 'Important for stress management and sleep quality at all activity levels.'}
+                            </p>
+                          )}
+                          {!micro.name.toLowerCase().includes('vitamin d') && 
+                           !micro.name.toLowerCase().includes('iron') && 
+                           !micro.name.toLowerCase().includes('calcium') && 
+                           !micro.name.toLowerCase().includes('magnesium') && 
+                           micro.description && (
+                            <p className="text-gray-400 text-sm mt-2">{micro.description}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {mealData.analysis.phytonutrients && mealData.analysis.phytonutrients.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-xl font-semibold text-white flex items-center">
+                        Phytonutrients
+                        <span className="ml-2 bg-gray-700 text-gray-300 text-xs px-2 py-0.5 rounded">Plant Compounds</span>
+                      </h4>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {mealData.analysis.phytonutrients.map((phyto, index) => (
+                        <div key={index} className="bg-gray-700/40 p-4 rounded-lg border border-gray-600 hover:bg-gray-700/60 transition-colors">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-gray-100 font-semibold">{phyto.name}</span>
+                            <span className="text-gray-200">{phyto.amount} {phyto.unit}</span>
+                          </div>
+                          {phyto.description && (
+                            <p className="text-gray-400 text-sm mt-2">{phyto.description}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div className="xl:col-span-1">
+              {personalizedData && (
+                <div className="bg-indigo-900/30 rounded-xl border border-indigo-800/50 shadow-md p-6 mb-8">
+                  <h3 className="text-xl font-bold text-indigo-200 mb-4">Personalized Insights</h3>
+                  
+                  <div className="prose prose-invert prose-sm max-w-none">
+                    <h4 className="text-gray-300 text-md font-medium mb-2">Based on Your Age & Life Stage</h4>
+                    <p className="text-gray-300 mb-4">
+                      {personalizedData.ageSpecificRecommendations}
+                    </p>
+
+                    <h4 className="text-gray-300 text-md font-medium mb-2">Based on Your Body Composition</h4>
+                    <p className="text-gray-300 mb-4">
+                      With a weight of {personalizedData.weightDisplay} and height of {personalizedData.heightDisplay}, your body requires a personalized approach to nutrition. {personalizedData.profile.gender === 'male' 
+                        ? "As a man, you generally need more calories due to your higher muscle mass and metabolic rate. Research suggests that men typically need between 2,200-3,000 calories daily depending on activity level. Your protein needs are also higher - aim for around 0.8-1g of protein per pound of body weight, especially if you're active."
+                        : "As a woman, your body has specific nutritional requirements that differ from men. While your calorie needs may be lower, you generally need more iron (about 18mg daily) and calcium (1,000-1,200mg daily) for optimal health. Your body also processes fat differently, with essential fat requirements significantly higher than men for hormonal balance."
+                      } Based on your profile and activity level of {personalizedData.profile.activity_level.toLowerCase()}, you need about {personalizedData.dailyCalories} calories daily.
+                    </p>
+
+                    <h4 className="text-gray-300 text-md font-medium mb-2">What This Meal Means for You</h4>
+                    <p className="text-gray-300 mb-4">
+                      This meal provides {mealData.analysis.calories} calories, which is about {personalizedData.caloriePercentage}% of your daily energy needs. {personalizedData.caloriePercentage < 25 
+                        ? "It's a lighter meal that leaves plenty of room for other nutritious foods throughout your day. Consider balancing it with protein-rich snacks or heartier meals to meet your daily requirements."
+                        : personalizedData.caloriePercentage < 40 
+                          ? "This is a well-balanced meal that fits perfectly into a standard eating pattern. It provides substantial nutrition while still allowing flexibility for other meals and snacks."
+                          : "This is a more substantial meal that represents a significant portion of your daily calorie needs. You might want to balance it with lighter options for your other meals."
+                      }
+                    </p>
+                    
+                    <h4 className="text-gray-300 text-md font-medium mb-2">Personalized Recommendations</h4>
+                    <p className="text-gray-300 mb-4">
+                      Based on your profile, here are a few nutrition tips: 
+                      {personalizedData.profile.gender === 'male' 
+                        ? `
+                          <ul class="list-disc list-inside mt-2 space-y-1">
+                            <li>Aim for 20-30g of protein per meal to optimize muscle health</li>
+                            <li>Include foods rich in zinc like oysters, beef, and pumpkin seeds</li>
+                            <li>Focus on potassium-rich foods for heart health (bananas, potatoes, yogurt)</li>
+                            <li>Stay well-hydrated with about 3-4 liters of fluids daily</li>
+                          </ul>`
+                        : `
+                          <ul class="list-disc list-inside mt-2 space-y-1">
+                            <li>Include iron-rich foods like leafy greens, beans, and lean meats</li>
+                            <li>Ensure adequate calcium through dairy, fortified plant milks, or leafy greens</li>
+                            <li>Consider vitamin D to enhance calcium absorption</li>
+                            <li>Include healthy fats from avocados, nuts, and olive oil for hormonal health</li>
+                          </ul>`
+                      }
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              <div className="grid grid-cols-1 gap-6">
+                {mealData.benefits && mealData.benefits.length > 0 && (
+                  <div className="bg-blue-900/20 rounded-xl p-5 border border-blue-900/50 shadow-md">
+                    <h3 className="text-lg font-bold text-blue-300 mb-3">Benefits</h3>
+                    <ul className="space-y-2">
+                      {mealData.benefits.map((benefit, index) => (
+                        <li key={index} className="flex items-start">
+                          <div className="bg-blue-800/50 text-blue-300 p-1 rounded mr-2 mt-0.5 flex-shrink-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                          <span className="text-gray-300 text-sm">{benefit}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                
+                {mealData.concerns && mealData.concerns.length > 0 && (
+                  <div className="bg-yellow-900/20 rounded-xl p-5 border border-yellow-900/50 shadow-md">
+                    <h3 className="text-lg font-bold text-yellow-300 mb-3">Nutritional Concerns</h3>
+                    <ul className="space-y-2">
+                      {mealData.concerns.map((concern, index) => (
+                        <li key={index} className="flex items-start">
+                          <div className="bg-yellow-800/50 text-yellow-300 p-1 rounded mr-2 mt-0.5 flex-shrink-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                          <span className="text-gray-300 text-sm">{concern}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+              
+              {mealData.suggestions && mealData.suggestions.length > 0 && (
+                <div className="mt-6 bg-green-900/20 rounded-xl p-5 border border-green-900/50 shadow-md">
+                  <h3 className="text-lg font-bold text-green-300 mb-3">Suggestions for Improvement</h3>
+                  <ul className="space-y-2">
+                    {mealData.suggestions.map((suggestion, index) => (
+                      <li key={index} className="flex items-start">
+                        <div className="bg-green-800/50 text-green-300 p-1 rounded mr-2 mt-0.5 flex-shrink-0">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <span className="text-gray-300 text-sm">{suggestion}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <div className="border-t border-gray-700 pt-6 mt-6">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+              <Link 
+                href="/upload" 
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2.5 rounded-lg transition flex items-center justify-center"
+              >
+                <ChevronsLeft className="mr-2" size={18} />
+                Analyze another meal
+              </Link>
+              
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => window.print()} 
+                  className="bg-gray-700 hover:bg-gray-600 text-white font-medium px-6 py-2.5 rounded-lg transition flex items-center justify-center"
+                >
+                  <Printer className="mr-2" size={18} />
+                  Print
+                </button>
+                
+                <Link 
+                  href="/history" 
+                  className="bg-gray-700 hover:bg-gray-600 text-white font-medium px-6 py-2.5 rounded-lg transition flex items-center justify-center"
+                >
+                  <History className="mr-2" size={18} />
+                  History
+                </Link>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+} 

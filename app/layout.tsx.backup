@@ -1,0 +1,49 @@
+import './globals.css';
+import { Inter } from 'next/font/google';
+import { Metadata } from 'next';
+
+const inter = Inter({ subsets: ['latin'] });
+
+export const metadata: Metadata = {
+  title: 'Snap2Health - AI-Powered Nutrition Analysis',
+  description: 'Get instant nutritional analysis of your meals using AI technology',
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="en">
+      <head>
+        {/* Fix scripts */}
+        <script src="/hydration-fix.js" defer></script>
+        <script src="/duplicate-content-fix.js" defer></script>
+      </head>
+      <body className={inter.className}>
+        <div className="min-h-screen bg-gray-900 text-white">
+          <header className="bg-gray-800 border-b border-gray-700">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="flex justify-between h-16">
+                <div className="flex">
+                  <a href="/" className="flex-shrink-0 flex items-center text-blue-400 font-bold text-xl">
+                    Snap2Health
+                  </a>
+                  <nav className="ml-6 flex items-center space-x-4">
+                    <a href="/" className="px-3 py-2 text-sm font-medium text-white">Home</a>
+                    <a href="/upload" className="px-3 py-2 text-sm font-medium text-white">Upload</a>
+                    <a href="/analysis" className="px-3 py-2 text-sm font-medium text-white">Analysis</a>
+                    <a href="/history" className="px-3 py-2 text-sm font-medium text-white">History</a>
+                    <a href="/profile" className="px-3 py-2 text-sm font-medium text-white">Profile</a>
+                  </nav>
+                </div>
+              </div>
+            </div>
+          </header>
+          {children}
+        </div>
+      </body>
+    </html>
+  );
+}

@@ -1,0 +1,31 @@
+import './globals.css';
+import { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Snap2Health',
+  description: 'AI-powered nutrition app',
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="en">
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <script src="/react-runtime-fix.js" async></script>
+      </head>
+      <body className="min-h-screen bg-slate-50">
+        <div className="min-h-screen">
+          {children}
+        </div>
+        <footer className="py-4 text-center text-xs text-gray-500">
+          &copy; {new Date().getFullYear()} Snap2Health
+        </footer>
+      </body>
+    </html>
+  );
+} 

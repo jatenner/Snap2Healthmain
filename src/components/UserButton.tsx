@@ -1,7 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
+<<<<<<< HEAD
 import { useAuth } from '../context/auth';
+=======
+import { useAuth } from '../context/AuthContext';
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
 
 export default function UserButton() {
   const { user, signOut } = useAuth();

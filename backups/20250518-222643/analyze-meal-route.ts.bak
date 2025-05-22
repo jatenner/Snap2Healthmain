@@ -1,0 +1,515 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { v4 as uuidv4, v5 as uuidv5, validate as validateUUID } from 'uuid';
+import OpenAI from 'openai';
+import { getUserIdFromSession } from '@/lib/auth';
+import { 
+  validateMealAnalysisData, 
+  retryWithExponentialBackoff,
+  createMealAnalysisSchema,
+  formatMealForStorage 
+} from '@/app/lib/api-utils';
+import { 
+  analyzeImageWithGPT,
+  reanalyzeWithCorrections 
+} from '@/app/lib/openai-utils';
+import { anonClient, adminClient } from '@/utils/supabase';
+import { safeJsonStringify, safeJsonParse, sanitizeObject } from '@/utils/json-helpers';
+
+// UUID namespace for consistent string-to-UUID conversion
+const UUID_NAMESPACE = '1b671a64-40d5-491e-99b0-da01ff1f3341';
+
+/**
+ * Convert a string to a UUID in a deterministic way
+ * This allows us to handle both UUID and string IDs consistently
+ */
+function stringToUUID(str: string): string {
+  if (validateUUID(str)) {
+    return str; // Already a valid UUID
+  }
+  // Generate a deterministic UUID from the string
+  return uuidv5(str, UUID_NAMESPACE);
+}
+
+// Force this route to be dynamic
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+export const revalidate = 0;
+export const fetchCache = 'only-no-store';
+
+/**
+ * GET handler to retrieve meal analysis by ID
+ */
+export async function GET(request: NextRequest) {
+  console.log('[api/analyze-meal] GET request received');
+  
+  try {
+    // Get meal ID from query parameter
+    const { searchParams } = new URL(request.url);
+    const mealId = searchParams.get('id');
+    const statusOnly = searchParams.get('statusOnly') === 'true';
+    
+    console.log(`[api/analyze-meal] GET request for meal ID: ${mealId}, statusOnly: ${statusOnly}`);
+    
+    if (!mealId) {
+      return NextResponse.json(
+        { success: false, error: 'Missing meal ID parameter' },
+        { status: 400 }
+      );
+    }
+    
+    // Use the Supabase client from utils/supabase.ts
+    const supabase = anonClient;
+    
+    let userId: string | null = null;
+    
+    // Try to get userId but don't fail if we can't
+    try {
+      const { userId: sessionUserId } = await getUserIdFromSession(request);
+      userId = sessionUserId;
+      console.log(`[api/analyze-meal] Authenticated user: ${userId}`);
+    } catch (authError) {
+      console.warn('[api/analyze-meal] Auth warning, continuing without userId:', authError);
+      // Continue with null userId for public access
+    }
+    
+    // Initialize retry counter and max attempts
+    let attempts = 0;
+    const maxAttempts = 3;
+    
+    while (attempts < maxAttempts) {
+      attempts++;
+      
+      try {
+        // Try meal_analyses table first (newest schema)
+        console.log('[api/analyze-meal] Querying meal_analyses table with ID:', mealId);
+        const { data: analysisData, error: analysisError } = await supabase
+          .from('meal_analyses')
+          .select('*')
+          .eq('uuid', mealId)
+          .maybeSingle();
+          
+        if (analysisError) {
+          console.error('[api/analyze-meal] Error querying meal_analyses:', analysisError);
+        }
+          
+        if (!analysisError && analysisData) {
+          console.log('[api/analyze-meal] Found meal in meal_analyses table');
+          
+          // If status check only, return minimal data
+          if (statusOnly) {
+            return NextResponse.json({
+              success: true,
+              status: 'complete',
+              mealId: analysisData.uuid
+            });
+          }
+          
+          // Format response data
+          const responseData = {
+            success: true,
+            data: {
+              uuid: analysisData.uuid,
+              mealId: analysisData.uuid,
+              mealName: analysisData.name || 'Meal Analysis',
+              imageUrl: analysisData.image_url,
+              goal: analysisData.goal || 'General Health',
+              calories: analysisData.calories || 0,
+              macronutrients: analysisData.macronutrients || [],
+              micronutrients: analysisData.micronutrients || [],
+              insights: analysisData.insights || '',
+              _source: 'meal_analyses'
+            }
+          };
+          
+          return NextResponse.json(sanitizeObject(responseData));
+        }
+        
+        // Try the meals table next
+        console.log('[api/analyze-meal] Querying meals table with ID:', mealId);
+        const { data: mealData, error: mealError } = await supabase
+          .from('meals')
+          .select('*')
+          .eq('id', mealId)
+          .maybeSingle();
+        
+        if (mealError) {
+          console.error('[api/analyze-meal] Error querying meals table:', mealError);
+        }
+        
+        if (!mealError && mealData) {
+          console.log('[api/analyze-meal] Found meal in meals table');
+          
+          // If status check only, return minimal data
+          if (statusOnly) {
+            return NextResponse.json({
+              success: true,
+              status: 'complete',
+              mealId: mealData.id
+            });
+          }
+          
+          // Format response data
+          const responseData = {
+            success: true,
+            data: {
+              mealId: mealData.id,
+              mealName: mealData.meal_name || 'Meal Analysis',
+              imageUrl: mealData.image_url,
+              goal: mealData.goal || 'General Health',
+              calories: mealData.calories || 0,
+              macronutrients: mealData.macronutrients || [],
+              micronutrients: mealData.micronutrients || [],
+              benefits: mealData.benefits || [],
+              concerns: mealData.concerns || [],
+              suggestions: mealData.suggestions || [],
+              insights: (mealData.analysis && mealData.analysis.insights) || mealData.insights || null,
+              _source: 'meals'
+            }
+          };
+          
+          return NextResponse.json(sanitizeObject(responseData));
+        }
+        
+        // Finally, try the backup table
+        console.log('[api/analyze-meal] Querying meal_data_backup table with ID:', mealId);
+        const { data: backupData, error: backupError } = await supabase
+          .from('meal_data_backup')
+          .select('*')
+          .eq('id', mealId)
+          .maybeSingle();
+        
+        if (backupError) {
+          console.error('[api/analyze-meal] Error querying meal_data_backup table:', backupError);
+        }
+        
+        if (!backupError && backupData) {
+          console.log('[api/analyze-meal] Found meal in meal_data_backup table');
+          
+          // Parse the data JSON field if it exists
+          let parsedData = backupData.data || {};
+          if (typeof parsedData === 'string') {
+            try {
+              parsedData = safeJsonParse(parsedData, {});
+            } catch (parseError) {
+              console.error('[api/analyze-meal] Error parsing backup data JSON:', parseError);
+            }
+          }
+          
+          // If status check only, return minimal data
+          if (statusOnly) {
+            return NextResponse.json({
+              success: true,
+              status: 'complete',
+              mealId: backupData.id
+            });
+          }
+          
+          // Format response data
+          const responseData = {
+            success: true,
+            data: {
+              mealId: backupData.id,
+              mealName: parsedData.mealName || backupData.name || 'Meal Analysis',
+              imageUrl: parsedData.imageUrl || backupData.image_url,
+              goal: parsedData.goal || 'General Health',
+              calories: parsedData.calories || 0,
+              macronutrients: parsedData.macronutrients || [],
+              micronutrients: parsedData.micronutrients || [],
+              insights: parsedData.insights || '',
+              _source: 'meal_data_backup'
+            }
+          };
+          
+          return NextResponse.json(sanitizeObject(responseData));
+        }
+        
+        // If we've checked all tables and found nothing, respond with 404
+        console.log('[api/analyze-meal] Meal not found in any table:', mealId);
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: 'Meal not found'
+          },
+          { status: 404 }
+        );
+      } catch (dbError) {
+        console.error(`[api/analyze-meal] Database error (attempt ${attempts}/${maxAttempts}):`, dbError);
+        
+        if (attempts >= maxAttempts) {
+          return NextResponse.json(
+            { 
+              success: false, 
+              error: 'Database error', 
+              details: dbError.message
+            },
+            { status: 500 }
+          );
+        }
+        
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    // This should never be reached due to the return in the retry loop
+    return NextResponse.json(
+      { success: false, error: 'Failed to fetch meal after multiple attempts' },
+      { status: 500 }
+    );
+  } catch (error) {
+    console.error('[api/analyze-meal] Uncaught error in GET handler:', error);
+    return NextResponse.json(
+      { success: false, error: 'Server error', details: error.message },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * POST handler to analyze a meal from an image URL
+ */
+export async function POST(req: NextRequest) {
+  console.log('[analyze-meal] Received request to analyze meal');
+  
+  try {
+    // Parse the JSON request body with safe JSON parser
+    let body;
+    try {
+      const jsonText = await req.text();
+      body = safeJsonParse(jsonText);
+      if (!body) {
+        return NextResponse.json({
+          success: false,
+          error: 'Invalid JSON in request body'
+        }, { status: 400 });
+      }
+    } catch (parseError) {
+      console.error('[analyze-meal] Error parsing request body:', parseError);
+      return NextResponse.json({
+        success: false,
+        error: 'Failed to parse request body'
+      }, { status: 400 });
+    }
+    
+    // Extract the image URL
+    const { imageUrl, goal = 'General Health' } = body;
+    
+    if (!imageUrl) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Image URL is required' 
+      }, { status: 400 });
+    }
+    
+    // Validate the image URL
+    try {
+      // Check if it's a valid URL
+      new URL(imageUrl);
+    } catch (urlError) {
+      console.error('[analyze-meal] Invalid image URL:', urlError);
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Invalid image URL format' 
+      }, { status: 400 });
+    }
+    
+    // Use the Supabase client from utils/supabase.ts
+    const supabase = anonClient;
+    
+    // Get user ID from the request
+    let userId: string = 'anonymous-user'; // Set a default
+    
+    try {
+      const { userId: sessionUserId } = await getUserIdFromSession(req);
+      if (sessionUserId) {
+        userId = sessionUserId;
+        console.log(`[analyze-meal] User ID: ${userId}`);
+      }
+    } catch (authError) {
+      console.warn('[analyze-meal] Auth error, using anonymous mode:', authError);
+      
+      if (process.env.NODE_ENV === 'production') {
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Authentication required' 
+        }, { status: 401 });
+      }
+    }
+    
+    let analysisResult;
+
+    try {
+      // Use OpenAI directly instead of the internal API to avoid URL resolution issues
+      // This is a temporary fix until we address the server-side fetch properly
+      console.log('[analyze-meal] Analyzing image using OpenAI directly');
+      
+      // Use the analyzeImageWithGPT utility directly
+      try {
+        console.log('[analyze-meal] Calling OpenAI for analysis with goal:', goal);
+        
+        // Use the OpenAI utils directly
+        const mealAnalysis = await analyzeImageWithGPT(
+          imageUrl, // Pass the URL directly - the function will handle it
+          goal,
+          req.headers.get('x-mock-openai') === 'true' // Enable mock mode if header is present
+        );
+        
+        // Format the response to match what would come from the analyze-image API
+        analysisResult = {
+          success: true,
+          mealId: uuidv4(),
+          mealAnalysis
+        };
+        
+        console.log('[analyze-meal] Analysis completed successfully');
+      } catch (analysisError) {
+        console.error('[analyze-meal] Direct OpenAI analysis failed:', analysisError);
+        
+        // Fall back to a simple analysis
+        analysisResult = {
+          success: true,
+          mealId: uuidv4(),
+          mealAnalysis: {
+            mealName: 'Food Analysis',
+            calories: 0,
+            macronutrients: [
+              { name: "Protein", amount: 0, unit: "g", percentDailyValue: 0 },
+              { name: "Carbs", amount: 0, unit: "g", percentDailyValue: 0 },
+              { name: "Fat", amount: 0, unit: "g", percentDailyValue: 0 }
+            ],
+            micronutrients: [],
+            insights: "We couldn't properly analyze this image. Please try again with a clearer picture of the food."
+          }
+        };
+        
+        console.log('[analyze-meal] Using fallback analysis due to OpenAI error');
+      }
+    } catch (error) {
+      console.error('[analyze-meal] Error analyzing image:', error);
+      return NextResponse.json({ 
+        success: false, 
+        error: `Error analyzing image: ${error.message}` 
+      }, { status: 500 });
+    }
+    
+    // Validate analysis result
+    if (!analysisResult || !analysisResult.mealAnalysis) {
+      console.error('[analyze-meal] Invalid analysis result format:', analysisResult);
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Invalid analysis result format' 
+      }, { status: 500 });
+    }
+    
+    // Generate a unique ID for this meal
+    const mealId = uuidv4();
+    
+    // Format the meal data for the response
+    const formattedMeal = formatMealForStorage(
+      analysisResult.mealAnalysis, 
+      { imageUrl, userId, mealId }
+    );
+    
+    console.log(`[analyze-meal] Storing meal data with ID: ${mealId}`);
+    
+    // Create a database record
+    const dbRecord = {
+      id: mealId,
+      user_id: userId,
+      image_url: imageUrl,
+      meal_name: formattedMeal.meal_name || "Unknown Meal",
+      calories: formattedMeal.calories || 0,
+      analysis: formattedMeal,
+      macronutrients: formattedMeal.macronutrients || [],
+      micronutrients: formattedMeal.micronutrients || [],
+      goal: formattedMeal.goal || "General Health"
+    };
+    
+    // Store the meal data in the database with retry logic
+    let storageSuccess = false;
+    let attempts = 0;
+    const maxAttempts = 3;
+    
+    while (!storageSuccess && attempts < maxAttempts) {
+      attempts++;
+      
+      try {
+        // Use anonClient for database operations
+        const { error } = await supabase
+          .from('meals')
+          .insert([sanitizeObject(dbRecord)]);
+        
+        if (error) {
+          console.error(`[analyze-meal] Error storing meal data (attempt ${attempts}/${maxAttempts}):`, error);
+          
+          // If there's a column error, try with a more limited record
+          if (error.message?.includes("Could not find the 'foods' column")) {
+            console.log('[analyze-meal] Detected missing foods column, trying with basic columns only');
+            
+            // Create simplified record with only core columns
+            const basicRecord = {
+              id: mealId,
+              user_id: userId,
+              image_url: imageUrl,
+              calories: formattedMeal.calories || 0,
+              analysis: formattedMeal // Store all data in the JSONB analysis field
+            };
+            
+            const { error: basicError } = await supabase
+              .from('meals')
+              .insert([sanitizeObject(basicRecord)]);
+              
+            if (basicError) {
+              console.error(`[analyze-meal] Error with simplified record (attempt ${attempts}/${maxAttempts}):`, basicError);
+            } else {
+              console.log('[analyze-meal] Successfully stored meal with simplified schema');
+              storageSuccess = true;
+              break;
+            }
+          }
+          
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } else {
+          console.log('[analyze-meal] Meal data stored successfully');
+          storageSuccess = true;
+        }
+      } catch (error) {
+        console.error(`[analyze-meal] Exception storing meal data (attempt ${attempts}/${maxAttempts}):`, error);
+        
+        if (attempts >= maxAttempts) {
+          console.warn('[analyze-meal] Giving up after multiple storage attempts');
+          break;
+        }
+        
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    // Return a 202 Accepted response with the meal ID for polling
+    const responseData = {
+      success: true,
+      status: 'processing',
+      message: 'Meal analysis is being processed',
+      mealId,
+      imageUrl,
+      storedSuccessfully: storageSuccess
+    };
+    
+    // Sanitize the response data to prevent JSON issues
+    const safeResponseData = sanitizeObject(responseData);
+    return NextResponse.json(safeResponseData, { status: 202 });
+  } catch (error) {
+    console.error('[analyze-meal] Unhandled error in route handler:', error);
+    
+    // Ensure the error message is safe to send
+    const errorMessage = error?.message || 'An unexpected error occurred';
+    const safeErrorResponse = sanitizeObject({ 
+      success: false, 
+      error: errorMessage
+    });
+    
+    return NextResponse.json(safeErrorResponse, { status: 500 });
+  }
+}

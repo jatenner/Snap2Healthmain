@@ -2,10 +2,17 @@
 module.exports = {
   darkMode: ["class"],
   content: [
+<<<<<<< HEAD
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
     './app/**/*.{js,ts,jsx,tsx,mdx}',
+=======
+    './pages/**/*.{ts,tsx}',
+    './components/**/*.{ts,tsx}',
+    './app/**/*.{ts,tsx}',
+    './src/**/*.{ts,tsx}',
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
   ],
   theme: {
     container: {
@@ -22,6 +29,7 @@ module.exports = {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+<<<<<<< HEAD
         darkBlue: {
           DEFAULT: "var(--primary-dark-blue)",
           secondary: "var(--secondary-blue)",
@@ -33,6 +41,11 @@ module.exports = {
         primary: {
           DEFAULT: "var(--highlight-blue)",
           foreground: "var(--text-blue)",
+=======
+        primary: {
+          DEFAULT: "hsl(var(--primary))",
+          foreground: "hsl(var(--primary-foreground))",
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -58,6 +71,7 @@ module.exports = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+<<<<<<< HEAD
         green: {
           50: '#f0fdf4',
           100: '#dcfce7',
@@ -71,6 +85,8 @@ module.exports = {
           900: '#14532d',
           950: '#052e16',
         },
+=======
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -91,9 +107,12 @@ module.exports = {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
       },
+<<<<<<< HEAD
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
       },
+=======
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
     },
   },
   plugins: [require("tailwindcss-animate")],

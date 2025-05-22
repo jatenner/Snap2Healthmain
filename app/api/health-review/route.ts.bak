@@ -1,0 +1,251 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+import { cookies } from 'next/headers';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+
+// Make the route dynamic to prevent caching
+export const dynamic = 'force-dynamic';
+
+// Helper functions for reviews and suggestions
+const getFallbackReview = (profile: any = null): string => {
+  if (profile) {
+    return `Based on your profile, we recommend focusing on balanced nutrition. Consider your dietary needs and goals.`;
+  }
+  return 'This meal appears to be reasonably balanced, but without detailed analysis, we recommend focusing on portion control and including a variety of food groups.';
+};
+
+const getDefaultSuggestions = (profile: any = null): string[] => {
+  const baseRecommendations = [
+    "Focus on eating a variety of colorful fruits and vegetables daily",
+    "Choose whole grains over refined grains when possible",
+    "Include lean protein sources in your meals",
+    "Stay hydrated by drinking water throughout the day",
+    "Limit processed foods and added sugars"
+  ];
+  
+  if (!profile) return baseRecommendations;
+  
+  if (profile.goal === 'Weight Loss' || (profile.goal?.toLowerCase()?.includes('weight loss'))) {
+    return [
+      "Consider tracking your caloric intake to ensure you're in a moderate deficit",
+      "Include protein in every meal to help maintain fullness and preserve muscle",
+      "Fill half your plate with non-starchy vegetables",
+      "Be mindful of portion sizes, especially with calorie-dense foods",
+      "Stay hydrated, as thirst can sometimes be mistaken for hunger"
+    ];
+  }
+  
+  if (profile.goal === 'Muscle Gain' || (profile.goal?.toLowerCase()?.includes('muscle'))) {
+    return [
+      "Ensure you're in a slight caloric surplus to support muscle growth",
+      "Aim for 1.6-2.2g of protein per kg of bodyweight daily",
+      "Include carbohydrates around your workouts for energy and recovery",
+      "Don't neglect healthy fats, which support hormone production",
+      "Consider timing protein intake within a few hours of strength training"
+    ];
+  }
+  
+  if (profile.goal === 'Heart Health' || (profile.goal?.toLowerCase()?.includes('heart'))) {
+    return [
+      "Choose foods rich in omega-3 fatty acids like fatty fish, walnuts, and flaxseeds",
+      "Limit sodium intake to support healthy blood pressure",
+      "Include plenty of fiber from fruits, vegetables, and whole grains",
+      "Choose lean proteins and plant-based protein sources often",
+      "Limit saturated and trans fats found in processed foods"
+    ];
+  }
+  
+  return baseRecommendations;
+};
+
+const generatePersonalizedReview = (nutrients: any, profile: any, goal: string = 'General Wellness'): string => {
+  if (!nutrients) {
+    return getFallbackReview(profile);
+  }
+  
+  const effectiveGoal = profile?.goal || goal || 'wellness';
+  
+  if (effectiveGoal.toLowerCase().includes('weight loss')) {
+    return `Based on your meal's nutritional content and your weight loss goal, this meal provides approximately ${nutrients.calories || 0} calories. For effective weight loss, focus on creating a moderate caloric deficit while ensuring adequate protein intake to preserve muscle mass.`;
+  }
+  
+  if (effectiveGoal.toLowerCase().includes('muscle')) {
+    return `This meal contains nutrients that support your muscle gain goal. With approximately ${nutrients.calories || 0} calories and protein content, it can contribute to your muscle-building nutrition plan when combined with proper strength training.`;
+  }
+  
+  // Default response for other goals
+  return `Based on your personal profile and this meal's nutritional content, you're getting a mix of nutrients that provide approximately ${nutrients.calories || 0} calories. A balanced approach to nutrition is important for your ${effectiveGoal} goal.`;
+};
+
+// Improve the fetchFromAnalyzeMealAPI function with better URL handling
+const fetchFromAnalyzeMealAPI = async (mealId: string) => {
+  try {
+    console.log(`[HealthReview] Fetching from analyze-meal API for ID: ${mealId}`);
+    
+    // Force absolute URL with hardcoded localhost URL to guarantee it works
+    const apiUrl = `http://localhost:3000/api/analyze-meal?id=${mealId}`;
+    
+    console.log(`[HealthReview] Fetching from absolute URL: ${apiUrl}`);
+    
+    const response = await fetch(apiUrl, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      method: 'GET',
+      cache: 'no-store'
+    });
+    
+    if (!response.ok) {
+      throw new Error(`API responded with status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('[HealthReview] Successfully got data from analyze-meal API');
+    return data;
+  } catch (error) {
+    console.error('[HealthReview] Error fetching from analyze-meal API:', error);
+    throw error;
+  }
+};
+
+// Add a function to get meal data from database by ID using the universal policy
+const getMealFromDatabase = async (supabase: any, mealId: string) => {
+  try {
+    console.log(`[HealthReview] Fetching meal data for ID: ${mealId}`);
+    
+    // First try getting from the data column (our emergency format)
+    const { data, error } = await supabase
+      .from('meals')
+      .select('data')
+      .eq('id', mealId)
+      .maybeSingle();
+    
+    if (error) {
+      console.log(`[HealthReview] Error fetching meal_id ${mealId}:`, error);
+      return null;
+    }
+    
+    if (data && data.data) {
+      console.log('[HealthReview] Found meal in data column:', data.data);
+      return data.data;
+    }
+    
+    // Try the original format
+    const { data: originalData, error: originalError } = await supabase
+      .from('meals')
+      .select('*')
+      .eq('id', mealId)
+      .maybeSingle();
+    
+    if (originalError) {
+      console.log(`[HealthReview] Error fetching meal_id ${mealId} in original format:`, originalError);
+      return null;
+    }
+    
+    if (originalData) {
+      console.log('[HealthReview] Found meal in original format:', originalData);
+      return originalData;
+    }
+    
+    return null;
+  } catch (err) {
+    console.error('[HealthReview] Unexpected error fetching meal:', err);
+    return null;
+  }
+};
+
+// Main API route handler
+export async function GET(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
+  const mealId = searchParams.get('mealId');
+  
+  console.log(`[HealthReview] GET request for mealId: ${mealId}`);
+  
+  if (!mealId) {
+    return NextResponse.json({ 
+      error: 'Missing mealId parameter',
+      success: false
+    }, { status: 400 });
+  }
+  
+  const supabase = createRouteHandlerClient({ cookies: () => cookies() });
+  
+  try {
+    // Step 1: Get user profile if available
+    let profile = null;
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (session?.session?.user?.id) {
+        console.log(`[HealthReview] Found profile for user: ${session.session.user.id}`);
+        
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.session.user.id)
+          .maybeSingle();
+        
+        if (!profileError && profileData) {
+          profile = profileData;
+        } else {
+          console.log('[HealthReview] No profile found in database');
+        }
+      }
+    } catch (e) {
+      console.error('[HealthReview] Error getting user profile:', e);
+    }
+    
+    // Step 2: Try to get meal data from the database
+    let mealData = await getMealFromDatabase(supabase, mealId);
+    
+    if (!mealData) {
+      console.log('[HealthReview] No valid meal data found in database, looking for alternatives');
+      
+      // Step 3: Try to fetch from analyze-meal API
+      mealData = await fetchFromAnalyzeMealAPI(mealId);
+      
+      if (!mealData) {
+        console.log('[HealthReview] No data from analyze-meal API, using fallback insights');
+        
+        // Return fallback health review
+        return NextResponse.json({
+          insights: getFallbackReview(profile),
+          suggestions: getDefaultSuggestions(profile),
+          success: true,
+          fallback: true,
+          mealId
+        });
+      }
+    }
+    
+    // Step 4: Generate personalized review
+    console.log('[HealthReview] Generating health review for meal data');
+    
+    // Extract nutrients from meal data
+    const nutrients = mealData.nutrients || mealData.analysis || {};
+    const goal = mealData.goal || 'General Wellness';
+    
+    // Generate personalized review
+    const insights = generatePersonalizedReview(nutrients, profile, goal);
+    
+    // Return result
+    return NextResponse.json({
+      insights,
+      mealData: {
+        id: mealId,
+        name: mealData.mealName || mealData.name || 'Analyzed Meal',
+        nutrients
+      },
+      success: true,
+      fallback: false
+    });
+    
+  } catch (error) {
+    console.error('[HealthReview] Error generating review:', error);
+    
+    return NextResponse.json({
+      insights: "We couldn't generate a personalized health review at this time. Please try again later.",
+      success: false,
+      error: (error as Error).message
+    }, { status: 500 });
+  }
+}

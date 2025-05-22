@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import React, { useState } from 'react';
+=======
+import React from 'react';
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
 import Image from 'next/image';
 
 interface MealSummaryCardProps {
@@ -16,6 +20,7 @@ export const MealSummaryCard: React.FC<MealSummaryCardProps> = ({
   calories,
   goal
 }) => {
+<<<<<<< HEAD
   const [imageError, setImageError] = useState(false);
   
   // Placeholder image for fallbacks
@@ -42,17 +47,24 @@ export const MealSummaryCard: React.FC<MealSummaryCardProps> = ({
     console.log("MealSummaryCard rendering without imageUrl");
   }
 
+=======
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
   return (
     <div className="bg-white rounded-xl shadow-md overflow-hidden">
       <div className="flex flex-col md:flex-row">
         {/* Image Section */}
+<<<<<<< HEAD
         {imageUrl && !imageError && (
+=======
+        {imageUrl && (
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
           <div className="md:w-1/3 relative">
             <div className="relative h-64 md:h-full w-full">
               <Image
                 src={imageUrl}
                 alt={caption}
                 fill
+<<<<<<< HEAD
                 unoptimized // Add this to bypass Next.js image optimization
                 sizes="(max-width: 768px) 100vw, 33vw"
                 style={{ objectFit: 'cover' }}
@@ -61,11 +73,17 @@ export const MealSummaryCard: React.FC<MealSummaryCardProps> = ({
                   console.error(`Error loading image in MealSummaryCard: ${imageUrl}`);
                   setImageError(true);
                 }}
+=======
+                sizes="(max-width: 768px) 100vw, 33vw"
+                style={{ objectFit: 'cover' }}
+                className="rounded-t-lg md:rounded-l-lg md:rounded-t-none"
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
               />
             </div>
           </div>
         )}
         
+<<<<<<< HEAD
         {/* Fallback if image failed to load */}
         {imageUrl && imageError && (
           <div className="md:w-1/3 bg-gray-100 flex items-center justify-center h-64 md:h-auto">
@@ -78,6 +96,8 @@ export const MealSummaryCard: React.FC<MealSummaryCardProps> = ({
           </div>
         )}
         
+=======
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
         {/* Content Section */}
         <div className={`p-6 ${imageUrl ? 'md:w-2/3' : 'w-full'}`}>
           {goal && (

@@ -1,6 +1,10 @@
 {
   "compilerOptions": {
+<<<<<<< HEAD
     "target": "es5",
+=======
+    "target": "ES2017",
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
     "lib": [
       "dom",
       "dom.iterable",
@@ -13,7 +17,11 @@
     "incremental": true,
     "module": "esnext",
     "esModuleInterop": true,
+<<<<<<< HEAD
     "moduleResolution": "bundler",
+=======
+    "moduleResolution": "node",
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",
@@ -21,6 +29,7 @@
       {
         "name": "next"
       }
+<<<<<<< HEAD
     ],
     "paths": {
       "@/*": ["./*", "./src/*"]
@@ -31,6 +40,15 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts"
+=======
+    ]
+  },
+  "include": [
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
+    "**/*.ts",
+    "**/*.tsx"
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
   ],
   "exclude": [
     "node_modules"

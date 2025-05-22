@@ -1,9 +1,15 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+<<<<<<< HEAD
 import { useAuth } from '@/context/auth';
 import { supabase } from '@/lib/supabaseClient';
 import LoadingSpinner from '@/components/LoadingSpinner';
+=======
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabaseClient';
+import LoadingSpinner from '../../components/LoadingSpinner';
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
 
 interface ProfileFormData {
   username: string;
@@ -11,7 +17,11 @@ interface ProfileFormData {
 }
 
 export default function ProfilePage() {
+<<<<<<< HEAD
   const { user, isLoading: loading } = useAuth();
+=======
+  const { user, loading: authLoading } = useAuth();
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
   const [formData, setFormData] = useState<ProfileFormData>({
     username: '',
     defaultGoal: 'General Wellness',
@@ -23,7 +33,11 @@ export default function ProfilePage() {
     if (user) {
       // Initialize form with user data
       setFormData({
+<<<<<<< HEAD
         username: user?.user_metadata?.username || user?.email || '',
+=======
+        username: user.user_metadata?.username || '',
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
         defaultGoal: user.user_metadata?.defaultGoal || 'General Wellness',
       });
     }
@@ -64,10 +78,17 @@ export default function ProfilePage() {
     }
   };
 
+<<<<<<< HEAD
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-12 flex justify-center">
         <LoadingSpinner size={48} />
+=======
+  if (authLoading) {
+    return (
+      <div className="container mx-auto px-4 py-12 flex justify-center">
+        <LoadingSpinner size="large" />
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
       </div>
     );
   }
@@ -173,13 +194,25 @@ export default function ProfilePage() {
           <div className="bg-gray-50 p-4 rounded-md">
             <p className="text-sm text-gray-500">Account Created</p>
             <p className="text-lg font-medium">
+<<<<<<< HEAD
               {new Date().toLocaleDateString()}
+=======
+              {user.created_at
+                ? new Date(user.created_at).toLocaleDateString()
+                : 'Not available'}
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
             </p>
           </div>
           <div className="bg-gray-50 p-4 rounded-md">
             <p className="text-sm text-gray-500">Last Sign In</p>
             <p className="text-lg font-medium">
+<<<<<<< HEAD
               {new Date().toLocaleDateString()}
+=======
+              {user.last_sign_in_at
+                ? new Date(user.last_sign_in_at).toLocaleDateString()
+                : 'Not available'}
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
             </p>
           </div>
         </div>

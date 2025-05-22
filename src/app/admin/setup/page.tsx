@@ -2,7 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { verifyDatabaseTables, supabase } from '../../../lib/supabaseClient';
+<<<<<<< HEAD
 import { useAuth } from '@/context/auth';
+=======
+import { useAuth } from '../../../context/AuthContext';
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
 
 export default function SetupPage() {
   const [tableStatus, setTableStatus] = useState<any>(null);

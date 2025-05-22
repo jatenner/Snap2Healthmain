@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -49,3 +50,6 @@ body::before {
   color: var(--primary-dark-blue);
   font-weight: bold;
 } 
+=======
+ 
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)

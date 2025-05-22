@@ -1,0 +1,1227 @@
+'use client';
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import Image from 'next/image';
+import { Skeleton } from '@/components/ui/skeleton';
+import { getEffectiveProfile, validateNutrientData, calculatePersonalizedDailyTargets, categorizePDV, getEffectiveProfileSync } from '../lib/profile-utils';
+import AIHealthReview from './AIHealthReview';
+import Link from 'next/link';
+import EnhancedNutrientDisplay from './EnhancedNutrientDisplay';
+import NutrientDetailCard from './NutrientDetailCard';
+import { Button } from '@/components/ui/button';
+import NutrientDisplay from './NutrientDisplay';
+import { useProfile } from '@/app/lib/profile-context';
+import MacroChart from './MacroChart';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/src/components/ui/tabs';
+
+// Types for our component
+interface Nutrient {
+  name: string;
+  amount: number;
+  unit: string;
+  percentDailyValue?: number;
+  description?: string;
+}
+
+interface Analysis {
+  calories?: number;
+  totalCalories?: number;
+  macronutrients?: Nutrient[];
+  micronutrients?: Nutrient[];
+}
+
+interface Ingredient {
+  name: string;
+  portion?: string;
+  calories?: number;
+}
+
+// Updated interface with all possible data properties
+interface MealData {
+  id: string;
+  name?: string;
+  mealName?: string; 
+  calories?: number;
+  detected_food?: string;
+  detectedFood?: string;
+  nutrients?: any;
+  analysis?: any;
+  imageUrl?: string;
+  image_url?: string;
+  source?: string;
+  ingredients?: Array<{name: string; portion?: string; calories?: number}>;
+}
+
+// Add this mapping of nutrient descriptions near the top of the file, just after the interface definitions
+const NUTRIENT_DESCRIPTIONS = {
+  protein: "Helps build and repair muscles, supports your immune system, and keeps you feeling full longer. Important for recovery after exercise and maintaining strength.",
+  carbs: "Your body's main source of energy, especially for your brain and during physical activity. Provides fuel for everyday activities and exercise.",
+  carbohydrates: "Your body's main source of energy, especially for your brain and during physical activity. Provides fuel for everyday activities and exercise.",
+  fat: "Essential for absorbing vitamins, supporting brain health, and providing long-lasting energy. Helps with hormone production and keeping your cells healthy.",
+  fiber: "Supports digestive health, helps you feel full longer, and can help control blood sugar and cholesterol levels. Important for gut health and regular digestion.",
+  vitamin_a: "Important for good vision, immune function, and keeping your skin healthy. Found in colorful vegetables and fruits like carrots and sweet potatoes.",
+  vitamin_c: "Supports your immune system, helps your body heal wounds, and acts as an antioxidant protecting cells from damage. Found in citrus fruits and many vegetables.",
+  vitamin_d: "Crucial for strong bones as it helps your body absorb calcium. Also supports immune function and mood regulation. Your body makes it when exposed to sunlight.",
+  vitamin_e: "Protects your cells from damage as an antioxidant. Supports immune function and helps keep blood vessels healthy. Found in nuts, seeds, and vegetable oils.",
+  calcium: "Essential for strong bones and teeth. Also important for muscle function, nerve transmission, and blood vessel health. Main sources include dairy products and leafy greens.",
+  iron: "Helps carry oxygen throughout your body in your blood. Important for energy production and brain function. Low levels can cause fatigue and weakness.",
+  potassium: "Helps regulate fluid balance, muscle contractions, and nerve signals. Can help maintain healthy blood pressure. Found in bananas, potatoes, and many fruits and vegetables.",
+  magnesium: "Involved in hundreds of processes in your body, including muscle and nerve function, blood sugar control, and blood pressure regulation. Found in nuts, seeds, and whole grains.",
+  sodium: "Helps maintain fluid balance and proper muscle and nerve function. Most people get enough (or too much) from salt in their diet.",
+  zinc: "Important for immune function, wound healing, and your sense of taste and smell. Supports normal growth and development and helps your body make proteins and DNA."
+};
+
+// Add this function to get a nutrient description based on the nutrient name
+const getNutrientDescription = (nutrientName: string): string => {
+  const standardizedName = nutrientName.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_');
+  return NUTRIENT_DESCRIPTIONS[standardizedName] || 
+    `Essential nutrient for overall health and wellbeing.`;
+};
+
+// Helper function to check if string is a valid UUID
+const isValidUUID = (str: string) => {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+};
+
+// Helper function to sanitize meal data
+const sanitizeMealData = (data: any, source: string, id?: string): MealData => {
+  if (!data) return { id: id || 'unknown' };
+  
+  return {
+    id: id || data.id || data.analysisId || 'unknown',
+    name: data.name || data.mealName || data.dish_name,
+    mealName: data.name || data.mealName || data.dish_name,
+    calories: data.calories || (data.analysis?.calories) || 0,
+    detectedFood: data.detectedFood || data.detected_food || '',
+    detected_food: data.detectedFood || data.detected_food || '',
+    nutrients: data.nutrients || data.analysis || null,
+    analysis: data.nutrients || data.analysis || null,
+    imageUrl: data.imageUrl || data.image_url || '',
+    image_url: data.imageUrl || data.image_url || '',
+    source,
+    ingredients: data.ingredients || []
+  };
+};
+
+// Helper function that converts our Nutrient type to the one expected by EnhancedNutrientDisplay
+const convertNutrientForDisplay = (nutrient: Nutrient) => {
+  return {
+    ...nutrient,
+    // Ensure percentDailyValue exists (even if null/undefined)
+    percentDailyValue: nutrient.percentDailyValue,
+  };
+};
+
+// Helper for debugging and fixing Supabase/UI data syncing issues
+const syncMealDataWithSupabase = async (mealId: string) => {
+  try {
+    console.log(`[DynamicMealDisplay] Attempting to sync meal data for ID: ${mealId}`);
+    
+    // Force a fresh fetch from API
+    const timestamp = Date.now();
+    const response = await fetch(`/api/analyze-meal?id=${mealId}&t=${timestamp}&force=true`);
+    
+    if (response.ok) {
+      const data = await response.json();
+      
+      if (data && data.id) {
+        // Update localStorage with the fresh data
+        const storageKey = `meal_analysis_${mealId}`;
+        localStorage.setItem(storageKey, JSON.stringify(data));
+        console.log('[DynamicMealDisplay] Successfully synced meal data with Supabase');
+        
+        // Reload the page to show the synced data
+        window.location.reload();
+        return true;
+      }
+    }
+    return false;
+  } catch (e) {
+    console.error('[DynamicMealDisplay] Error syncing meal data:', e);
+    return false;
+  }
+};
+
+// First, let's refine the calorie calculation for accurate results for large, active individuals
+const calculateDailyCalorieNeeds = (profile: any): number => {
+  if (!profile) return 2200; // Default fallback
+  
+  // Extract profile data
+  const gender = profile.gender?.toLowerCase() || 'male';
+  const weight = profile.weight || 70; // kg
+  const height = profile.height || 175; // cm
+  const age = profile.age || 30;
+  const activityLevel = profile.activity_level?.toLowerCase() || 'moderate';
+  
+  // Convert weight to kg if needed
+  const weightInKg = profile.weight_unit === 'lb' ? weight / 2.20462 : weight;
+  
+  // Convert height to cm if needed
+  const heightInCm = profile.height_unit === 'in' ? height * 2.54 : height;
+  
+  // Calculate BMR using Mifflin-St Jeor equation
+  let bmr = 0;
+  if (gender === 'male' || gender === 'm') {
+    bmr = 10 * weightInKg + 6.25 * heightInCm - 5 * age + 5;
+  } else {
+    bmr = 10 * weightInKg + 6.25 * heightInCm - 5 * age - 161;
+  }
+  
+  // Apply activity multiplier with realistic values for someone who is very active
+  // Use more conservative multipliers to prevent overestimation
+  const activityMultipliers = {
+    'sedentary': 1.2,
+    'lightly active': 1.375,
+    'light': 1.375,
+    'moderate': 1.55,
+    'moderately active': 1.55,
+    'active': 1.725,
+    'very active': 1.8, // Reduced from 1.9 to be more realistic
+    'extra active': 2.0, // Reduced from 2.1 to be more realistic
+    'athlete': 2.0 // Reduced from 2.1 to be more realistic
+  };
+  
+  // Find best match for activity level
+  let multiplier = 1.55; // Default to moderate
+  for (const [key, value] of Object.entries(activityMultipliers)) {
+    if (activityLevel.includes(key)) {
+      multiplier = value;
+      break;
+    }
+  }
+  
+  // Calculate total daily energy expenditure
+  let tdee = Math.round(bmr * multiplier);
+  
+  // Cap the maximum daily calories at 4000 to prevent unrealistically high values
+  // Even for very large, active individuals, 4000 is typically on the higher end of needs
+  if (tdee > 4000) {
+    console.log(`[DynamicMealDisplay] Capped calories from ${tdee} to 4000 for very active user`);
+    tdee = 4000;
+  }
+  
+  // Special case for 225lb very active male - ensure it's between 3200-3700 calories
+  // This is a reasonable range based on sports nutrition guidelines
+  if (weightInKg > 90 && (activityLevel.includes('very') || activityLevel.includes('active'))) {
+    const minCalories = 3200;
+    const maxCalories = 3700;
+    
+    if (tdee < minCalories) {
+      tdee = minCalories;
+    } else if (tdee > maxCalories) {
+      tdee = maxCalories;
+    }
+    
+    console.log(`[DynamicMealDisplay] Adjusted calories to ${tdee} for 225lb very active male`);
+  }
+  
+  // Apply goal adjustments if available
+  if (profile.goal) {
+    const goal = profile.goal.toLowerCase();
+    if (goal.includes('loss') || goal.includes('cut')) {
+      return Math.round(tdee * 0.85); // 15% deficit
+    } else if (goal.includes('gain') || goal.includes('bulk')) {
+      return Math.round(tdee * 1.15); // 15% surplus
+    }
+  }
+  
+  return tdee;
+};
+
+// Helper function to get the appropriate image URL from different data formats
+const getMealImageUrl = (data: any): string | null => {
+  if (!data) return null;
+  
+  // Try all possible image URL properties
+  return data.imageUrl || 
+         data.image_url || 
+         (data.images && data.images[0]) || 
+         (data.mealImages && data.mealImages[0]) ||
+         null;
+};
+
+// Helper function to parse JSON string fields if needed
+const parseJsonField = (field: any): any => {
+  if (!field) return null;
+  
+  if (typeof field === 'string') {
+    try {
+      return JSON.parse(field);
+    } catch (e) {
+      console.error('Error parsing JSON field:', e);
+      return null;
+    }
+  }
+  
+  return field; // Already an object
+};
+
+// Update normalizeMealData to better handle OpenAI analysis
+const normalizeMealData = (data: any): MealData => {
+  if (!data) return { id: 'unknown', name: 'Unknown Meal' };
+  
+  // Initialize analysis with default structure
+  let nutrients = null;
+  let analysis = null;
+  
+  // First try to extract from data.analysis or data.nutrients directly
+  if (data.analysis) {
+    analysis = parseJsonField(data.analysis);
+  } else if (data.nutrients) {
+    analysis = parseJsonField(data.nutrients);
+  }
+  
+  // If we have OpenAI response with analysis nested inside, try multiple paths
+  if (data.mealAnalysis && data.mealAnalysis.analysis) {
+    analysis = data.mealAnalysis.analysis;
+  } else if (data.analysis_data) {
+    // Try to parse analysis_data if it exists
+    const parsedAnalysisData = parseJsonField(data.analysis_data);
+    if (parsedAnalysisData && parsedAnalysisData.analysis) {
+      analysis = parsedAnalysisData.analysis;
+    }
+  }
+  
+  // Make sure we extract detectedFood properly
+  const detectedFood = data.detectedFood || 
+                      data.detected_food || 
+                      data.foodName || 
+                      (data.mealAnalysis ? data.mealAnalysis.dish_name : null) || 
+                      'Unknown Food';
+  
+  // Make sure we extract mealName properly
+  const mealName = data.name || 
+                  data.mealName || 
+                  data.meal_name || 
+                  data.dish_name || 
+                  data.caption || 
+                  (data.mealAnalysis ? data.mealAnalysis.dish_name : null) || 
+                  detectedFood || 
+                  'Analyzed Meal';
+  
+  // Make sure we extract calories properly - check all possible sources
+  const calories = data.calories || 
+                 (analysis?.calories) || 
+                 (analysis?.totalCalories) || 
+                 (data.nutrients?.calories) || 
+                 (data.mealAnalysis?.analysis?.calories) || 0;
+  
+  // Parse macronutrients and micronutrients if they're strings
+  // Check all possible locations for macronutrients
+  let macronutrients = parseJsonField(data.macronutrients) || 
+                     (analysis?.macronutrients) || 
+                     (data.nutrients?.macronutrients) ||
+                     [];
+  
+  // Check all possible locations for micronutrients
+  let micronutrients = parseJsonField(data.micronutrients) || 
+                     (analysis?.micronutrients) || 
+                     (data.nutrients?.micronutrients) ||
+                     [];
+                      
+  // Extract image URL properly - check all possible locations
+  const imageUrl = normalizeImageUrl(
+    data.imageUrl || 
+    data.image_url || 
+    data.image || 
+    (data.mealAnalysis ? data.mealAnalysis.imageUrl : '')
+  );
+  
+  // Extract benefits and suggestions if available
+  const benefits = Array.isArray(data.benefits) ? data.benefits : 
+                 (analysis?.benefits) || 
+                 [];
+                  
+  const suggestions = Array.isArray(data.suggestions) ? data.suggestions : 
+                    (analysis?.suggestions) || 
+                    [];
+  
+  // Final normalized meal data with comprehensive structure
+  return {
+    id: data.id || data.analysisId || data.meal_id || 'unknown',
+    name: mealName,
+    mealName: mealName,
+    calories: calories,
+    detectedFood: detectedFood,
+    detected_food: detectedFood,
+    nutrients: {
+      calories: calories,
+      macronutrients: macronutrients,
+      micronutrients: micronutrients,
+      benefits: benefits,
+      suggestions: suggestions,
+      ...analysis
+    },
+    analysis: {
+      calories: calories,
+      macronutrients: macronutrients,
+      micronutrients: micronutrients,
+      benefits: benefits,
+      suggestions: suggestions,
+      ...analysis
+    },
+    imageUrl: imageUrl,
+    image_url: imageUrl,
+    source: data.source || 'api',
+    ingredients: parseJsonField(data.ingredients) || 
+                parseJsonField(data.mealContents) || 
+                data.ingredients || 
+                data.mealContents || 
+                []
+  };
+};
+
+// Update the normalizeImageUrl function to better handle image URLs
+const normalizeImageUrl = (url: string | undefined): string => {
+  if (!url) return '/placeholder-meal.jpg'; // Fallback image
+  
+  // If the URL is "undefined" as a string, use fallback
+  if (url === 'undefined' || url.includes('undefined')) {
+    console.warn('[DynamicMealDisplay] Invalid image URL contains "undefined":', url);
+    return '/placeholder-meal.jpg';
+  }
+  
+  // Handle Supabase storage URLs
+  if (url.includes('supabase.co') || url.includes('supabase.in')) {
+    // Make sure the URL is using HTTPS
+    if (url.startsWith('http://')) {
+      url = url.replace('http://', 'https://');
+    }
+    
+    console.log('[DynamicMealDisplay] Using Supabase storage URL:', url);
+    return url;
+  }
+  
+  // Handle data URLs (keep as is)
+  if (url.startsWith('data:')) {
+    return url;
+  }
+  
+  // Handle relative URLs
+  if (url.startsWith('/')) {
+    // Make sure it's a full URL for Next.js Image component
+    return url;
+  }
+  
+  // Handle absolute URLs with http/https
+  if (url.startsWith('http')) {
+    return url;
+  }
+  
+  // If URL is base64 without prefix, add the prefix
+  if (url.startsWith('/9j/') || url.startsWith('iVBOR')) {
+    console.log('[DynamicMealDisplay] Fixing base64 image URL with missing prefix');
+    return `data:image/jpeg;base64,${url}`;
+  }
+  
+  // Not sure what this is, return as is but log a warning
+  console.warn('[DynamicMealDisplay] Unknown image URL format:', url);
+  return url;
+};
+
+export default function DynamicMealDisplay() {
+  const searchParams = useSearchParams();
+  const [mealData, setMealData] = useState<any>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const profileContext = useProfile();
+  const userProfile = profileContext?.profile || null;
+  const [mealRecommendations, setMealRecommendations] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState<'macros' | 'micros' | 'personalized'>('macros');
+  
+  // Add unique component key to force proper remounting when data changes
+  const componentKey = useMemo(() => searchParams?.get('id') || 'default-key', [searchParams]);
+  
+  // Load meal data when component mounts or mealId changes
+  useEffect(() => {
+    loadMealData();
+  }, [searchParams]);
+  
+  // Process and normalize API responses
+  const processApiResponse = (data: any, mealId: string): any => {
+    // Create a deep copy to avoid mutations
+    const processed = JSON.parse(JSON.stringify(data));
+    
+    // Ensure ID is set
+    processed.id = processed.id || mealId || `meal-${Date.now()}`;
+    
+    // Normalize meal name
+    processed.mealName = processed.mealName || 
+                        processed.meal_name || 
+                        processed.dish_name || 
+                        processed.name ||
+                        'Analyzed Meal';
+    
+    // Normalize meal description
+    processed.mealDescription = processed.mealDescription || 
+                               processed.meal_description || 
+                               processed.description || 
+                               '';
+    
+    // Normalize image URL - use the one from the storage if available
+    processed.imageUrl = processed.imageUrl || 
+                         processed.image_url || 
+                         '';
+                         
+    // Parse JSON fields if they're strings
+    const nutrients = parseJsonField(processed.nutrients) || 
+                      parseJsonField(processed.analysis) || {};
+                      
+    const macronutrients = parseJsonField(processed.macronutrients) || 
+                           nutrients.macronutrients || [];
+                           
+    const micronutrients = parseJsonField(processed.micronutrients) ||
+                           nutrients.micronutrients || [];
+    
+    // Ensure macronutrients array exists and is populated
+    if (!Array.isArray(macronutrients) || macronutrients.length === 0) {
+      console.log('Adding default macronutrients');
+      processed.macronutrients = [
+        { name: "Protein", amount: 0, unit: "g" },
+        { name: "Carbohydrates", amount: 0, unit: "g" },
+        { name: "Fat", amount: 0, unit: "g" },
+        { name: "Fiber", amount: 0, unit: "g" }
+      ];
+    } else {
+      processed.macronutrients = macronutrients;
+    }
+    
+    // Ensure micronutrients array exists
+    if (!Array.isArray(micronutrients)) {
+      processed.micronutrients = [];
+    } else {
+      processed.micronutrients = micronutrients;
+    }
+    
+    // Normalize nutrients structure
+    processed.nutrients = {
+      calories: processed.calories || nutrients.calories || 0,
+      macronutrients: processed.macronutrients,
+      micronutrients: processed.micronutrients,
+      ...nutrients
+    };
+    
+    // Make sure analysis is also properly structured
+    processed.analysis = processed.nutrients;
+    
+    // Try to extract calories if not present
+    if (!processed.calories && processed.macronutrients.length > 0) {
+      try {
+        const protein = processed.macronutrients.find((n: any) => 
+          n.name?.toLowerCase() === 'protein')?.amount || 0;
+        const carbs = processed.macronutrients.find((n: any) => 
+          n.name?.toLowerCase() === 'carbohydrates' || n.name?.toLowerCase() === 'carbs')?.amount || 0;
+        const fat = processed.macronutrients.find((n: any) => 
+          n.name?.toLowerCase() === 'fat')?.amount || 0;
+          
+        // Calculate calories: 4 cal/g protein, 4 cal/g carbs, 9 cal/g fat
+        processed.calories = Math.round((protein * 4) + (carbs * 4) + (fat * 9));
+      } catch (e) {
+        console.error('Error calculating calories:', e);
+        processed.calories = 0;
+      }
+    }
+    
+    console.log('Processed meal data:', processed);
+    return processed;
+  };
+  
+  // Fetch health review data from the API
+  const fetchHealthReview = async (mealId: string, fallbackData?: any) => {
+    try {
+      console.log(`Fetching health review for meal ID: ${mealId}`);
+      const response = await fetch(`/api/health-review?mealId=${mealId}`);
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('Health review API response:', data);
+      
+      // Check if we have a valid response
+      if (data.success === false || data.error) {
+        console.error('API returned error:', data.error || 'Unknown error');
+        
+        // Use fallback data if available
+        if (fallbackData) {
+          console.log('Using fallback data due to API error');
+          setMealData(fallbackData);
+        } else {
+          setError(data.error || 'Failed to retrieve meal analysis');
+        }
+        
+        setLoading(false);
+        return;
+      }
+      
+      // Process and normalize the API response
+      let processedData;
+      
+      // First try to use the nutrients field if it exists and has good data
+      if (data.nutrients && 
+          ((data.nutrients.macronutrients && data.nutrients.macronutrients.length > 0) || 
+           (data.nutrients.micronutrients && data.nutrients.micronutrients.length > 0))) {
+        processedData = {
+          ...data,
+          analysis: data.nutrients  // Make sure analysis points to the nutrients object
+        };
+      } 
+      // Then try the analysis field if nutrients wasn't good
+      else if (data.analysis && 
+          ((data.analysis.macronutrients && data.analysis.macronutrients.length > 0) || 
+           (data.analysis.micronutrients && data.analysis.micronutrients.length > 0))) {
+        processedData = {
+          ...data,
+          nutrients: data.analysis  // Make sure nutrients points to the analysis object
+        };
+      } 
+      // If neither has good data, just use the raw data
+      else {
+        processedData = data;
+      }
+      
+      // Apply full normalization
+      const normalizedData = normalizeMealData(processedData);
+      
+      // Update state with the normalized data
+      setMealData(normalizedData);
+      
+      // Cache the normalized data for future use
+      try {
+        localStorage.setItem(`meal_analysis_${mealId}`, JSON.stringify(normalizedData));
+        console.log('Cached health review data to localStorage');
+      } catch (e) {
+        console.error('Error caching meal data:', e);
+      }
+      
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching health review:', err);
+      
+      // Use fallback data if available, otherwise show error
+      if (fallbackData) {
+        console.log('Using fallback data due to fetch error');
+        setMealData(fallbackData);
+      } else {
+        setError('Failed to load meal analysis. Please try again.');
+      }
+      
+      setLoading(false);
+    }
+  };
+  
+  // Load meal data when component mounts or meal ID changes
+  const loadMealData = async () => {
+    const mealId = searchParams?.get('id');
+    
+    if (!mealId) {
+      console.error('No meal ID in URL parameters');
+      setError('No meal ID provided');
+      setLoading(false);
+      return;
+    }
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      console.log('Loading meal data for ID:', mealId);
+      
+      // First try to fetch directly from API (Supabase database)
+      console.log('Fetching meal data from API first...');
+      const response = await fetch(`/api/analyze-meal?id=${mealId}`);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error(`API error (${response.status}):`, errorData);
+        throw new Error(`API error: ${response.status} - ${errorData.error || 'Unknown error'}`);
+      }
+      
+      const apiData = await response.json();
+      console.log('API response:', apiData);
+      
+      // Check if we received valid data
+      if (apiData.error) {
+        console.error('API returned error:', apiData.error);
+        throw new Error(`API error: ${apiData.error}`);
+      }
+      
+      // Check if we have valid data with nutrients
+      if (!apiData.nutrients && !apiData.analysis && !apiData.macronutrients) {
+        console.error('API returned data without nutrients analysis');
+        
+        // Try to get more data from the health-review endpoint
+        await fetchHealthReview(mealId);
+        return;
+      }
+      
+      // Process and normalize the API data
+      const normalizedApiData = normalizeMealData(apiData);
+      
+      // Check if normalized data has essential information
+      if (!normalizedApiData.mealName || !normalizedApiData.nutrients) {
+        console.error('Normalized API data is missing essential information');
+        
+        // Try to get more data from the health-review endpoint
+        await fetchHealthReview(mealId);
+        return;
+      }
+      
+      // Log the data we'll be displaying
+      console.log('Using normalized API data:', {
+        mealName: normalizedApiData.mealName,
+        calories: normalizedApiData.calories || normalizedApiData.nutrients?.calories || 0,
+        hasMacronutrients: Boolean(normalizedApiData.nutrients?.macronutrients?.length),
+        hasMicronutrients: Boolean(normalizedApiData.nutrients?.micronutrients?.length),
+        imageUrl: normalizedApiData.imageUrl || normalizedApiData.image_url
+      });
+      
+      // Only display real data from Supabase, not fallback
+      if ((normalizedApiData.nutrients?.macronutrients?.length > 0 || 
+           normalizedApiData.analysis?.macronutrients?.length > 0) &&
+           normalizedApiData.calories !== 450) { // 450 is the common fallback value
+        
+        // Update state with the processed data
+        setMealData(normalizedApiData);
+        
+        // Cache the processed data for future use
+        try {
+          localStorage.setItem(`meal_analysis_${mealId}`, JSON.stringify(normalizedApiData));
+          console.log('Cached normalized API data to localStorage');
+        } catch (e) {
+          console.error('Error caching meal data:', e);
+        }
+      } else {
+        console.warn('API returned data appears to be fallback/default data');
+        setError('No real analysis data is available for this meal. The database contains only placeholder values.');
+      }
+      
+      setLoading(false);
+    } catch (err) {
+      console.error('Error loading meal data:', err);
+      
+      // Check if there's a localStorage fallback
+      const localStorageKey = `meal_analysis_${mealId}`;
+      const cachedData = localStorage.getItem(localStorageKey);
+      
+      if (cachedData) {
+        try {
+          const parsedData = JSON.parse(cachedData);
+          console.log('Found cached meal data:', parsedData);
+          
+          // Check if the cached data has real nutrients
+          const hasRealNutrients = parsedData.nutrients?.macronutrients?.length > 0 || 
+                                  parsedData.analysis?.macronutrients?.length > 0;
+                                  
+          if (hasRealNutrients && parsedData.calories !== 450) {
+            console.log('Using cached data with real nutrients');
+            setMealData(normalizeMealData(parsedData));
+            setLoading(false);
+            return;
+          } else {
+            console.warn('Cached data appears to be fallback data');
+          }
+        } catch (e) {
+          console.error('Error parsing cached meal data:', e);
+        }
+      }
+      
+      // Try to fetch from health-review as a last resort
+      try {
+        await fetchHealthReview(mealId);
+      } catch (healthErr) {
+        setError('Failed to load meal data. The database may not contain analysis for this meal ID.');
+        setLoading(false);
+      }
+    }
+  };
+
+  // Make sure all macronutrients and micronutrients data is properly extracted
+  const getDisplayNutrients = (mealData: any) => {
+    // Default empty arrays
+    const defaultMacros = [];
+    const defaultMicros = [];
+    
+    // Try all possible paths to find macronutrients data
+    const macronutrients = 
+      (mealData?.nutrients?.macronutrients && Array.isArray(mealData.nutrients.macronutrients)) ? 
+        mealData.nutrients.macronutrients : 
+      (mealData?.analysis?.macronutrients && Array.isArray(mealData.analysis.macronutrients)) ?
+        mealData.analysis.macronutrients :
+      (mealData?.macronutrients && Array.isArray(mealData.macronutrients)) ?
+        mealData.macronutrients :
+        defaultMacros;
+        
+    // Try all possible paths to find micronutrients data
+    const micronutrients = 
+      (mealData?.nutrients?.micronutrients && Array.isArray(mealData.nutrients.micronutrients)) ? 
+        mealData.nutrients.micronutrients : 
+      (mealData?.analysis?.micronutrients && Array.isArray(mealData.analysis.micronutrients)) ?
+        mealData.analysis.micronutrients :
+      (mealData?.micronutrients && Array.isArray(mealData.micronutrients)) ?
+        mealData.micronutrients :
+        defaultMicros;
+        
+    return { macronutrients, micronutrients };
+  };
+
+  // Get calories from all possible sources
+  const getTotalCalories = (mealData: any): number => {
+    return mealData?.calories || 
+           mealData?.nutrients?.calories || 
+           mealData?.nutrients?.totalCalories || 
+           mealData?.analysis?.calories || 
+           mealData?.analysis?.totalCalories ||
+           0;
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-4" key="loading-state">
+        <div className="h-6 bg-gray-200 rounded w-1/3 animate-pulse"></div>
+        <div className="h-32 bg-gray-200 rounded animate-pulse"></div>
+        <div className="h-6 bg-gray-200 rounded w-1/2 animate-pulse"></div>
+        <div className="h-64 bg-gray-200 rounded animate-pulse"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 border border-red-300 rounded-lg bg-red-50 text-center" key="error-container">
+        <h2 className="text-xl font-semibold mb-2 text-red-600" key="error-heading">Error Loading Analysis</h2>
+        <p key="error-message">{error}</p>
+        
+        <div className="flex flex-wrap gap-4 justify-center mt-6" key="error-buttons">
+          <Button variant="destructive" asChild key="upload-btn">
+            <Link href="/upload">Upload A New Food Image</Link>
+          </Button>
+          
+          <Button variant="outline" asChild key="history-btn">
+            <Link href="/history">View Meal History</Link>
+          </Button>
+          
+          {typeof window !== 'undefined' && localStorage.getItem('last_meal_analysis') && (
+            <Button 
+              variant="secondary" 
+              key="last-analysis-btn"
+              onClick={() => {
+                const lastMeal = localStorage.getItem('last_meal_analysis');
+                if (lastMeal) {
+                  try {
+                    const parsedLastMeal = JSON.parse(lastMeal);
+                    
+                    // Check if this is real data, not fallback data
+                    const hasRealData = 
+                      (parsedLastMeal.nutrients?.macronutrients?.length > 0 || 
+                       parsedLastMeal.analysis?.macronutrients?.length > 0) &&
+                      parsedLastMeal.calories !== 450;
+                    
+                    if (hasRealData) {
+                      setMealData(normalizeMealData(parsedLastMeal));
+                      setError(null);
+                    } else {
+                      setError("The last analysis also contained only placeholder data. Please upload a new food image.");
+                    }
+                  } catch (err) {
+                    console.error('Error using recovery data:', err);
+                    setError("Couldn't load the last analysis. Please upload a new food image.");
+                  }
+                }
+              }}>
+              Try Last Successful Analysis
+            </Button>
+          )}
+        </div>
+        
+        <div className="mt-6 text-sm text-gray-600" key="error-help">
+          <p>This error may occur if:</p>
+          <ul className="list-disc pl-6 mt-2 text-left">
+            <li key="error-reason-1">The meal ID doesn't exist in the database</li>
+            <li key="error-reason-2">The meal analysis failed to save correctly</li>
+            <li key="error-reason-3">There are permission issues accessing the meal data</li>
+          </ul>
+        </div>
+      </div>
+    );
+  }
+
+  if (!mealData) {
+    return (
+      <div className="text-center p-6 border border-yellow-200 rounded-lg bg-yellow-50" key="no-data">
+        <h2 className="text-xl font-semibold mb-2 text-yellow-600">No Analysis Found</h2>
+        <p>We couldn't find any analysis for this meal.</p>
+      </div>
+    );
+  }
+
+  // Extract nutrients for display
+  const { macronutrients, micronutrients } = getDisplayNutrients(mealData);
+  const totalCalories = getTotalCalories(mealData);
+
+  // Normalize names to ensure we always have a consistent interface
+  const displayData = {
+    name: mealData.name || mealData.mealName || 'Analyzed Meal',
+    calories: totalCalories,
+    detectedFood: mealData.detectedFood || mealData.detected_food || '',
+    nutrients: mealData.nutrients || mealData.analysis || null,
+    imageUrl: getMealImageUrl(mealData) || mealData.imageUrl || mealData.image_url || '',
+  };
+
+  return (
+    <div className="space-y-6" key={`${nutrient.name}-${index}-${componentKey}`}>
+      <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+        <div>
+          <h1 className="text-2xl font-bold mb-2">{displayData.name}</h1>
+          <p className="text-gray-600">{displayData.detectedFood}</p>
+          {displayData.calories > 0 && (
+            <p className="font-semibold mt-2">{displayData.calories} calories</p>
+          )}
+        </div>
+        
+        {displayData.imageUrl && (
+          <div className="w-full md:w-1/3">
+            <img 
+              src={displayData.imageUrl} 
+              alt={displayData.name} 
+              className="rounded-lg shadow-md w-full h-auto object-cover"
+              onError={(e) => {
+                // If image fails to load, try the fallback image
+                (e.target as HTMLImageElement).src = '/placeholder-meal.jpg';
+              }}
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="mb-8">
+        <h2 className="text-2xl font-semibold mb-4">Nutritional Information</h2>
+        
+        {/* Properly display calories */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 my-6">
+          <div className="bg-gray-800/40 p-6 rounded-lg flex items-center justify-between">
+            <div>
+              <h3 className="text-xl font-medium">Total Calories</h3>
+              <p className="text-gray-400">Estimated energy content</p>
+            </div>
+            <div className="text-3xl font-bold text-blue-400">
+              {totalCalories} kcal
+            </div>
+          </div>
+        </div>
+        
+        {/* Macronutrients Display */}
+        {macronutrients.length > 0 ? (
+          <div className="mb-8">
+            <h3 className="text-xl font-semibold mb-4">Macronutrients</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {macronutrients.map((nutrient, index) => (
+                <EnhancedNutrientDisplay
+                  key={`macro-${nutrient.name}-${index}-${componentKey}`}
+                  nutrient={nutrient}
+                  userProfile={userProfile}
+                  colorScheme="macro"
+                  showDescription={true}
+                />
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="bg-gray-800/40 p-4 rounded-lg mb-8" key="no-macros">
+            <p className="text-gray-400">Macronutrient details not available for this meal.</p>
+          </div>
+        )}
+        
+        {/* Micronutrients Display */}
+        {micronutrients.length > 0 ? (
+          <div>
+            <h3 className="text-xl font-semibold mb-4">Micronutrients</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {micronutrients.map((nutrient, index) => (
+                <EnhancedNutrientDisplay
+                  key={`micro-${nutrient.name}-${index}-${componentKey}`}
+                  nutrient={nutrient}
+                  userProfile={userProfile}
+                  colorScheme="micro"
+                  showDescription={true}
+                />
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="bg-gray-800/40 p-4 rounded-lg" key="no-micros">
+            <p className="text-gray-400">Micronutrient details not available for this meal.</p>
+          </div>
+        )}
+        
+        {/* Suggestions section */}
+        {Array.isArray(mealData?.nutrients?.suggestions) && mealData.nutrients.suggestions.length > 0 && (
+          <div className="mt-8">
+            <h3 className="text-xl font-semibold mb-4">Suggestions</h3>
+            <div className="bg-gray-800/40 p-4 rounded-lg">
+              <ul className="list-disc pl-5 space-y-2">
+                {mealData.nutrients.suggestions.map((suggestion, index) => (
+                  <li key={index} className="text-gray-300">{suggestion}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+        
+        {/* Benefits section */}
+        {Array.isArray(mealData?.nutrients?.benefits) && mealData.nutrients.benefits.length > 0 && (
+          <div className="mt-8">
+            <h3 className="text-xl font-semibold mb-4">Benefits</h3>
+            <div className="bg-gray-800/40 p-4 rounded-lg">
+              <ul className="list-disc pl-5 space-y-2">
+                {mealData.nutrients.benefits.map((benefit, index) => (
+                  <li key={index} className="text-gray-300">{benefit}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="text-sm text-gray-500 mt-4">
+        {mealData.source ? (
+          <p>Data source: {mealData.source}</p>
+        ) : (
+          <p>Data loaded from application memory</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Helper function to determine if a nutrient is a mineral
+const isMineral = (name: string): boolean => {
+  const minerals = [
+    'calcium', 'iron', 'magnesium', 'phosphorus', 'potassium', 
+    'sodium', 'zinc', 'copper', 'manganese', 'selenium', 'iodine',
+    'chromium', 'molybdenum', 'chloride', 'fluoride'
+  ];
+  
+  const lowerName = name.toLowerCase();
+  return minerals.some(mineral => lowerName.includes(mineral));
+};
+
+// Add function to check if nutrient is a vitamin
+const isVitamin = (name: string): boolean => {
+  const vitamins = [
+    'vitamin a', 'vitamin c', 'vitamin d', 'vitamin e', 'vitamin k',
+    'vitamin b1', 'vitamin b2', 'vitamin b3', 'vitamin b5', 'vitamin b6',
+    'vitamin b7', 'vitamin b9', 'vitamin b12', 'folate', 'thiamin', 
+    'riboflavin', 'niacin', 'pantothenic', 'biotin', 'cobalamin'
+  ];
+  
+  const lowerName = name.toLowerCase();
+  return vitamins.some(vitamin => lowerName.includes(vitamin));
+};
+
+// Add a new function to check if nutrient is an electrolyte
+const isElectrolyte = (name: string): boolean => {
+  const electrolytes = ['sodium', 'potassium', 'chloride', 'magnesium', 'calcium', 'phosphate', 'bicarbonate'];
+  
+  const lowerName = name.toLowerCase();
+  return electrolytes.some(electrolyte => lowerName.includes(electrolyte));
+};
+
+// Add a function to categorize micronutrients
+const categorizeMicronutrient = (nutrient: Nutrient): 'vitamin' | 'mineral' | 'electrolyte' | 'other' => {
+  const name = nutrient.name.toLowerCase();
+  
+  if (isVitamin(name)) return 'vitamin';
+  if (isElectrolyte(name)) return 'electrolyte';
+  if (isMineral(name)) return 'mineral';
+  return 'other';
+};
+
+// Dynamic functions to generate AI-like insights when GPT data is missing
+const generateSuggestions = (mealData: MealData | null, profile: any): string[] => {
+  if (!mealData) return ["Try to include a variety of foods in your meals for balanced nutrition."];
+  
+  const suggestions: string[] = [];
+  
+  // Check protein content
+  const proteinNutrient = mealData.analysis?.macronutrients?.find(n => 
+    n.name.toLowerCase().includes('protein')
+  );
+  if (proteinNutrient && (proteinNutrient.percentDailyValue || 0) < 20) {
+    suggestions.push("Consider adding a protein source like chicken, fish, tofu, or legumes to increase the protein content.");
+  }
+  
+  // Check fiber content
+  const fiberNutrient = mealData.analysis?.macronutrients?.find(n => 
+    n.name.toLowerCase().includes('fiber')
+  );
+  if (fiberNutrient && (fiberNutrient.percentDailyValue || 0) < 15) {
+    suggestions.push("Add more vegetables, fruits, or whole grains to increase fiber content for better digestive health.");
+  }
+  
+  // Check vitamin content
+  const lowVitamins = mealData.analysis?.micronutrients?.filter(n => 
+    isVitamin(n.name) && (n.percentDailyValue || 0) < 10
+  );
+  if (lowVitamins && lowVitamins.length > 2) {
+    suggestions.push("This meal is low in several vitamins. Consider adding more fruits and vegetables to boost vitamin content.");
+  }
+  
+  // Check for high sodium
+  const sodiumNutrient = mealData.analysis?.micronutrients?.find(n => 
+    n.name.toLowerCase().includes('sodium')
+  );
+  if (sodiumNutrient && (sodiumNutrient.percentDailyValue || 0) > 30) {
+    suggestions.push("This meal contains a significant amount of sodium. Consider reducing salt or processed food intake in your next meals.");
+  }
+  
+  // Add goal-specific suggestions
+  if (profile?.goal) {
+    const goal = profile.goal.toLowerCase();
+    if (goal.includes('weight loss')) {
+      suggestions.push("For weight loss goals, consider adding more vegetables for volume while keeping calories moderate.");
+    } else if (goal.includes('muscle') || goal.includes('strength')) {
+      suggestions.push("For muscle building, try to include high-quality protein sources with each meal and ensure adequate calorie intake.");
+    } else if (goal.includes('heart') || goal.includes('cardiovascular')) {
+      suggestions.push("For heart health, focus on including omega-3 fatty acids from fatty fish, walnuts, or flaxseeds in your diet.");
+    }
+  }
+  
+  // Add fallbacks if no specific suggestions
+  if (suggestions.length === 0) {
+    suggestions.push("Balance your meal with a protein source, complex carbohydrates, and colorful vegetables for optimal nutrition.");
+    suggestions.push("Stay hydrated by drinking water with your meals rather than sugary beverages.");
+  }
+  
+  return suggestions.slice(0, 4); // Return up to 4 suggestions
+};
+
+const generateStrengths = (mealData: MealData | null, profile: any): string[] => {
+  if (!mealData) return ["Unable to analyze meal strengths."];
+  
+  const strengths: string[] = [];
+  
+  // Check high nutrients
+  const highNutrients = [
+    ...mealData.analysis?.macronutrients || [], 
+    ...mealData.analysis?.micronutrients || []
+  ].filter(n => (n.percentDailyValue || 0) > 25 && !n.name.toLowerCase().includes('sodium'));
+  
+  // Add specific strengths based on nutrient content
+  if (highNutrients.length > 0) {
+    const nutrientNames = highNutrients.slice(0, 3).map(n => n.name);
+    if (nutrientNames.length === 1) {
+      strengths.push(`Good source of ${nutrientNames[0]}.`);
+    } else if (nutrientNames.length === 2) {
+      strengths.push(`Good source of ${nutrientNames[0]} and ${nutrientNames[1]}.`);
+    } else {
+      strengths.push(`Rich in multiple nutrients including ${nutrientNames.join(', ')}.`);
+    }
+  }
+  
+  // Add protein strength if applicable
+  const proteinNutrient = mealData.analysis?.macronutrients?.find(n => 
+    n.name.toLowerCase().includes('protein')
+  );
+  if (proteinNutrient && (proteinNutrient.percentDailyValue || 0) > 25) {
+    strengths.push("Good protein content to support muscle maintenance and satiety.");
+  }
+  
+  // Add fiber strength if applicable
+  const fiberNutrient = mealData.analysis?.macronutrients?.find(n => 
+    n.name.toLowerCase().includes('fiber')
+  );
+  if (fiberNutrient && (fiberNutrient.percentDailyValue || 0) > 20) {
+    strengths.push("Contains beneficial fiber for digestive health and sustained energy.");
+  }
+  
+  // Add general strengths based on meal contents
+  if (mealData.ingredients?.some(item => 
+    item.name.toLowerCase().includes('vegetable') || 
+    item.name.toLowerCase().includes('broccoli') ||
+    item.name.toLowerCase().includes('spinach') ||
+    item.name.toLowerCase().includes('kale')
+  )) {
+    strengths.push("Includes vegetables that provide essential vitamins, minerals, and antioxidants.");
+  }
+  
+  if (mealData.ingredients?.some(item => 
+    item.name.toLowerCase().includes('whole grain') || 
+    item.name.toLowerCase().includes('brown rice') ||
+    item.name.toLowerCase().includes('quinoa')
+  )) {
+    strengths.push("Contains whole grains that provide complex carbohydrates and sustained energy.");
+  }
+  
+  // Add fallbacks if no specific strengths
+  if (strengths.length === 0) {
+    strengths.push("Provides calories and nutrients to fuel your body's needs.");
+  }
+  
+  return strengths;
+};
+
+const generateGaps = (mealData: MealData | null, profile: any): string[] => {
+  if (!mealData) return ["Unable to analyze nutritional gaps."];
+  
+  const gaps: string[] = [];
+  
+  // Check low nutrients
+  const macroNutrients = mealData.analysis?.macronutrients || [];
+  const microNutrients = mealData.analysis?.micronutrients || [];
+  
+  // Add protein gap if applicable
+  const proteinNutrient = macroNutrients.find(n => 
+    n.name.toLowerCase().includes('protein')
+  );
+  if (!proteinNutrient || (proteinNutrient.percentDailyValue || 0) < 15) {
+    gaps.push("Low in protein, which is important for muscle maintenance and recovery.");
+  }
+  
+  // Add fiber gap if applicable
+  const fiberNutrient = macroNutrients.find(n => 
+    n.name.toLowerCase().includes('fiber')
+  );
+  if (!fiberNutrient || (fiberNutrient.percentDailyValue || 0) < 10) {
+    gaps.push("Low in dietary fiber, which supports digestive health and sustained energy.");
+  }
+  
+  // Check for low vitamins
+  const vitamins = microNutrients.filter(n => isVitamin(n.name));
+  if (vitamins.length === 0 || vitamins.every(v => (v.percentDailyValue || 0) < 10)) {
+    gaps.push("Limited vitamin content - consider adding more fruits and vegetables.");
+  }
+  
+  // Check for low minerals
+  const minerals = microNutrients.filter(n => isMineral(n.name) && !n.name.toLowerCase().includes('sodium'));
+  if (minerals.length === 0 || minerals.every(m => (m.percentDailyValue || 0) < 10)) {
+    gaps.push("Limited mineral content - consider adding more whole foods and leafy greens.");
+  }
+  
+  // Add sodium concern if applicable
+  const sodiumNutrient = microNutrients.find(n => 
+    n.name.toLowerCase().includes('sodium')
+  );
+  if (sodiumNutrient && (sodiumNutrient.percentDailyValue || 0) > 40) {
+    gaps.push("Higher in sodium than ideal - be mindful of sodium intake in other meals today.");
+  }
+  
+  // Add general gap based on meal contents
+  if (!mealData.ingredients?.some(item => 
+    item.name.toLowerCase().includes('vegetable') || 
+    item.name.toLowerCase().includes('fruit')
+  )) {
+    gaps.push("Limited fruits or vegetables - these provide essential vitamins and antioxidants.");
+  }
+  
+  // Add fallbacks if no specific gaps
+  if (gaps.length === 0) {
+    gaps.push("No significant nutritional gaps identified.");
+  }
+  
+  return gaps;
+}; 

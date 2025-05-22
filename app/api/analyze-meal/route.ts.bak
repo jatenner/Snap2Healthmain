@@ -1,0 +1,1955 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { saveMealToHistory } from '@/lib/meal-data';
+import { v4 as uuidv4 } from 'uuid';
+import { REALISTIC_MEAL_DATA } from './mock-data';
+import OpenAI from 'openai';
+import crypto from 'crypto';
+import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'crypto';
+import { Database } from '@/types/supabase';
+import { calculateDVPercent } from '@/lib/profile-utils';
+import { SupabaseClient } from '@supabase/supabase-js';
+import { safeUpdateProgress } from '@/lib/api-helpers';
+
+/**
+ * IMPORTANT: This file was causing a 'setUploadProgress is not defined' reference error
+ * in the POST function (around line 1793). This was happening because:
+ * 
+ * 1. The server-side API code was trying to call setUploadProgress directly 
+ * 2. This function only exists in the client-side browser context
+ * 3. When running server-side in the API route, the function doesn't exist
+ * 
+ * The fix is to:
+ * 1. Use safeUpdateProgress from api-helpers.ts instead of direct calls
+ * 2. Remove references to direct setUploadProgress calls
+ * 3. Ensure client-side scripts (fix-upload-progress.js and fix-all-routes.js) 
+ *    provide a global fallback on the client side
+ */
+
+// Safe progress update function for server-side
+// function safeServerProgress(message) {
+//   try {
+//     console.log(`[API Progress] ${message}`);
+//     // In server context, setUploadProgress doesn't exist
+//   } catch (e) {
+//     // Silently handle any errors
+//   }
+// }
+
+// Simple user profile utility function to replace the missing import
+const getUserProfile = async (userId: string) => {
+  try {
+    // Get Supabase client
+    const cookieStore = cookies();
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    
+    // First check the profiles table
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+      
+    if (profileError && profileError.code !== 'PGRST116') { // Not found error is ok
+      console.error('Error fetching profile data from table:', profileError);
+    }
+    
+    // Also get user metadata from auth table
+    const { data: userData, error: userError } = await supabase.auth.getUser(userId);
+    
+    if (userError) {
+      console.error('Error fetching user metadata:', userError);
+    }
+    
+    // Combine user metadata and profile data with defaults
+    const defaultProfileValues = {
+      age: 35,
+      gender: 'not-specified',
+      height: '5\'10"',
+      weight: 70,
+      dietaryPreferences: null,
+      healthGoals: 'General Wellness',
+      activityLevel: 'Moderate',
+    };
+    
+    const userMetadata = userData?.user?.user_metadata || {};
+    const profile = profileData || {};
+    
+    const combinedProfile = {
+      ...defaultProfileValues,
+      ...profile,
+      ...userMetadata,
+    };
+    
+    console.log('Retrieved combined user profile:', {
+      hasAge: !!combinedProfile.age,
+      hasGender: !!combinedProfile.gender,
+      hasHeight: !!combinedProfile.height,
+      hasWeight: !!combinedProfile.weight,
+      healthGoals: combinedProfile.healthGoals || combinedProfile.defaultGoal || 'General Wellness',
+    });
+    
+    return combinedProfile;
+  } catch (error) {
+    console.error('Exception in getUserProfile:', error);
+    return null;
+  }
+};
+
+// Customize fallback meal based on health goal
+function getCustomizedFallbackMeal(goal: string, imageUrl: string, userProfile: any): AnalysisResult {
+  // Use the mock data as a base
+  const mockData = REALISTIC_MEAL_DATA;
+  
+  // Ensure we have a valid imageUrl
+  const validImageUrl = imageUrl || 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+  
+  // Create a properly structured result matching the AnalysisResult interface
+  const result: AnalysisResult = {
+    imageUrl: validImageUrl,
+    mealName: mockData.caption,
+    goal: goal || "General Wellness",
+    mealDescription: mockData.caption,
+    mealContents: mockData.foodItems.map(item => ({ name: item.name })),
+    ingredients: mockData.foodItems,
+    analysis: {
+      calories: mockData.analysis.totalCalories,
+      totalCalories: mockData.analysis.totalCalories,
+      macronutrients: mockData.analysis.macronutrients.map(macro => ({
+        name: macro.name,
+        amount: macro.amount,
+        unit: macro.unit,
+        percentDailyValue: macro.dailyValuePercent,
+        description: `${macro.name} provides ${macro.dailyValuePercent}% of daily needs`
+      })),
+      micronutrients: mockData.analysis.micronutrients.map(micro => ({
+        name: micro.name,
+        amount: micro.amount,
+        unit: micro.unit,
+        percentDailyValue: micro.dailyValuePercent,
+        description: `${micro.name} provides ${micro.dailyValuePercent}% of daily needs`
+      })),
+      phytonutrients: [],
+      benefits: mockData.analysis.benefits,
+      concerns: mockData.analysis.concerns
+    },
+    benefits: mockData.analysis.benefits,
+    concerns: mockData.analysis.concerns,
+    suggestions: mockData.analysis.suggestions,
+    isEstimated: true,
+    success: true
+  };
+
+  console.log('[FALLBACK] Personalizing meal data based on user profile:', {
+    goal: userProfile?.healthGoals || goal,
+    age: userProfile?.age,
+    sex: userProfile?.gender,
+    weight: userProfile?.weight
+  });
+
+  return result;
+}
+
+// Group micronutrients for better organization
+function categorizeMicronutrients(micronutrients) {
+  const categories = {
+    "Vitamins": [],
+    "Minerals": [],
+    "Antioxidants": [],
+    "Essential Fatty Acids": []
+  };
+  
+  if (!micronutrients || !Array.isArray(micronutrients)) {
+    console.warn('[API] Micronutrients is not a valid array:', typeof micronutrients);
+    return categories;
+  }
+  
+  micronutrients.forEach(nutrient => {
+    if (!nutrient || typeof nutrient !== 'object' || !nutrient.name) {
+      console.warn('[API] Invalid nutrient object in micronutrients array:', nutrient);
+      return; // Skip this item
+    }
+    
+    const name = nutrient.name.toLowerCase();
+    
+    if (name.includes('vitamin')) {
+      categories["Vitamins"].push(nutrient);
+    } else if (
+      name.includes('calcium') || 
+      name.includes('iron') || 
+      name.includes('zinc') || 
+      name.includes('magnesium') || 
+      name.includes('potassium') || 
+      name.includes('sodium') || 
+      name.includes('selenium') || 
+      name.includes('copper') || 
+      name.includes('manganese') || 
+      name.includes('phosphorus') || 
+      name.includes('iodine')
+    ) {
+      categories["Minerals"].push(nutrient);
+    } else if (
+      name.includes('flavonoid') || 
+      name.includes('carotenoid') || 
+      name.includes('lycopene') || 
+      name.includes('lutein') || 
+      name.includes('resveratrol') || 
+      name.includes('anthocyanin') || 
+      name.includes('polyphenol')
+    ) {
+      categories["Antioxidants"].push(nutrient);
+    } else if (
+      name.includes('omega') || 
+      name.includes('dha') || 
+      name.includes('epa') || 
+      name.includes('ala') || 
+      name.includes('fatty acid')
+    ) {
+      categories["Essential Fatty Acids"].push(nutrient);
+    } else {
+      // Default to vitamins if we can't categorize
+      categories["Vitamins"].push(nutrient);
+    }
+  });
+  
+  // Remove empty categories
+  Object.keys(categories).forEach(key => {
+    if (categories[key].length === 0) {
+      delete categories[key];
+    }
+  });
+  
+  return categories;
+}
+
+// Calculate personalized daily nutrient targets based on user profile
+function calculatePersonalizedDailyValues(profile: any) {
+  if (!profile) {
+    return {
+      // Default values for a moderately active adult
+      calories: 2000,
+      protein: { grams: 50, dv_percent: 100 },
+      fat: { grams: 65, dv_percent: 100 },
+      carbohydrates: { grams: 300, dv_percent: 100 },
+      fiber: { grams: 28, dv_percent: 100 },
+      vitaminA: { mcg: 900, dv_percent: 100 },
+      vitaminC: { mg: 90, dv_percent: 100 },
+      calcium: { mg: 1300, dv_percent: 100 },
+      iron: { mg: 18, dv_percent: 100 },
+      potassium: { mg: 4700, dv_percent: 100 }
+    };
+  }
+  
+  // Extract basic profile information
+  const gender = profile.gender?.toLowerCase() || 'not-specified';
+  const age = profile.age || 35;
+  const weightKg = profile.weight || 70; // Default to 70kg if not specified
+  const heightCm = profile.height || 170; // Default to 170cm if not specified
+  const activityLevel = profile.activity_level?.toLowerCase() || profile.activityLevel?.toLowerCase() || 'moderate';
+  const goal = profile.goal?.toLowerCase() || 'general wellness';
+  
+  // Calculate BMR using Mifflin-St Jeor Equation
+  let bmr = 0;
+  if (gender === 'male') {
+    bmr = 10 * weightKg + 6.25 * heightCm - 5 * age + 5;
+  } else if (gender === 'female') {
+    bmr = 10 * weightKg + 6.25 * heightCm - 5 * age - 161;
+  } else {
+    // For non-binary or unspecified, take the average
+    const maleBmr = 10 * weightKg + 6.25 * heightCm - 5 * age + 5;
+    const femaleBmr = 10 * weightKg + 6.25 * heightCm - 5 * age - 161;
+    bmr = (maleBmr + femaleBmr) / 2;
+  }
+  
+  // Activity level multipliers
+  const activityMultipliers = {
+    'sedentary': 1.2,
+    'light': 1.375,
+    'moderate': 1.55,
+    'active': 1.725,
+    'very active': 1.9
+  };
+  
+  // Find the closest matching activity level
+  let activityMultiplier = 1.55; // Default to moderate
+  Object.entries(activityMultipliers).forEach(([level, multiplier]) => {
+    if (activityLevel.includes(level)) {
+      activityMultiplier = multiplier;
+    }
+  });
+  
+  // Calculate daily calorie needs
+  let dailyCalories = Math.round(bmr * activityMultiplier);
+  
+  // Adjust calories based on goal
+  if (goal.includes('weight loss') || goal.includes('lose weight')) {
+    dailyCalories = Math.round(dailyCalories * 0.85); // 15% deficit
+  } else if (goal.includes('gain') || goal.includes('muscle') || goal.includes('bulk')) {
+    dailyCalories = Math.round(dailyCalories * 1.1); // 10% surplus
+  }
+  
+  // Calculate macronutrient distribution based on goal
+  let proteinRatio = 0.2; // 20% of calories from protein
+  let fatRatio = 0.3;     // 30% of calories from fat
+  let carbRatio = 0.5;    // 50% of calories from carbs
+  
+  // Adjust macro ratios based on goal
+  if (goal.includes('muscle') || goal.includes('strength') || goal.includes('athletic')) {
+    proteinRatio = 0.3;  // Higher protein for muscle building
+    carbRatio = 0.45;    // Moderate carbs
+    fatRatio = 0.25;     // Lower fat
+  } else if (goal.includes('keto') || goal.includes('low carb')) {
+    proteinRatio = 0.3;  // Moderate protein
+    fatRatio = 0.6;      // High fat
+    carbRatio = 0.1;     // Very low carb
+  } else if (goal.includes('endurance') || goal.includes('cardio') || goal.includes('running')) {
+    carbRatio = 0.6;     // Higher carbs for endurance
+    proteinRatio = 0.2;  // Moderate protein
+    fatRatio = 0.2;      // Lower fat
+  }
+  
+  // Calculate grams per macronutrient
+  // Protein & carbs = 4 calories per gram, fat = 9 calories per gram
+  const proteinGrams = Math.round((dailyCalories * proteinRatio) / 4);
+  const carbGrams = Math.round((dailyCalories * carbRatio) / 4);
+  const fatGrams = Math.round((dailyCalories * fatRatio) / 9);
+  
+  // Calculate fiber based on calorie intake (14g per 1000 calories is a good guideline)
+  const fiberGrams = Math.round((dailyCalories / 1000) * 14);
+  
+  // Vitamins and minerals - adjust based on age & gender
+  // These are simplified and should be replaced with more detailed calculations
+  // based on national dietary guidelines for different demographics
+  
+  // Base values
+  let vitaminA = 900; // mcg RAE
+  let vitaminC = 90;  // mg
+  let calcium = 1000; // mg
+  let iron = 18;      // mg
+  let potassium = 4700; // mg
+  
+  // Adjust for gender differences
+  if (gender === 'female') {
+    vitaminA = 700;  // Women generally need less vitamin A
+    vitaminC = 75;   // Women generally need less vitamin C
+    iron = 18;       // Women generally need more iron (especially in childbearing years)
+  } else if (gender === 'male') {
+    iron = 8;        // Men need less iron
+  }
+  
+  // Adjust for age
+  if (age > 50) {
+    calcium = 1200;  // Older adults need more calcium
+    // No need to set vitaminD, it's not in our return object
+  } else if (age < 19) {
+    calcium = 1300;  // Teenagers need more calcium
+  }
+  
+  return {
+    calories: dailyCalories,
+    protein: { grams: proteinGrams, dv_percent: 100 },
+    carbohydrates: { grams: carbGrams, dv_percent: 100 },
+    fat: { grams: fatGrams, dv_percent: 100 },
+    fiber: { grams: fiberGrams, dv_percent: 100 },
+    vitaminA: { mcg: vitaminA, dv_percent: 100 },
+    vitaminC: { mg: vitaminC, dv_percent: 100 },
+    calcium: { mg: calcium, dv_percent: 100 },
+    iron: { mg: iron, dv_percent: 100 },
+    potassium: { mg: potassium, dv_percent: 100 }
+  };
+}
+
+// Interface for the analysis result
+interface AnalysisResult {
+  id?: string;               // ID for the analysis record
+  imageUrl: string;
+  mealName: string;
+  goal: string;
+  mealDescription?: string;
+  mealContents: Array<{name: string}>;
+  ingredients: Array<{name: string; portion?: string; calories?: number}>;
+  analysis: {
+    calories: number;
+    totalCalories: number;
+    macronutrients: Array<{
+      name: string;
+      amount: number;
+      unit: string;
+      percentDailyValue?: number;
+      description?: string;
+    }>;
+    micronutrients: Array<{
+      name: string;
+      amount: number;
+      unit: string;
+      percentDailyValue?: number;
+      description?: string;
+    }>;
+    phytonutrients?: Array<{
+      name: string;
+      amount: number;
+      unit: string;
+      percentDailyValue?: number;
+      description?: string;
+    }>;
+    benefits?: string[];
+    concerns?: string[];
+  };
+  benefits?: string[];
+  concerns?: string[];
+  suggestions?: string[];
+  userProfile?: any;
+  isEstimated?: boolean;
+  success?: boolean;
+  foodName?: string;    // Specifically detected food name from OpenAI
+  detectedFood?: string; // Alternative field for frontend compatibility
+  error?: string;        // Error message if analysis failed
+  errorDetails?: string; // Detailed error information
+  isFallback?: boolean;  // Flag to indicate if this is fallback data
+}
+
+// Add a flag to enable development mode (bypass OpenAI calls)
+const DEVELOPMENT_MODE = false; // Always use OpenAI API
+
+// Declaration for analysisResult at the right scope
+let analysisResult: AnalysisResult | null = null;
+
+// Helper function to sanitize OpenAI JSON response
+function sanitizeOpenAIJsonResponse(content: string): string {
+  // Remove any markdown formatting or code blocks
+  let cleaned = content;
+  
+  // Remove markdown code blocks if present
+  cleaned = cleaned.replace(/```json\s+/g, '');
+  cleaned = cleaned.replace(/```\s*$/g, '');
+  cleaned = cleaned.replace(/```/g, '');
+  
+  // Remove any explanatory text before or after the JSON
+  const jsonStartIndex = cleaned.indexOf('{');
+  const jsonEndIndex = cleaned.lastIndexOf('}');
+  
+  if (jsonStartIndex !== -1 && jsonEndIndex !== -1) {
+    cleaned = cleaned.substring(jsonStartIndex, jsonEndIndex + 1);
+  }
+  
+  return cleaned;
+}
+
+// Add a function to safely store the analysis data in cookies
+function storeAnalysisResult(analysisId: string, data: any, response: NextResponse): NextResponse {
+  try {
+    // Store the analysis result in cookies for client-side access (not using localStorage directly)
+    const sanitizedResult = JSON.stringify(data);
+    
+    // Store in multiple cookies for redundancy
+    response.cookies.set({
+      name: 'meal_analysis_data',
+      value: sanitizedResult,
+      maxAge: 60 * 30, // 30 minutes
+      path: '/'
+    });
+    
+    response.cookies.set({
+      name: `meal_analysis_${analysisId}`,
+      value: sanitizedResult,
+      maxAge: 60 * 30, // 30 minutes
+      path: '/'
+    });
+    
+    return response;
+  } catch (error) {
+    console.error('Error storing analysis result:', error);
+    return response;
+  }
+}
+
+// Helper function to safely check if we're in a browser environment
+function isBrowser(): boolean {
+  return typeof window !== 'undefined' && typeof window.document !== 'undefined';
+}
+
+// Export GET handler with improved error handling
+export async function GET(request: NextRequest) {
+  try {
+    // Get the URL query parameters
+    const url = new URL(request.url);
+    const searchParams = url.searchParams;
+    const queryId = searchParams.get('id') || 'unknown';
+    
+    console.log(`[API GET] Received request for meal ID: ${queryId}`);
+    
+    // Initialize the database client
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    // Get the user ID from the session
+    const userId = await getUserId(request);
+    
+    // Query the database for the meal
+    console.log(`[API GET] Attempting to fetch meal from database with queryId: ${queryId}`);
+    
+    try {
+      const { data: mealData, error } = await supabase
+        .from('meal_analyses')
+        .select('*')
+        .eq('id', queryId)
+        .single();
+      
+      if (error) {
+        console.log(`[API GET] Error fetching meal_id ${queryId}:`, error);
+        
+        // Try a backup query
+        try {
+          console.log(`[API GET] Meal not found in meal_analyses table, checking alternative tables: ${queryId}`);
+          
+          // Try alternative query
+          const { data: backupData, error: backupError } = await supabase
+            .from('meals')  // Try an alternative table if it exists
+            .select('*')
+            .eq('id', queryId)
+            .single();
+            
+          if (backupError) {
+            console.log(`[API GET] Backup query also failed for ID: ${queryId}, error:`, backupError.message);
+            
+            // If the ID is in the format "meal-timestamp", it's likely a legacy format
+            // In this case, provide a basic fallback response
+            if (queryId.startsWith('meal-')) {
+              console.log(`[API GET] Legacy meal ID format detected, providing a basic fallback response`);
+              
+              // Check localStorage only in browser
+              if (isBrowser()) {
+                // Try to look for this meal ID in localStorage
+                const localData = localStorage.getItem(`meal_analysis_${queryId}`);
+                if (localData) {
+                  try {
+                    const parsedLocalData = JSON.parse(localData);
+                    return Response.json(parsedLocalData);
+                  } catch (parseError) {
+                    console.error('[API GET] Error parsing localStorage data:', parseError);
+                  }
+                }
+              }
+              
+              // Create a basic fallback response
+              return Response.json({
+                id: queryId,
+                name: "Analyzed Meal",
+                mealName: "Analyzed Meal",
+                detected_food: "Food Item",
+                calories: 450,
+                analysis: {
+                  calories: 450,
+                  macronutrients: [
+                    { name: "Protein", amount: 20, unit: "g", percentDailyValue: 40 },
+                    { name: "Carbohydrates", amount: 40, unit: "g", percentDailyValue: 13 },
+                    { name: "Fat", amount: 15, unit: "g", percentDailyValue: 19 },
+                    { name: "Fiber", amount: 5, unit: "g", percentDailyValue: 18 }
+                  ],
+                  micronutrients: [
+                    { name: "Vitamin A", amount: 300, unit: "IU", percentDailyValue: 10 },
+                    { name: "Vitamin C", amount: 15, unit: "mg", percentDailyValue: 25 },
+                    { name: "Calcium", amount: 150, unit: "mg", percentDailyValue: 15 },
+                    { name: "Iron", amount: 2, unit: "mg", percentDailyValue: 10 }
+                  ]
+                },
+                fallback: true,
+                legacy_id: true
+              });
+            }
+            
+            return Response.json({ error: "Meal not found", success: false }, { status: 404 });
+          }
+          
+          return Response.json(backupData);
+        } catch (alternativeErr) {
+          console.error('[API GET] Error in backup query:', alternativeErr);
+          return Response.json({ error: "Meal not found", success: false }, { status: 404 });
+        }
+      }
+      
+      return Response.json(mealData);
+    } catch (dbError) {
+      console.error('[API GET] Database error:', dbError);
+      
+      // Attempt to sync from localStorage but only in browser
+      console.log(`[API GET] Meal not found in database, attempting to sync from localStorage: ${queryId}`);
+      
+      if (isBrowser()) {
+        try {
+          const localData = localStorage.getItem(`meal_analysis_${queryId}`);
+          if (localData) {
+            const parsedData = JSON.parse(localData);
+            // If we have valid local data, return it
+            if (parsedData && parsedData.id) {
+              return Response.json(parsedData);
+            }
+          }
+        } catch (localError) {
+          console.error('[API GET] Error retrieving from localStorage:', localError);
+        }
+      }
+      
+      return Response.json({ error: "Meal not found", success: false }, { status: 404 });
+    }
+  } catch (err: any) {
+    console.error('[API GET] Unexpected error:', err);
+    return Response.json({ error: err.message || "Unknown error", success: false }, { status: 500 });
+  }
+}
+
+// Helper to parse JSONB fields that might be strings or objects
+function parseJsonField(field: any): any {
+  if (!field) return null;
+  
+  if (typeof field === 'string') {
+    try {
+      return JSON.parse(field);
+    } catch {
+      return field;
+    }
+  }
+  
+  return field;
+}
+
+// Upload to Supabase storage
+const uploadImageToSupabase = async (
+  decodedImage: Buffer, 
+  fileName: string,
+  contentType: string,
+  userId: string | null,
+  supabaseClient: any
+): Promise<string | null> => {
+  console.log('Starting Supabase storage upload process...');
+  
+  try {
+    console.log(`Decoded image: ${decodedImage.length} bytes, type: ${contentType}`);
+    
+    // Make sure we have a valid file extension
+    if (!fileName.includes('.')) {
+      fileName = `${fileName}.jpeg`;
+    }
+    
+    // Generate a safe file name with timestamp to avoid collisions
+    const timestamp = Date.now();
+    let safeName = fileName.replace(/[^a-zA-Z0-9.]/g, '');
+    safeName = `${timestamp}-${safeName}${crypto.randomBytes(4).toString('hex')}.jpeg`;
+    
+    // Use user-specific path if authenticated, otherwise use anonymous folder
+    let storagePath: string;
+    if (userId) {
+      // User is authenticated - store in their folder
+      storagePath = `users/${userId}/${safeName}`;
+      console.log(`[Storage] Using authenticated user path for userId: ${userId}`);
+    } else {
+      // Anonymous user - store in anonymous folder with timestamp to organize
+      storagePath = `anonymous/${timestamp}/${safeName}`;
+      console.log('[Storage] Using anonymous path since no authenticated user was found');
+    }
+    
+    console.log(`Uploading to Supabase path: ${storagePath}`);
+    console.log(`Storage path used: ${storagePath}`);
+    
+    // Upload the file to Supabase Storage
+    const { data, error } = await supabaseClient.storage
+      .from('meal-images')
+      .upload(storagePath, decodedImage, {
+        contentType: contentType,
+        cacheControl: "3600",
+        upsert: true,
+      });
+    
+    if (error) {
+      console.error('Error uploading to Supabase storage:', error.message);
+      return null;
+    }
+    
+    // Get the public URL
+    const { data: publicUrlData } = supabaseClient.storage
+      .from('meal-images')
+      .getPublicUrl(storagePath);
+    
+    const publicUrl = publicUrlData.publicUrl;
+    console.log('Supabase storage upload successful:', publicUrl);
+    
+    return publicUrl;
+  } catch (error) {
+    console.error('Error in Supabase upload:', error);
+    return null;
+  }
+};
+
+// Get the authenticated user ID from the request headers (set by middleware)
+const getUserId = async (req: NextRequest): Promise<string | null> => {
+  // Track where we found auth info for better debugging
+  let authSource = 'none';
+  
+  // 1. First check middleware headers (most reliable)
+  const userId = req.headers.get('x-auth-user-id');
+  const isAuthenticated = req.headers.get('x-authenticated') === 'true';
+  
+  if (isAuthenticated && userId) {
+    console.log(`[API] Authenticated user: ${userId} (source: middleware headers)`);
+    return userId;
+  }
+  
+  // 2. Check FormData for auth info (added by fix-storage-auth.js)
+  try {
+    // Clone the request to not consume the body
+    const clonedReq = req.clone();
+    
+    // Only check FormData for multipart requests
+    const contentType = req.headers.get('content-type') || '';
+    if (contentType.includes('multipart/form-data')) {
+      try {
+        const formData = await clonedReq.formData();
+        const formUserId = formData.get('userId') as string;
+        const formAuthFlag = formData.get('isAuthenticated') as string;
+        
+        if (formUserId && formAuthFlag === 'true') {
+          console.log(`[API] Authenticated user: ${formUserId} (source: form data)`);
+          return formUserId;
+        }
+      } catch (e) {
+        console.error('[API] Error parsing FormData:', e);
+      }
+    }
+  } catch (e) {
+    console.error('[API] Error checking FormData for auth:', e);
+  }
+  
+  // 3. Check the cookies for direct authentication info
+  try {
+    const authCookie = req.cookies.get('supabase-auth-token');
+    if (authCookie?.value) {
+      try {
+        const tokenValue = JSON.parse(authCookie.value);
+        // Extract user ID from token if possible
+        if (Array.isArray(tokenValue) && tokenValue.length > 0) {
+          const token = tokenValue[0];
+          // Basic JWT parsing - extract payload
+          const tokenParts = token.split('.');
+          if (tokenParts.length === 3) {
+            const payload = JSON.parse(atob(tokenParts[1]));
+            if (payload.sub) {
+              console.log(`[API] Authenticated user: ${payload.sub} (source: auth cookie)`);
+              return payload.sub;
+            }
+          }
+        }
+      } catch (e) {
+        console.error('[API] Error parsing auth cookie:', e);
+      }
+    }
+  } catch (e) {
+    console.error('[API] Error checking cookies for auth:', e);
+  }
+  
+  // 4. Direct user ID cookie check
+  try {
+    const userIdCookie = req.cookies.get('supabase-auth-user-id');
+    if (userIdCookie?.value) {
+      console.log(`[API] Authenticated user: ${userIdCookie.value} (source: user-id cookie)`);
+      return userIdCookie.value;
+    }
+  } catch (e) {
+    console.error('[API] Error checking user ID cookie:', e);
+  }
+
+  // Use cookies to create a Supabase client and try to get the session
+  try {
+    const cookieStore = cookies();
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user?.id) {
+      console.log(`[API] Authenticated user: ${session.user.id} (source: supabase session)`);
+      return session.user.id;
+    }
+  } catch (e) {
+    console.error('[API] Error checking Supabase session:', e);
+  }
+  
+  // We'll continue with anonymous user path
+  console.log('[API] No authenticated user detected, proceeding as anonymous');
+  return null;
+};
+
+// Helper function to normalize meal data format
+const normalizeMealData = (data: any, id?: string): any => {
+  if (!data) return { meal_name: 'Analyzed Meal' };
+  
+  // Create a deep copy to avoid mutating the original
+  const normalized = JSON.parse(JSON.stringify(data));
+  
+  // Ensure ID exists
+  normalized.id = id || normalized.id || `meal-${Date.now()}`;
+  
+  // Normalize meal name from different possible sources
+  normalized.meal_name = normalized.dish_name || 
+                        normalized.mealName || 
+                        normalized.name ||
+                        normalized.meal_name || 
+                        normalized.caption ||  // Add caption as a potential source
+                        'Analyzed Meal';
+  
+  // Ensure caption exists for backward compatibility
+  normalized.caption = normalized.caption || normalized.meal_name;
+  
+  // Ensure calories exists
+  normalized.calories = normalized.calories || 
+                       (normalized.analysis && normalized.analysis.calories) ||
+                       (normalized.analysis && normalized.analysis.totalCalories) ||
+                       (normalized.nutrients && normalized.nutrients.calories) ||
+                       0;
+  
+  // Normalize macronutrients 
+  // Check different possible locations for macronutrients
+  let macronutrients = normalized.macronutrients || 
+                      (normalized.analysis && normalized.analysis.macronutrients) ||
+                      (normalized.nutrients && normalized.nutrients.macronutrients) ||
+                      [];
+  
+  // Ensure macronutrients is an array
+  if (!Array.isArray(macronutrients)) {
+    macronutrients = [];
+  }
+  
+  // Ensure macronutrients is properly formatted
+  normalized.macronutrients = macronutrients.map((macro: any) => ({
+    name: macro.name || 'Unknown',
+    amount: macro.amount || 0,
+    unit: macro.unit || 'g',
+    percentDailyValue: macro.percentDailyValue || macro.percentDaily || 0
+  }));
+  
+  // Normalize micronutrients
+  // Check different possible locations for micronutrients
+  let micronutrients = normalized.micronutrients || 
+                      (normalized.analysis && normalized.analysis.micronutrients) ||
+                      (normalized.nutrients && normalized.nutrients.micronutrients) ||
+                      [];
+  
+  // Ensure micronutrients is an array
+  if (!Array.isArray(micronutrients)) {
+    micronutrients = [];
+  }
+  
+  // Ensure micronutrients is properly formatted
+  normalized.micronutrients = micronutrients.map((micro: any) => ({
+    name: micro.name || 'Unknown',
+    amount: micro.amount || 0,
+    unit: micro.unit || 'mg',
+    percentDailyValue: micro.percentDailyValue || micro.percentDaily || 0
+  }));
+  
+  // Normalize benefits, concerns, and suggestions
+  normalized.benefits = Array.isArray(normalized.benefits) ? normalized.benefits : 
+                      (normalized.analysis && Array.isArray(normalized.analysis.benefits)) ? normalized.analysis.benefits : [];
+  
+  normalized.concerns = Array.isArray(normalized.concerns) ? normalized.concerns : 
+                       (normalized.analysis && Array.isArray(normalized.analysis.concerns)) ? normalized.analysis.concerns : [];
+  
+  normalized.suggestions = Array.isArray(normalized.suggestions) ? normalized.suggestions : 
+                         (normalized.analysis && Array.isArray(normalized.analysis.suggestions)) ? normalized.analysis.suggestions : [];
+  
+  // Ensure analysis object exists for backward compatibility
+  if (!normalized.analysis) {
+    normalized.analysis = {
+      calories: normalized.calories,
+      totalCalories: normalized.calories,
+      macronutrients: normalized.macronutrients,
+      micronutrients: normalized.micronutrients,
+      benefits: normalized.benefits,
+      concerns: normalized.concerns,
+      suggestions: normalized.suggestions
+    };
+  }
+  
+  return normalized;
+};
+
+// Add this function to add descriptions to nutrients
+function addDescriptionsToNutrients(response: any): any {
+  // Make a deep copy to avoid mutating the original
+  const result = JSON.parse(JSON.stringify(response));
+  
+  // Define common descriptions for nutrients
+  const descriptions = {
+    protein: "Essential for muscle building, tissue repair, and overall growth.",
+    carbohydrates: "Primary source of energy for the body and brain.",
+    carbs: "Primary source of energy for the body and brain.",
+    fat: "Important for absorbing vitamins, supporting brain health, and providing long-lasting energy.",
+    fiber: "Aids digestion, helps maintain bowel health, and can reduce cholesterol.",
+    sugar: "Provides quick energy but should be consumed in moderation.",
+    sodium: "Helps maintain fluid balance and is needed for muscle and nerve function.",
+    calcium: "Essential for strong bones, teeth, and proper muscle function.",
+    iron: "Critical for oxygen transport in the blood and energy production.",
+    potassium: "Helps regulate fluid balance and muscle contractions.",
+    "vitamin a": "Important for vision, immune function, and cell growth.",
+    "vitamin c": "Supports immune function and acts as an antioxidant.",
+    "vitamin d": "Vital for calcium absorption and bone health.",
+    "vitamin e": "Acts as an antioxidant and supports immune function.",
+    "vitamin k": "Essential for blood clotting and bone health.",
+    magnesium: "Supports muscle and nerve function and energy production.",
+    zinc: "Important for immune function, wound healing, and cell division."
+  };
+
+  // Add descriptions to macronutrients
+  if (result.analysis?.macronutrients) {
+    result.analysis.macronutrients = result.analysis.macronutrients.map((nutrient: any) => {
+      if (!nutrient.description) {
+        const key = (nutrient.name || '').toLowerCase();
+        nutrient.description = descriptions[key] || 
+          `${nutrient.name} is an essential nutrient for overall health.`;
+      }
+      return nutrient;
+    });
+  }
+  
+  // Add descriptions to micronutrients
+  if (result.analysis?.micronutrients) {
+    result.analysis.micronutrients = result.analysis.micronutrients.map((nutrient: any) => {
+      if (!nutrient.description) {
+        const key = (nutrient.name || '').toLowerCase();
+        nutrient.description = descriptions[key] || 
+          `${nutrient.name} is an essential micronutrient for body functions.`;
+      }
+      return nutrient;
+    });
+  }
+  
+  return result;
+}
+
+// Process OpenAI response and apply personalized daily value calculations
+const processOpenAIResponse = (data: any, userProfile: any, personalizedTargets: any): any => {
+  if (!data) return null;
+  
+  // Deep clone to avoid mutating original data
+  const processed = JSON.parse(JSON.stringify(data));
+  
+  // Ensure calories exists
+  processed.calories = processed.calories || 0;
+  
+  // Process macronutrients with personalized daily values
+  if (Array.isArray(processed.macronutrients)) {
+    processed.macronutrients = processed.macronutrients.map((macro: any) => {
+      if (!macro || !macro.name) return macro;
+      
+      // Create a normalized, standardized key
+      const normalizedName = macro.name.toLowerCase().replace(/\s+/g, '_');
+      
+      // Check if we have a personalized target for this macronutrient
+      let dvPercent = macro.dv_percent || macro.percentDailyValue || 0;
+      
+      // Calculate personalized DV if we have a target and an amount
+      if (personalizedTargets && 
+          personalizedTargets[normalizedName] && 
+          typeof personalizedTargets[normalizedName].grams === 'number' &&
+          typeof macro.amount === 'number') {
+        // Calculate percentage based on personalized target
+        dvPercent = Math.round((macro.amount / personalizedTargets[normalizedName].grams) * 100);
+        console.log(`[API] Personalized DV for ${macro.name}: ${macro.amount}${macro.unit || 'g'} = ${dvPercent}% of ${personalizedTargets[normalizedName].grams}g target`);
+      }
+      
+      // Ensure we have a numeric value, not null or undefined
+      return {
+        ...macro,
+        percentDailyValue: dvPercent,
+        dv_percent: dvPercent
+      };
+    });
+  }
+  
+  // Process micronutrients with personalized daily values
+  if (Array.isArray(processed.micronutrients)) {
+    processed.micronutrients = processed.micronutrients.map((micro: any) => {
+      if (!micro || !micro.name) return micro;
+      
+      // Handle different unit types and normalizations
+      let normalizedName = micro.name.toLowerCase().replace(/\s+/g, '_');
+      
+      // Map micronutrient name variations to standardized keys
+      const nameMapping: Record<string, string> = {
+        'vitamin_c': 'vitaminC',
+        'vitamin_d': 'vitaminD',
+        'vitamin_a': 'vitaminA',
+        'vitamin_e': 'vitaminE',
+        'vitamin_b1': 'vitaminB1',
+        'vitamin_b2': 'vitaminB2',
+        'vitamin_b3': 'vitaminB3',
+        'vitamin_b6': 'vitaminB6',
+        'vitamin_b9': 'vitaminB9',
+        'vitamin_b12': 'vitaminB12'
+      };
+      
+      const targetKey = nameMapping[normalizedName] || normalizedName;
+      
+      // Check if we have a personalized target for this micronutrient
+      let dvPercent = micro.dv_percent || micro.percentDailyValue || 0;
+      
+      // Calculate personalized DV if we have a target and an amount
+      if (personalizedTargets && 
+          personalizedTargets[targetKey] && 
+          typeof micro.amount === 'number') {
+        // Get the unit from both the target and the micro
+        const targetUnitKey = Object.keys(personalizedTargets[targetKey])[0]; // e.g., 'mg'
+        const targetAmount = personalizedTargets[targetKey][targetUnitKey];
+        
+        if (typeof targetAmount === 'number' && targetAmount > 0) {
+          // Calculate percentage based on personalized target
+          dvPercent = Math.round((micro.amount / targetAmount) * 100);
+          console.log(`[API] Personalized DV for ${micro.name}: ${micro.amount}${micro.unit || targetUnitKey} = ${dvPercent}% of ${targetAmount}${targetUnitKey} target`);
+        }
+      }
+      
+      // Ensure we have a numeric value, not null or undefined
+      return {
+        ...micro,
+        percentDailyValue: dvPercent,
+        dv_percent: dvPercent
+      };
+    });
+  }
+  
+  return processed;
+}
+
+// Analyze meal image using OpenAI API
+async function analyzeMealImage(imageUrl: string, goal: string = "General Wellness", forceAnalysisType: string | null = null): Promise<any> {
+  console.log(`[API] Analyzing image at ${imageUrl} with goal: ${goal}`);
+  
+  try {
+    updateProgress('Initializing image analysis...');
+    
+    // Initialize OpenAI
+    const openaiApiKey = process.env.OPENAI_API_KEY;
+    if (!openaiApiKey) {
+      console.warn('[API] Missing OpenAI API key, using fallback data');
+      updateProgress('Using fallback data (no API key)');
+      return getCustomizedFallbackMeal(goal, imageUrl, null);
+    }
+    
+    const openai = new OpenAI({ apiKey: openaiApiKey });
+    updateProgress('Processing image with AI...');
+    
+    // Call the OpenAI API to analyze the image
+    const response = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL_GPT_VISION || 'gpt-4o',
+      messages: [
+        {
+          role: "system",
+          content: `You are a nutritional analysis AI designed to identify and analyze meals in images. 
+          For the given image, provide a comprehensive description with these components:
+          1. Accurate identification of the dish, describing all visible food items
+          2. Detailed nutrition analysis with macronutrients and micronutrients
+          3. Health benefits, potential concerns, and improvement suggestions based on the health goal: "${goal}".
+          
+          Format your response as a JSON object matching this structure exactly:
+          {
+            "mealName": "Name of the dish detected in the image",
+            "mealDescription": "Detailed description of the meal",
+            "mealContents": [{"name": "Item 1"}, {"name": "Item 2"}],
+            "ingredients": [
+              {"name": "Ingredient", "portion": "Approximate portion", "calories": estimated_calories}
+            ],
+            "detectedFood": "Primary food item(s) detected",
+            "analysis": {
+              "calories": total_estimated_calories,
+              "macronutrients": [
+                {"name": "Protein", "amount": amount_in_grams, "unit": "g", "percentDailyValue": percent},
+                {"name": "Carbohydrates", "amount": amount_in_grams, "unit": "g", "percentDailyValue": percent},
+                {"name": "Fiber", "amount": amount_in_grams, "unit": "g", "percentDailyValue": percent},
+                {"name": "Fat", "amount": amount_in_grams, "unit": "g", "percentDailyValue": percent}
+              ],
+              "micronutrients": [
+                {"name": "Example Vitamin", "amount": amount, "unit": "mg", "percentDailyValue": percent}
+              ]
+            },
+            "benefits": ["Health benefit 1", "Health benefit 2"],
+            "concerns": ["Health concern 1", "Health concern 2"],
+            "suggestions": ["Suggestion to improve nutritional value 1", "Suggestion 2"]
+          }
+          
+          Provide your absolute best estimate for nutritional values based on visible evidence.`
+        },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: `Analyze this meal image with a focus on ${goal}.` },
+            { type: "image_url", image_url: { url: imageUrl } }
+          ]
+        }
+      ],
+      response_format: { type: "json_object" }
+    });
+    
+    // Extract and parse the response
+    const content = response.choices[0]?.message?.content;
+    
+    if (!content) {
+      throw new Error('No content returned from OpenAI');
+    }
+    
+    updateProgress('AI analysis complete');
+    updateProgress('Processing nutrition data...');
+    
+    try {
+      // Parse the JSON response
+      const analysisData = JSON.parse(content);
+      
+      // Format into our expected result structure
+      const result: AnalysisResult = {
+        success: true,
+        imageUrl,
+        goal,
+        mealName: analysisData.mealName || 'Analyzed Meal',
+        mealDescription: analysisData.mealDescription || '',
+        detectedFood: analysisData.detectedFood || '',
+        foodName: analysisData.detectedFood || '',
+        mealContents: analysisData.mealContents || [],
+        ingredients: analysisData.ingredients || [],
+        analysis: {
+          calories: analysisData.analysis?.calories || 0,
+          totalCalories: analysisData.analysis?.calories || 0,
+          macronutrients: analysisData.analysis?.macronutrients || [],
+          micronutrients: analysisData.analysis?.micronutrients || []
+        },
+        benefits: analysisData.benefits || [],
+        concerns: analysisData.concerns || [],
+        suggestions: analysisData.suggestions || [],
+        isEstimated: true
+      };
+      
+      updateProgress('Analysis complete');
+      return result;
+    } catch (parseError) {
+      console.error('[API] Error parsing OpenAI response:', parseError);
+      console.log('Raw content:', content);
+      
+      // Fall back to mock data
+      updateProgress('Error parsing AI response, using fallback');
+      return getCustomizedFallbackMeal(goal, imageUrl, null);
+    }
+  } catch (error) {
+    console.error('[API] Error analyzing meal image:', error);
+    // Use safeUpdateProgress to indicate error
+    updateProgress('Error analyzing image');
+    
+    // Fall back to mock data
+    return getCustomizedFallbackMeal(goal, imageUrl, null);
+  }
+}
+
+// Fix the database saving function
+export async function saveMealToDatabase(userId: string, mealData: any, imageUrl: string): Promise<{ success: boolean; mealId: string | null; error?: any }> {
+  console.log('[DB] Saving meal to database for user:', userId);
+  
+  try {
+    // Check if environment variables are available
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    
+    if (!supabaseUrl || !supabaseKey) {
+      console.error('[DB] Missing Supabase credentials');
+      return { 
+        success: false, 
+        mealId: mealData.mealId || null, 
+        error: 'Missing Supabase credentials' 
+      };
+    }
+
+    // Create Supabase client 
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    // Try to ensure backup table exists (but handle errors gracefully)
+    try {
+      await supabase.rpc('ensure_backup_table');
+    } catch (err) {
+      console.warn('[MealBackup] Could not ensure table exists:', err);
+    }
+
+    // Extract and properly format all nutrition data from GPT response
+    // Ensure we normalize and extract from analysis if needed
+    let macronutrients = mealData.macronutrients || [];
+    let micronutrients = mealData.micronutrients || [];
+    let benefits = mealData.benefits || [];
+    let concerns = mealData.concerns || [];
+    let suggestions = mealData.suggestions || [];
+    let calories = mealData.calories || 0;
+    
+    // If data is nested in analysis, extract it from there
+    if (mealData.analysis) {
+      if (!macronutrients.length && mealData.analysis.macronutrients) {
+        macronutrients = mealData.analysis.macronutrients;
+      }
+      
+      if (!micronutrients.length && mealData.analysis.micronutrients) {
+        micronutrients = mealData.analysis.micronutrients;
+      }
+      
+      if (!benefits.length && mealData.analysis.benefits) {
+        benefits = mealData.analysis.benefits;
+      }
+      
+      if (!concerns.length && mealData.analysis.concerns) {
+        concerns = mealData.analysis.concerns;
+      }
+      
+      if (!suggestions.length && mealData.analysis.suggestions) {
+        suggestions = mealData.analysis.suggestions;
+      }
+      
+      if (!calories && (mealData.analysis.calories || mealData.analysis.totalCalories)) {
+        calories = mealData.analysis.calories || mealData.analysis.totalCalories;
+      }
+    }
+    
+    // Normalize all fields to be properly formatted for JSONB storage
+    // Ensure arrays are actually arrays and objects are proper JSON
+    macronutrients = ensureJsonStructure(macronutrients);
+    micronutrients = ensureJsonStructure(micronutrients);
+    benefits = ensureJsonStructure(benefits);
+    concerns = ensureJsonStructure(concerns);
+    suggestions = ensureJsonStructure(suggestions);
+    
+    // Ensure we have proper analysis structure
+    const analysis = mealData.analysis ? 
+      (typeof mealData.analysis === 'string' ? 
+        JSON.parse(mealData.analysis) : mealData.analysis) 
+      : {};
+
+    // Generate insights text from analysis if available
+    const insights = generateInsights(mealData, null);
+
+    // Basic payload with essential fields
+    const mealPayload = {
+      id: mealData.mealId,
+      user_id: userId,
+      name: mealData.mealName || 'Unnamed Meal',
+      caption: mealData.mealName || 'Unnamed Meal', // Use both name and caption
+      image_url: imageUrl,
+      calories: calories,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    // Enhanced payload with all JSONB columns
+    const enhancedPayload = {
+      ...mealPayload,
+      concerns: concerns,
+      analysis: analysis,
+      insights: insights,
+      suggestions: suggestions,
+      nutrients: mealData.nutrients || {},
+      macronutrients: macronutrients,
+      micronutrients: micronutrients,
+      benefits: benefits,
+    };
+
+    console.log('[DB] Constructed meal payload with ID:', mealData.mealId);
+    
+    // Try primary meals table first
+    const { error: mealsError } = await supabase
+      .from('meals')
+      .upsert(enhancedPayload);
+
+    if (mealsError) {
+      console.error('[DB] Error saving to meals table:', mealsError);
+      
+      // Try meal_analyses table as fallback
+      const { error: analysesError } = await supabase
+        .from('meal_analyses')
+        .upsert(enhancedPayload);
+
+      if (analysesError) {
+        console.error('[DB] Fallback also failed:', analysesError);
+        
+        // Try backup table as last resort
+        try {
+          const backupPayload = {
+            id: mealData.mealId,
+            user_id: userId,
+            name: mealData.mealName || 'Unnamed Meal',
+            image_url: imageUrl,
+            data: mealData, // Store everything in the data JSONB column
+            created_at: new Date().toISOString()
+          };
+          
+          const { error: backupError } = await supabase
+            .from('meal_data_backup')
+            .upsert(backupPayload);
+
+          if (backupError) {
+            console.error('[DB] Backup table save failed:', backupError);
+            return { 
+              success: false, 
+              mealId: mealData.mealId, 
+              error: backupError 
+            };
+          } else {
+            console.log('[DB] Successfully saved to backup table');
+            return { 
+              success: true, 
+              mealId: mealData.mealId, 
+              error: 'Saved to backup (primary and fallback tables failed)' 
+            };
+          }
+        } catch (backupException) {
+          console.error('[DB] Exception saving to backup table:', backupException);
+          return { 
+            success: false, 
+            mealId: mealData.mealId, 
+            error: backupException 
+          };
+        }
+      } else {
+        console.log('[DB] Successfully saved to meal_analyses table (fallback)');
+        return { 
+          success: true, 
+          mealId: mealData.mealId 
+        };
+      }
+    } else {
+      console.log('[DB] Successfully saved to meals table');
+      return { 
+        success: true, 
+        mealId: mealData.mealId 
+      };
+    }
+  } catch (error) {
+    console.error('[DB] Unexpected error saving meal:', error);
+    return { 
+      success: false, 
+      mealId: mealData.mealId || null, 
+      error 
+    };
+  }
+}
+
+// Helper function to ensure proper JSON structure for JSONB fields
+function ensureJsonStructure(data: any): any {
+  if (!data) return [];
+  
+  // If it's a string, try to parse it
+  if (typeof data === 'string') {
+    try {
+      return JSON.parse(data);
+    } catch (e) {
+      // If not valid JSON, wrap it in an array
+      return [data];
+    }
+  }
+  
+  // If it's already an array, return it
+  if (Array.isArray(data)) {
+    return data;
+  }
+  
+  // If it's an object, wrap it in an array
+  if (typeof data === 'object') {
+    return [data];
+  }
+  
+  // Default: wrap in array
+  return [data];
+}
+
+// Generate insights from analysis data
+function generateInsights(mealData: any, userProfile?: any): string {
+  try {
+    // Extract personalized insights if already available
+    if (mealData.analysis?.personalized_insights) {
+      return mealData.analysis.personalized_insights;
+    }
+    
+    // Generate insights array
+    const insights = [];
+    const goal = userProfile?.goal || userProfile?.healthGoals || mealData.goal || 'General Health';
+    
+    // Add personalized greeting if we have user data
+    if (userProfile) {
+      insights.push(`Based on your ${goal.toLowerCase()} goals${userProfile.age ? ` at age ${userProfile.age}` : ''}, here's my analysis:`);
+    }
+    
+    // Add calorie information with more personalization
+    const calories = mealData.calories || 
+                    mealData.analysis?.calories || 
+                    mealData.analysis?.totalCalories || 0;
+    
+    if (calories > 0) {
+      // Get estimated daily calorie needs if we have user data
+      let dailyCalorieNeeds = 2000; // Default
+      if (userProfile) {
+        const activityLevel = userProfile.activityLevel || userProfile.activity_level || 'moderate';
+        const gender = userProfile.gender || 'not-specified';
+        const age = userProfile.age || 35;
+        const weight = userProfile.weight || 70; // kg
+        
+        // Detailed BMR calculation using Mifflin-St Jeor Equation
+        if (gender.toLowerCase() === 'male') {
+          dailyCalorieNeeds = Math.round((10 * weight) + (6.25 * 170) - (5 * age) + 5);
+        } else if (gender.toLowerCase() === 'female') {
+          dailyCalorieNeeds = Math.round((10 * weight) + (6.25 * 163) - (5 * age) - 161);
+        } else {
+          dailyCalorieNeeds = Math.round((10 * weight) + (6.25 * 166) - (5 * age) - 80);
+        }
+        
+        // Adjust for activity level - using more precise multipliers
+        if (activityLevel.includes('sedentary')) {
+          dailyCalorieNeeds = Math.round(dailyCalorieNeeds * 1.2);
+        } else if (activityLevel.includes('light')) {
+          dailyCalorieNeeds = Math.round(dailyCalorieNeeds * 1.375);
+        } else if (activityLevel.includes('moderate')) {
+          dailyCalorieNeeds = Math.round(dailyCalorieNeeds * 1.55);
+        } else if (activityLevel.includes('active') || activityLevel.includes('high')) {
+          dailyCalorieNeeds = Math.round(dailyCalorieNeeds * 1.725);
+        } else if (activityLevel.includes('very')) {
+          dailyCalorieNeeds = Math.round(dailyCalorieNeeds * 1.9);
+        } else {
+          // Default for unknown activity levels
+          dailyCalorieNeeds = Math.round(dailyCalorieNeeds * 1.4);
+        }
+        
+        // Adjust for goal with more precise adjustments
+        if (goal.toLowerCase().includes('weight loss') || goal.toLowerCase().includes('lose weight')) {
+          dailyCalorieNeeds = Math.round(dailyCalorieNeeds * 0.8); // 20% deficit for weight loss
+        } else if (goal.toLowerCase().includes('muscle') || goal.toLowerCase().includes('gain weight')) {
+          dailyCalorieNeeds = Math.round(dailyCalorieNeeds * 1.1); // 10% surplus for muscle gain
+        } else if (goal.toLowerCase().includes('maintain')) {
+          // No adjustment needed for maintenance
+        } else if (goal.toLowerCase().includes('endurance') || goal.toLowerCase().includes('athletic')) {
+          dailyCalorieNeeds = Math.round(dailyCalorieNeeds * 1.15); // 15% surplus for high athletic demands
+        }
+      }
+      
+      // Calculate calories as percentage of daily needs
+      const percentOfDaily = Math.round((calories / dailyCalorieNeeds) * 100);
+      
+      // More nuanced calorie analysis based on percentOfDaily
+      if (percentOfDaily < 15) {
+        insights.push(`This ${calories}-calorie meal provides about ${percentOfDaily}% of your estimated daily energy needs (${dailyCalorieNeeds} calories) — making it suitable as a light snack.`);
+      } else if (percentOfDaily >= 15 && percentOfDaily < 25) {
+        insights.push(`At ${calories} calories (${percentOfDaily}% of your ${dailyCalorieNeeds} daily calorie needs), this works well as a smaller meal or substantial snack.`);
+      } else if (percentOfDaily >= 25 && percentOfDaily < 40) {
+        insights.push(`This balanced ${calories}-calorie meal provides ${percentOfDaily}% of your daily energy requirements (${dailyCalorieNeeds} calories), making it an appropriate main meal.`);
+      } else {
+        insights.push(`At ${calories} calories, this substantial meal provides ${percentOfDaily}% of your daily energy needs (${dailyCalorieNeeds} calories). If consumed as a single meal, you may want to adjust portion sizes or balance with lighter meals throughout the day.`);
+      }
+    }
+    
+    // Add macronutrient breakdown and insights with more details and scientific explanation
+    const macros = mealData.macronutrients || mealData.analysis?.macronutrients || [];
+    if (macros.length > 0) {
+      // Extract key macros
+      const protein = macros.find((m: any) => m.name?.toLowerCase().includes('protein'));
+      const carbs = macros.find((m: any) => m.name?.toLowerCase().includes('carb'));
+      const fat = macros.find((m: any) => m.name?.toLowerCase().includes('fat') && !m.name?.toLowerCase().includes('saturated'));
+      const fiber = macros.find((m: any) => m.name?.toLowerCase().includes('fiber'));
+      const sugar = macros.find((m: any) => m.name?.toLowerCase().includes('sugar'));
+      const saturatedFat = macros.find((m: any) => m.name?.toLowerCase().includes('saturated'));
+      
+      // Calculate macronutrient percentages and calories from each
+      if (protein?.amount && carbs?.amount && fat?.amount) {
+        const proteinCalories = protein.amount * 4; // 4 calories per gram
+        const carbCalories = carbs.amount * 4; // 4 calories per gram
+        const fatCalories = fat.amount * 9; // 9 calories per gram
+        
+        const totalCalories = proteinCalories + carbCalories + fatCalories;
+        if (totalCalories > 0) {
+          const proteinPct = Math.round((proteinCalories / totalCalories) * 100);
+          const carbsPct = Math.round((carbCalories / totalCalories) * 100);
+          const fatPct = Math.round((fatCalories / totalCalories) * 100);
+          
+          insights.push(`Your meal provides ${proteinPct}% of calories from protein, ${carbsPct}% from carbohydrates, and ${fatPct}% from fats.`);
+          
+          // Add detailed goal-specific macronutrient insights
+          const goalLower = goal.toLowerCase();
+          if (goalLower.includes('weight loss') || goalLower.includes('fat loss')) {
+            if (proteinPct < 25) {
+              insights.push(`For effective weight loss, consider increasing protein to 25-30% of calories to enhance satiety, preserve muscle mass, and optimize thermic effect of food.`);
+            } else if (proteinPct >= 30) {
+              insights.push(`The high protein content (${proteinPct}%) is excellent for weight loss, as it promotes satiety, preserves lean muscle, and has a higher thermic effect compared to other macronutrients.`);
+            }
+            
+            if (carbsPct > 50 && fiber && fiber.amount < 10) {
+              insights.push(`While your meal is higher in carbohydrates (${carbsPct}%), the fiber content (${fiber.amount}g) is relatively low. For weight management, focus on high-fiber carbohydrates with a lower glycemic index.`);
+            }
+          } 
+          else if (goalLower.includes('muscle') || goalLower.includes('strength')) {
+            if (proteinPct < 25) {
+              insights.push(`For muscle development, consider increasing protein intake to at least 25-30% of calories. Research shows 1.6-2.2g/kg of bodyweight daily supports optimal muscle protein synthesis.`);
+            } else {
+              insights.push(`Your protein intake (${protein.amount}g) supports muscle protein synthesis, especially if consumed within the anabolic window around your training sessions.`);
+            }
+            
+            if (carbsPct < 40) {
+              insights.push(`For muscle building, consider increasing carbohydrate intake to replenish muscle glycogen stores. Research indicates 5-7g/kg of bodyweight is optimal for consistent training performance.`);
+            }
+          }
+          else if (goalLower.includes('keto') || goalLower.includes('low carb')) {
+            if (carbsPct > 10) {
+              insights.push(`For ketogenic goals, this meal's carbohydrate content (${carbs.amount}g) may be too high to maintain ketosis. Consider reducing to under 20-30g total carbs per day to promote ketone production.`);
+            } else {
+              insights.push(`This meal's macronutrient ratio aligns well with ketogenic requirements, with limited carbohydrates (${carbs.amount}g) to help maintain ketosis.`);
+            }
+          }
+          else if (goalLower.includes('energy') || goalLower.includes('performance')) {
+            if (carbsPct < 50) {
+              insights.push(`For optimal energy and athletic performance, consider increasing complex carbohydrates to 50-60% of calories. Research shows higher carb intake supports glycogen stores for endurance and high-intensity activities.`);
+            } else {
+              insights.push(`The carbohydrate content (${carbs.amount}g) provides good energy support for performance, especially when consumed 1-4 hours before activity to optimize glycogen availability.`);
+            }
+          }
+        }
+      }
+      
+      // Add more detailed protein insights based on user profile
+      if (protein?.amount && userProfile?.weight) {
+        let dailyProteinTarget: number;
+        const weightInLbs = userProfile.weight;
+        const goalLower = goal.toLowerCase();
+        
+        // Calculate targeted daily protein based on weight and goal
+        if (goalLower.includes('muscle') || goalLower.includes('strength')) {
+          dailyProteinTarget = weightInLbs * 0.9; // ~2g/kg
+          
+          // Check protein adequacy for muscle building
+          const mealProteinPercentage = Math.round((protein.amount / dailyProteinTarget) * 100);
+          
+          if (mealProteinPercentage < 25) {
+            insights.push(`This meal provides only ${mealProteinPercentage}% of your daily protein target (${Math.round(dailyProteinTarget)}g) for muscle building. Research suggests distributing protein intake evenly throughout the day with at least 20-30g per meal for optimal muscle protein synthesis.`);
+          } else if (mealProteinPercentage > 40) {
+            insights.push(`This meal provides an excellent ${protein.amount}g of protein (${mealProteinPercentage}% of your daily needs). Studies indicate that 20-40g of protein per meal maximizes muscle protein synthesis, supporting your muscle development goals.`);
+          }
+        } 
+        else if (goalLower.includes('weight loss')) {
+          dailyProteinTarget = weightInLbs * 0.7; // ~1.5g/kg for preserving muscle during weight loss
+          
+          const mealProteinPercentage = Math.round((protein.amount / dailyProteinTarget) * 100);
+          
+          if (mealProteinPercentage < 20) {
+            insights.push(`For effective weight management, this meal's protein content (${protein.amount}g) is lower than optimal. Research shows higher protein intake (${Math.round(dailyProteinTarget)}g daily for your weight) helps preserve lean mass during caloric restriction.`);
+          } else if (mealProteinPercentage > 30) {
+            insights.push(`The protein content (${protein.amount}g) is excellent for weight management, representing ${mealProteinPercentage}% of your daily target. Higher protein intake increases satiety hormones like GLP-1 and PYY while reducing ghrelin, helping control hunger.`);
+          }
+        }
+        else {
+          // General health
+          dailyProteinTarget = weightInLbs * 0.36; // ~0.8g/kg RDA
+          
+          const mealProteinPercentage = Math.round((protein.amount / dailyProteinTarget) * 100);
+          
+          if (mealProteinPercentage > 30) {
+            insights.push(`This meal provides a substantial ${mealProteinPercentage}% of your daily protein needs (${Math.round(dailyProteinTarget)}g), supporting overall health maintenance.`);
+          }
+        }
+      }
+      
+      // Fiber-specific insights with more scientific context
+      if (fiber?.amount) {
+        if (fiber.amount < 5) {
+          insights.push(`This meal is relatively low in fiber (${fiber.amount}g). Dietary fiber promotes beneficial gut bacteria, improved metabolic health, and enhanced GLP-1 signaling for satiety. Consider adding vegetables, fruits, legumes, or whole grains to reach the recommended 25-30g daily.`);
+        } else if (fiber.amount > 10) {
+          insights.push(`With ${fiber.amount}g of fiber, this meal excellently supports digestive health, microbiome diversity, and blood glucose stability by slowing carbohydrate absorption and improving insulin sensitivity.`);
+        }
+      }
+      
+      // Sugar insights
+      if (sugar?.amount && sugar.amount > 15) {
+        insights.push(`This meal contains ${sugar.amount}g of sugar, which can contribute to rapid blood glucose fluctuations. The American Heart Association recommends limiting added sugars to 24g daily for women and 36g for men.`);
+      }
+      
+      // Saturated fat insights
+      if (saturatedFat?.amount && saturatedFat.amount > 10) {
+        insights.push(`The saturated fat content (${saturatedFat.amount}g) is relatively high. While some saturated fats are part of a balanced diet, excessive intake is associated with increased LDL cholesterol levels.`);
+      }
+    }
+    
+    // Add more advanced micronutrient highlight insights
+    const micros = mealData.micronutrients || mealData.analysis?.micronutrients || [];
+    if (micros.length > 0) {
+      // Find nutrients with high % daily values
+      const highValueNutrients = micros
+        .filter((m: any) => m.percentDailyValue > 25 || m.percentDaily > 25)
+        .sort((a: any, b: any) => (b.percentDailyValue || b.percentDaily || 0) - (a.percentDailyValue || a.percentDaily || 0))
+        .slice(0, 3);
+      
+      if (highValueNutrients.length > 0) {
+        const nutrientNames = highValueNutrients.map((n: any) => n.name).join(', ');
+        insights.push(`This meal is particularly rich in ${nutrientNames}, providing significant nutritional benefits.`);
+        
+        // Add specific benefits of the top nutrient
+        if (highValueNutrients[0]) {
+          const topNutrient = highValueNutrients[0];
+          const name = topNutrient.name.toLowerCase();
+          
+          if (name.includes('vitamin c')) {
+            insights.push(`High vitamin C content supports immune function through enhanced neutrophil activity, collagen synthesis, and antioxidant protection against free radicals.`);
+          } else if (name.includes('vitamin a') || name.includes('beta-carotene')) {
+            insights.push(`The vitamin A content supports vision through rhodopsin production, immune function, and cellular differentiation. Beta-carotene also provides antioxidant benefits.`);
+          } else if (name.includes('calcium')) {
+            insights.push(`Calcium not only supports bone health through hydroxyapatite crystal formation but also plays crucial roles in muscle contraction, nerve signaling, and blood clotting.`);
+          } else if (name.includes('iron')) {
+            insights.push(`Iron is essential for oxygen transport via hemoglobin, energy production at the cellular level, and proper immune function through cytokine regulation.`);
+          } else if (name.includes('omega') || name.includes('dha') || name.includes('epa')) {
+            insights.push(`Omega-3 fatty acids support cardiovascular health by reducing inflammation, improving lipid profiles, and supporting cognitive function through neuronal membrane integrity.`);
+          }
+        }
+      }
+      
+      // Find critical nutrients with deficiencies
+      const lowValueNutrients = micros
+        .filter((m: any) => {
+          const name = m.name.toLowerCase();
+          const dv = m.percentDailyValue || m.percentDaily || 0;
+          return dv < 10 && (
+            // Key nutrients we want to highlight if low
+            name.includes('iron') || name.includes('calcium') || 
+            name.includes('vitamin d') || name.includes('magnesium') ||
+            name.includes('zinc') || name.includes('vitamin b12') ||
+            name.includes('potassium') || name.includes('vitamin c')
+          );
+        })
+        .slice(0, 2);
+      
+      if (lowValueNutrients.length > 0) {
+        const names = lowValueNutrients.map(n => n.name).join(' and ');
+        
+        // Personalized recommendations based on deficient nutrients with scientific rationale
+        const recommendations = lowValueNutrients.map(nutrient => {
+          const name = nutrient.name.toLowerCase();
+          if (name.includes('iron')) {
+            return "lean red meat, spinach, or lentils paired with vitamin C-rich foods to enhance non-heme iron absorption by up to 300%";
+          } else if (name.includes('calcium')) {
+            return "dairy products, fortified plant milks, or dark leafy greens, which provide calcium with high bioavailability";
+          } else if (name.includes('vitamin d')) {
+            return "fatty fish (salmon, mackerel), egg yolks, or 15-30 minutes of midday sun exposure to stimulate endogenous vitamin D synthesis";
+          } else if (name.includes('magnesium')) {
+            return "nuts, seeds, dark chocolate, or leafy greens, which contain high bioavailable magnesium essential for over 300 enzymatic reactions";
+          } else if (name.includes('zinc')) {
+            return "oysters, beef, pumpkin seeds, or lentils to support immune function and protein synthesis";
+          } else if (name.includes('vitamin b12')) {
+            return "animal products, nutritional yeast, or a B12 supplement, especially important if you follow a plant-based diet as B12 is primarily found in animal foods";
+          } else if (name.includes('potassium')) {
+            return "bananas, potatoes, legumes, or leafy greens to help balance sodium levels and support healthy blood pressure";
+          } else if (name.includes('vitamin c')) {
+            return "citrus fruits, bell peppers, strawberries, or broccoli, which provide antioxidant protection and enhance iron absorption";
+          } else {
+            return "foods rich in this nutrient to address potential deficiency";
+          }
+        }).join(' or ');
+        
+        insights.push(`This meal is low in ${names}. To optimize nutritional intake, consider adding ${recommendations}.`);
+      }
+
+      // Check for important nutrient synergies
+      const hasVitaminC = micros.some((m: any) => m.name?.toLowerCase().includes('vitamin c') && (m.percentDailyValue || m.percentDaily || 0) > 10);
+      const hasIron = micros.some((m: any) => m.name?.toLowerCase().includes('iron'));
+      if (hasVitaminC && hasIron) {
+        insights.push(`This meal demonstrates excellent nutrient synergy: the vitamin C enhances non-heme iron absorption by up to 300% by reducing iron from its ferric to ferrous state.`);
+      }
+
+      const hasVitaminD = micros.some((m: any) => m.name?.toLowerCase().includes('vitamin d') && (m.percentDailyValue || m.percentDaily || 0) > 10);
+      const hasCalcium = micros.some((m: any) => m.name?.toLowerCase().includes('calcium') && (m.percentDailyValue || m.percentDaily || 0) > 10);
+      if (hasVitaminD && hasCalcium) {
+        insights.push(`This meal contains the synergistic pairing of calcium and vitamin D, which work together for optimal bone health. Vitamin D increases intestinal calcium absorption by up to 40% through activation of calcium transport proteins.`);
+      }
+      
+      // Check for polyphenol content
+      const hasPolyphenols = mealData.ingredients?.some((ing: any) => 
+        ['berries', 'dark chocolate', 'red wine', 'green tea', 'olive', 'flax', 'soy', 'nuts'].some(term => 
+          ing.name?.toLowerCase().includes(term)
+        )
+      );
+      
+      if (hasPolyphenols) {
+        insights.push(`This meal contains ingredients rich in polyphenols, which act as powerful antioxidants, supporting cellular health by reducing oxidative stress and inflammation at the molecular level.`);
+      }
+    }
+    
+    // Add benefits from analysis
+    const benefits = mealData.benefits || mealData.analysis?.benefits || [];
+    if (benefits.length > 0) {
+      // Select a specific benefit to highlight with additional context
+      const selectedBenefit = benefits[Math.floor(Math.random() * benefits.length)];
+      insights.push(`Key benefit: ${selectedBenefit}`);
+    }
+    
+    // Add detailed personalized goal-specific insights
+    const goalLower = goal.toLowerCase();
+    if (goalLower.includes('weight loss')) {
+      // Get fiber and protein content
+      const fiber = macros.find((m: any) => m.name?.toLowerCase().includes('fiber'));
+      const protein = macros.find((m: any) => m.name?.toLowerCase().includes('protein'));
+      
+      const fiberContent = fiber ? `fiber content (${fiber.amount}g)` : 'nutrient profile';
+      const proteinContent = protein ? `protein (${protein.amount}g)` : 'macronutrient balance';
+      
+      insights.push(`For weight management, this meal's ${fiberContent} activates stretch receptors in the GI tract and slows gastric emptying, while the ${proteinContent} increases diet-induced thermogenesis and supports lean mass preservation during caloric deficit.`);
+      
+      // Add specific advice about meal timing
+      insights.push(`Consider the timing of this meal in your eating window. Research on time-restricted feeding suggests an 8-10 hour eating window may improve metabolic flexibility and support weight loss efforts.`);
+    } 
+    else if (goalLower.includes('muscle')) {
+      const protein = macros.find((m: any) => m.name?.toLowerCase().includes('protein'));
+      const carbs = macros.find((m: any) => m.name?.toLowerCase().includes('carb'));
+      
+      const proteinContent = protein ? `${protein.amount}g of protein` : 'protein content';
+      const carbContent = carbs ? `${carbs.amount}g of carbohydrates` : 'carbohydrate content';
+      
+      insights.push(`For muscle development, the ${proteinContent} activates mTOR signaling pathways, while the ${carbContent} helps replenish muscle glycogen and create an anabolic environment through insulin release. Consuming this meal within 2 hours post-workout optimizes nutrient partitioning.`);
+    } 
+    else if (goalLower.includes('energy') || goalLower.includes('endurance')) {
+      const carbs = macros.find((m: any) => m.name?.toLowerCase().includes('carb'));
+      const fat = macros.find((m: any) => m.name?.toLowerCase().includes('fat'));
+      
+      const carbContent = carbs ? `carbohydrate content (${carbs.amount}g)` : 'nutrient composition';
+      const fatContent = fat ? `healthy fats (${fat.amount}g)` : 'fats';
+      
+      insights.push(`For sustained energy, this meal's ${carbContent} provides readily available glucose and glycogen stores, while the ${fatContent} offer concentrated energy sources that become increasingly important during longer duration activities through beta-oxidation pathways.`);
+    } 
+    else if (goalLower.includes('heart') || goalLower.includes('cardio')) {
+      const fiber = macros.find((m: any) => m.name?.toLowerCase().includes('fiber'));
+      const fiberContent = fiber ? `the fiber content (${fiber.amount}g)` : 'the soluble fiber';
+      
+      insights.push(`For cardiovascular health, ${fiberContent} binds to bile acids, facilitating cholesterol excretion and potentially lowering serum LDL levels. The balance of nutrients supports endothelial function and healthy blood pressure regulation.`);
+    } 
+    else if (goalLower.includes('longevity') || goalLower.includes('anti-aging')) {
+      insights.push(`For longevity benefits, the nutrient profile supports cellular maintenance through antioxidant pathways, potentially attenuating age-related cellular senescence and supporting telomere integrity. Consider incorporating periodic fasting alongside nutrient-dense meals like this to activate longevity-promoting autophagy pathways.`);
+    }
+    else if (goalLower.includes('brain') || goalLower.includes('cognitive')) {
+      insights.push(`For cognitive support, focus on regular intake of omega-3 fatty acids (especially DHA), antioxidants, and choline-rich foods. These nutrients support neuronal membrane integrity, reduce neuroinflammation, and provide precursors for neurotransmitter synthesis.`);
+    }
+    
+    // Add tailored recommendations for specific demographics
+    if (userProfile) {
+      if (userProfile.gender?.toLowerCase() === 'female' && userProfile.age >= 12 && userProfile.age <= 50) {
+        // Check for iron content
+        const iron = micros.find((m: any) => m.name?.toLowerCase().includes('iron'));
+        if (iron && (iron.percentDailyValue || 0) < 15) {
+          insights.push(`As a woman of reproductive age, your iron requirements (18mg daily) are significantly higher than men's (8mg) due to menstrual blood loss. Consider including heme iron sources (red meat, poultry) which have 15-35% absorption compared to 2-20% for non-heme plant sources.`);
+        }
+        
+        // Add calcium recommendation for bone health
+        const calcium = micros.find((m: any) => m.name?.toLowerCase().includes('calcium'));
+        if (!calcium || (calcium.percentDailyValue || 0) < 20) {
+          insights.push(`Building bone density through adequate calcium and vitamin D intake during pre-menopausal years creates a critical "bone bank" that helps protect against osteoporosis later in life.`);
+        }
+      }
+      
+      if (userProfile.age > 50) {
+        // Check for key nutrients for aging populations
+        const b12 = micros.find((m: any) => m.name?.toLowerCase().includes('b12') || m.name?.toLowerCase().includes('cobalamin'));
+        const calcium = micros.find((m: any) => m.name?.toLowerCase().includes('calcium'));
+        const vitD = micros.find((m: any) => m.name?.toLowerCase().includes('vitamin d'));
+        
+        if ((!b12 || (b12.percentDailyValue || 0) < 25) && (!calcium || (calcium.percentDailyValue || 0) < 25) && (!vitD || (vitD.percentDailyValue || 0) < 25)) {
+          insights.push(`After age 50, reduced stomach acid production can limit B12 absorption (potentially requiring supplementation), while calcium and vitamin D become increasingly critical as absorption efficiency declines and bone resorption accelerates.`);
+        }
+      }
+      
+      // If user is athletic
+      if (userProfile.activityLevel?.toLowerCase().includes('active') || userProfile.activityLevel?.toLowerCase().includes('athlete')) {
+        const magnesium = micros.find((m: any) => m.name?.toLowerCase().includes('magnesium'));
+        const potassium = micros.find((m: any) => m.name?.toLowerCase().includes('potassium'));
+        
+        if ((!magnesium || (magnesium.percentDailyValue || 0) < 20) || (!potassium || (potassium.percentDailyValue || 0) < 20)) {
+          insights.push(`For active individuals, electrolyte minerals like magnesium and potassium are critical for neuromuscular function, preventing cramps, and supporting energy metabolism pathways. Consider increasing intake through leafy greens, bananas, and nuts/seeds.`);
+        }
+      }
+    }
+    
+    // Add cutting-edge nutrition science insight
+    const nutritionScience = [
+      "Meal timing and frequency may influence metabolic flexibility, with research suggesting that allowing 4-5 hours between meals can optimize fat-burning capacity.",
+      "The gut microbiome's composition can significantly influence how you metabolize and benefit from the nutrients in this meal, with fiber-rich foods promoting beneficial bacterial populations.",
+      "Circadian rhythm research suggests that consuming most of your calories earlier in the day aligns with optimal metabolic and hormonal patterns. Consider front-loading calorie intake if weight management is a goal.",
+      "Protein's thermic effect of feeding (TEF) is 20-30%, meaning up to a third of protein calories are used in the digestive process itself, making it highly thermodynamically efficient.",
+      "Phytonutrient compounds in colorful plant foods activate hormetic stress responses and Nrf2 pathways that enhance cellular resilience and antioxidant enzyme production.",
+      "Strength training before meals can increase muscle sensitivity to insulin for up to 24 hours, directing more nutrients toward muscle glycogen replenishment rather than fat storage."
+    ];
+    
+    insights.push(nutritionScience[Math.floor(Math.random() * nutritionScience.length)]);
+    
+    // Join all insights into a single string
+    return insights.join(' ');
+  } catch (e) {
+    console.error('[generateInsights] Error generating insights:', e);
+    return 'Meal analysis completed successfully.';
+  }
+}
+
+// Add this helper function for safely updating progress
+const updateProgress = (message: string | null) => {
+  // This is a server-side function, so we can't directly update client state
+  // We'll just log the progress for debugging
+  console.log(`[API] Progress: ${message}`);
+  // Don't try to call setUploadProgress directly - it's a client-side function
+};
+
+// In the POST function, implement the complete flow
+export async function POST(request: NextRequest): Promise<Response> {
+  console.log('API route called: /api/analyze-meal');
+  
+  try {
+    // Check if the OpenAI API key is present
+    const openaiApiKey = process.env.OPENAI_API_KEY;
+    console.log('OpenAI API Key present:', !!openaiApiKey);
+    
+    if (!openaiApiKey) {
+      return NextResponse.json(
+        { error: 'OpenAI API key is not configured' },
+        { status: 500 }
+      );
+    }
+    
+    // Update progress safely instead of using setUploadProgress
+    updateProgress('Processing uploaded image...');
+    
+    // Use FormData to get the uploaded file
+    const formData = await request.formData();
+    const file = formData.get('file') as File | null;
+    const mealId = formData.get('mealId') as string || randomUUID();
+    const goal = formData.get('goal') as string || 'General Wellness';
+    
+    if (!file) {
+      console.error('[API] No image found in request');
+      updateProgress('Error: No image provided');
+      return new Response(JSON.stringify({
+        error: 'No image provided',
+        success: false
+      }), { 
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    // Update progress with our safe function
+    updateProgress('Reading image data...');
+    
+    // Get image type and data
+    const contentType = file.type;
+    const imageBuffer = Buffer.from(await file.arrayBuffer());
+    
+    // Get URL for uploads or use a placeholder
+    let imageUrl = null;
+    
+    // Get the authentication token from the request
+    const authHeader = request.headers.get('authorization');
+    const middlewareAuthHeader = request.headers.get('x-auth-user-id');
+    let userId: string | null = null;
+    
+    // Check for authenticated user in different ways
+    if (middlewareAuthHeader) {
+      // Get user ID from middleware headers (most reliable)
+      userId = middlewareAuthHeader;
+      console.log('[API] Authenticated user:', userId, '(source: middleware headers)');
+    } else if (authHeader && authHeader.startsWith('Bearer ')) {
+      // Get user ID from authorization header
+      const token = authHeader.substring(7);
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+      
+      const { data } = await supabase.auth.getUser(token);
+      userId = data?.user?.id || null;
+      console.log('[API] Authenticated user:', userId, '(source: auth header)');
+    } else {
+      console.log('[API] No authenticated user found, using anonymous mode');
+    }
+    
+    // Create Supabase client
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    // Update progress with our safe function
+    updateProgress('Uploading to storage...');
+    
+    // Use a safe file name
+    const fileName = `meal-${mealId}`;
+    
+    // Upload to Supabase storage
+    imageUrl = await uploadImageToSupabase(
+      imageBuffer,
+      fileName,
+      contentType,
+      userId || 'anonymous', 
+      supabase
+    );
+    
+    if (!imageUrl) {
+      throw new Error('Failed to upload image to storage');
+    }
+    
+    // Update progress with our safe function
+    updateProgress('Image uploaded successfully');
+    updateProgress('Generating analysis...');
+    
+    // Get user profile if available
+    let userProfile = null;
+    if (userId) {
+      try {
+        userProfile = await getUserProfile(userId);
+      } catch (profileError) {
+        console.error('[API] Error fetching user profile:', profileError);
+        // Continue without profile
+      }
+    }
+    
+    // Now perform the analysis with the uploaded image URL
+    updateProgress('Beginning analysis...');
+    
+    // Option 1: Use OpenAI analysis in a production app
+    const analysisResult = await analyzeMealImage(imageUrl, goal);
+    
+    // Option 2: Use mock data for development or as fallback
+    // const analysisResult = getCustomizedFallbackMeal(
+    //   goal, 
+    //   imageUrl, 
+    //   userProfile
+    // );
+    
+    // Add the meal ID to the result
+    analysisResult.id = mealId;
+    
+    // Create the meal data object with analyzed information
+    const mealData = {
+      mealId: mealId,
+      mealName: analysisResult.mealName || 'Analyzed Meal',
+      goal: goal,
+      analysis: analysisResult.analysis,
+      detectedFood: analysisResult.detectedFood || analysisResult.foodName || ''
+    };
+    
+    // Save to database using our helper function
+    const dbSaveResult = await saveMealToDatabase(userId || 'anonymous', mealData, imageUrl);
+    
+    // Add database save result to the analysis response
+    analysisResult.dbSaved = dbSaveResult.success;
+    analysisResult.dbError = dbSaveResult.error;
+    
+    updateProgress('Analysis complete');
+    
+    // Return the result
+    return new Response(JSON.stringify(analysisResult), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+  } catch (error: any) {
+    console.error('[API] Unhandled error in analyze-meal API:', error);
+    return new Response(JSON.stringify({ 
+      success: false, 
+      error: error.message || "Unknown error"
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+}

@@ -1,0 +1,201 @@
+'use client';
+
+import React, { useState, useEffect, useRef } from 'react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import Image from 'next/image';
+import Link from 'next/link';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { useAuth } from '../context/auth';
+import dynamic from 'next/dynamic';
+import { AlertCircle, ArrowLeft } from 'lucide-react';
+
+// Import the StandaloneMealAnalysis component dynamically
+const StandaloneMealAnalysis = dynamic(() => import('../components/StandaloneMealAnalysis'), {
+  ssr: false,
+  loading: () => (
+    <div className="animate-pulse flex flex-col items-center">
+      <div className="h-8 w-48 bg-gray-700 rounded mb-4"></div>
+      <div className="h-64 w-64 bg-gray-700 rounded-lg"></div>
+    </div>
+  )
+});
+
+// Add MealDataFix to the global Window interface
+declare global {
+  interface Window {
+    loadMealAnalysisData?: (mealId: string) => any;
+    forceRedirectToAnalysis?: (mealId: string) => void;
+    MealDataFix?: {
+      handleAPIError: () => any;
+    };
+  }
+}
+
+export default function MealAnalysisPage() {
+  const [isClient, setIsClient] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+  const [mealId, setMealId] = useState<string | null>(null);
+  
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const isFirstRender = useRef(true);
+  const { user } = useAuth();
+  const supabase = createClientComponentClient();
+
+  // Set client-side flag
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // Handle query params on page load
+  useEffect(() => {
+    if (isClient && isFirstRender.current) {
+      isFirstRender.current = false;
+      
+      const id = searchParams.get('id');
+      
+      if (id) {
+        setMealId(id);
+        loadMealData(id); // Use our new loadMealData function
+      } else {
+        // No meal ID in URL, try to get from localStorage
+        const storedId = localStorage.getItem('current_meal_id');
+        
+        if (storedId) {
+          // We have a previously analyzed meal, redirect to it
+          const newParams = new URLSearchParams(searchParams.toString());
+          newParams.set('id', storedId);
+          router.replace(`${pathname}?${newParams.toString()}`);
+        } else {
+          // No previous meal, redirect to upload
+          router.replace('/upload');
+        }
+      }
+    }
+  }, [searchParams, router, pathname, isClient]);
+
+  const loadMealData = async (id: string) => {
+    setIsLoading(true);
+    setHasError(false);
+    
+    try {
+      // Try to get data from localStorage first
+      const storedData = localStorage.getItem(`meal_analysis_${id}`);
+      if (storedData) {
+        try {
+          const parsedData = JSON.parse(storedData);
+          if (parsedData) {
+            console.log("Using meal data from localStorage:", id);
+            setIsLoading(false);
+            return;
+          }
+        } catch (e) {
+          console.error("Error parsing stored meal data:", e);
+          // Continue to API call if parsing fails
+        }
+      }
+      
+      // If not in localStorage, fetch from API
+      console.log("Fetching meal data from API:", id);
+      const response = await fetch(`/api/analyze-meal?id=${id}`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch meal data: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data && data.analysisResult) {
+        console.log("Received meal data from API");
+        
+        // Store in localStorage for future use
+        try {
+          localStorage.setItem(`meal_analysis_${id}`, JSON.stringify(data.analysisResult));
+          localStorage.setItem('last_meal_analysis', JSON.stringify(data.analysisResult));
+          localStorage.setItem('current_meal_id', id);
+        } catch (e) {
+          console.error("Error storing meal data in localStorage:", e);
+        }
+      } else {
+        throw new Error("Invalid or missing meal data in API response");
+      }
+    } catch (error) {
+      console.error("Error loading meal data:", error);
+      
+      // Try to use fallback data instead of showing error
+      if (window.MealDataFix && typeof window.MealDataFix.handleAPIError === 'function') {
+        console.log("Using fallback meal data due to API error");
+        const fallbackData = window.MealDataFix.handleAPIError();
+        
+        if (fallbackData) {
+          // Store fallback data in localStorage
+          try {
+            localStorage.setItem(`meal_analysis_${id}`, JSON.stringify(fallbackData));
+            localStorage.setItem('last_meal_analysis', JSON.stringify(fallbackData));
+            localStorage.setItem('current_meal_id', id);
+            console.log("Stored fallback data in localStorage");
+          } catch (e) {
+            console.error("Error storing fallback data in localStorage:", e);
+          }
+        } else {
+          setHasError(true);
+        }
+      } else {
+        setHasError(true);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // Render skeleton during loading
+  if (!isClient || isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="animate-pulse flex flex-col items-center">
+          <div className="h-8 w-48 bg-gray-700 rounded mb-4"></div>
+          <div className="h-64 w-64 bg-gray-700 rounded-lg"></div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (hasError) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4">
+        <div className="text-center mb-8">
+          <h1 className="text-red-500 text-2xl font-bold mb-4">Analysis Error</h1>
+          <p className="text-gray-300 mb-6">Could not find meal analysis data</p>
+          
+          <Link 
+            href="/upload" 
+            className="inline-flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition-colors"
+          >
+            <ArrowLeft className="h-5 w-5 mr-2" />
+            Back to Upload
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-900 pt-8 pb-16">
+      {/* Back to upload link */}
+      <div className="max-w-4xl mx-auto px-4 mb-8">
+        <Link href="/upload" className="text-blue-400 hover:text-blue-300 flex items-center">
+          <ArrowLeft className="mr-2" size={18} />
+          Back to Upload
+        </Link>
+      </div>
+      
+      {/* Main content - we'll use the StandaloneMealAnalysis component */}
+      <div className="max-w-4xl mx-auto px-4">
+        {mealId && <StandaloneMealAnalysis analysisId={mealId} />}
+      </div>
+    </div>
+  );
+} 

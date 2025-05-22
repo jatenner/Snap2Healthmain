@@ -2,12 +2,18 @@
 
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
+<<<<<<< HEAD
 import { Card, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { supabase } from '../lib/supabaseClient';
 import LoadingSpinner from './LoadingSpinner';
 import { useAuth } from '../context/auth';
 import { formatMealDate } from '../utils/formatMealTime';
+=======
+import { supabase } from '../lib/supabaseClient';
+import LoadingSpinner from './LoadingSpinner';
+import { useAuth } from '../context/AuthContext';
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
 
 interface MealImage {
   publicUrl: string;
@@ -73,6 +79,7 @@ export default function MealImageGallery() {
         if (match && match[1]) {
           const timestamp = parseInt(match[1]);
           if (!isNaN(timestamp)) {
+<<<<<<< HEAD
             // Check if timestamp is in milliseconds (13 digits) or seconds (10 digits)
             const adjustedTimestamp = timestamp.toString().length <= 10 
               ? timestamp * 1000  // Convert seconds to milliseconds
@@ -99,6 +106,12 @@ export default function MealImageGallery() {
         // If we can't extract a valid date, use current date
         console.log(`Couldn't extract valid date from filename: ${filename}, using current date`);
         return new Date().toISOString();
+=======
+            return new Date(timestamp).toISOString();
+          }
+        }
+        return new Date().toISOString(); // Fallback to current date
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
       };
       
       // Convert file paths to public URLs with date information
@@ -108,8 +121,11 @@ export default function MealImageGallery() {
           .from('meal-images')
           .getPublicUrl(file.path);
           
+<<<<<<< HEAD
         console.log(`Generated URL for ${file.path}:`, data.publicUrl);
         
+=======
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
         return {
           publicUrl: data.publicUrl,
           name: file.name,
@@ -139,7 +155,16 @@ export default function MealImageGallery() {
   
   // Format date to a short readable format
   function formatDate(dateString: string) {
+<<<<<<< HEAD
     return formatMealDate(dateString);
+=======
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    }).format(date);
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
   }
 
   // Placeholder SVG for failed images
@@ -147,12 +172,21 @@ export default function MealImageGallery() {
 
   if (loading) {
     return (
+<<<<<<< HEAD
       <div className="flex justify-center items-center h-56">
         <LoadingSpinner size={48} />
       </div>
     );
   }
   
+=======
+      <div className="flex justify-center items-center py-12">
+        <LoadingSpinner size="large" />
+      </div>
+    );
+  }
+
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
   if (error) {
     return (
       <div className="bg-red-50 text-red-700 p-4 rounded-lg my-4">
@@ -167,7 +201,11 @@ export default function MealImageGallery() {
       </div>
     );
   }
+<<<<<<< HEAD
   
+=======
+
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
   if (images.length === 0) {
     return (
       <div className="bg-blue-50 text-blue-700 p-4 rounded-lg my-4">
@@ -181,6 +219,7 @@ export default function MealImageGallery() {
     const groupedImages: {[key: string]: MealImage[]} = {};
     
     images.forEach(image => {
+<<<<<<< HEAD
       try {
         // Create date object and validate
         const date = new Date(image.createdAt);
@@ -209,6 +248,13 @@ export default function MealImageGallery() {
         }
         groupedImages[errorKey].push(image);
       }
+=======
+      const date = new Date(image.createdAt).toISOString().split('T')[0];
+      if (!groupedImages[date]) {
+        groupedImages[date] = [];
+      }
+      groupedImages[date].push(image);
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
     });
     
     return groupedImages;
@@ -238,6 +284,7 @@ export default function MealImageGallery() {
                       fill
                       sizes="(max-width: 768px) 50vw, 25vw"
                       className="object-cover"
+<<<<<<< HEAD
                       unoptimized
                       onError={(e) => {
                         console.error(`Error loading image: ${image.publicUrl}`);
@@ -248,6 +295,10 @@ export default function MealImageGallery() {
                           pathSegments: urlParts.slice(3),
                           isSupabaseUrl: image.publicUrl.includes('supabase.co')
                         });
+=======
+                      onError={(e) => {
+                        console.error(`Error loading image: ${image.publicUrl}`);
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
                         (e.target as HTMLImageElement).src = placeholderImage;
                       }}
                     />

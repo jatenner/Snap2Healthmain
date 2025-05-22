@@ -1,0 +1,891 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/app/context/auth';
+import { safeForEach, safeMap, safeFilter, getArrayOrEmpty } from '../lib/utils';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+
+// Enhanced interfaces to support all nutrient data
+interface Nutrient {
+  name: string;
+  amount: number;
+  unit: string;
+  percentDailyValue?: number;
+  description?: string;
+  category?: 'vitamin' | 'mineral' | 'macronutrient' | 'antioxidant' | 'fatty-acid' | 'other';
+  status?: 'low' | 'adequate' | 'high';
+  personalizedDV?: number;
+}
+
+interface MealAnalysisData {
+  id?: string;
+  calories: number;
+  macronutrients: Nutrient[];
+  micronutrients: Nutrient[];
+  phytonutrients?: Nutrient[];
+  benefits?: string[];
+  concerns?: string[];
+  suggestions?: string[];
+  ingredients?: { name: string; portion: string; calories: number }[];
+  analysis?: {
+    macronutrients?: Nutrient[];
+    micronutrients?: Nutrient[];
+    personalized_insights?: string;
+    insights?: string;
+  };
+  nutrients?: {
+    macronutrients?: Nutrient[];
+    micronutrients?: Nutrient[];
+  };
+  personalized_insights?: string;
+  insights_summary?: string;
+}
+
+interface UserProfile {
+  id?: string;
+  full_name?: string;
+  gender?: string;
+  age?: number;
+  weight?: number;
+  height?: number;
+  activity_level?: string;
+  goal?: string;
+  health_conditions?: string[];
+  dietary_restrictions?: string[];
+  [key: string]: any;
+}
+
+interface PersonalizedNutritionAnalysisProps {
+  analysisData: MealAnalysisData;
+  userGoal?: string;
+}
+
+// Add back the missing nutrient name arrays
+const vitaminNames = [
+  'vitamin a', 'vitamin c', 'vitamin d', 'vitamin e', 'vitamin k', 
+  'vitamin b1', 'vitamin b2', 'vitamin b3', 'vitamin b5', 'vitamin b6', 'vitamin b7', 'vitamin b9', 'vitamin b12',
+  'thiamine', 'thiamin', 'riboflavin', 'niacin', 'folate', 'folic acid', 'cobalamin', 'biotin', 'pantothenic acid'
+];
+
+const mineralNames = [
+  'calcium', 'iron', 'zinc', 'magnesium', 'potassium', 'sodium', 'phosphorus', 
+  'iodine', 'selenium', 'copper', 'manganese', 'chromium', 'molybdenum', 'fluoride', 
+  'chloride', 'sulfur', 'cobalt', 'boron', 'silicon', 'vanadium', 'nickel', 'tin', 'lithium'
+];
+
+const antioxidantNames = [
+  'flavonoid', 'carotenoid', 'lycopene', 'lutein', 'zeaxanthin', 'resveratrol', 'anthocyanin',
+  'catechin', 'quercetin', 'polyphenol', 'antioxidant'
+];
+
+const fattyAcidNames = [
+  'omega-3', 'omega-6', 'omega-9', 'epa', 'dha', 'fatty acid', 'pufa', 'mufa', 
+  'polyunsaturated', 'monounsaturated', 'polyunsaturated fat', 'monounsaturated fat'
+];
+
+// Helper function to get detailed descriptions for nutrients
+const getNutrientDescription = (name: string): string => {
+  const descriptions: Record<string, string> = {
+    // Macronutrients
+    'protein': 'Essential for muscle repair, immune function, and enzyme production. Helps maintain lean body mass and supports tissue growth.',
+    'carbohydrates': 'Primary energy source for the body, especially during high-intensity activities. Provides fuel for the brain and nervous system.',
+    'fat': 'Important for hormone production, brain health, nutrient absorption, and long-term energy storage. Essential fatty acids support heart and brain health.',
+    'fiber': 'Promotes digestive health, helps maintain stable blood sugar levels, and increases satiety to aid weight management. May help reduce cholesterol levels.',
+    'sugar': 'Provides quick energy but should be limited for optimal health. Excess consumption is linked to various health issues including obesity and diabetes.',
+    'sodium': 'Essential for fluid balance and nerve function, but excess can affect blood pressure and cardiovascular health. Aim to keep below 2300mg daily.',
+    'saturated fat': 'Should be limited in the diet as excessive intake is associated with increased cholesterol levels and heart disease risk. Aim to keep below 10% of daily calories.',
+    'trans fat': 'Artificial fats that should be avoided as they increase LDL cholesterol and decrease HDL cholesterol. Even small amounts can negatively impact heart health.',
+    'unsaturated fat': 'Healthy fats found in plant foods and fish that support heart health and reduce inflammation. Include sources like olive oil, avocados, and nuts.',
+    'omega-3': 'Essential fatty acids that reduce inflammation, support brain health, and may lower heart disease risk. Found in fatty fish, flaxseeds, and walnuts.',
+    'omega-6': 'Essential fatty acids that play a role in brain function and normal growth and development. Balance with omega-3s for optimal health.',
+    'cholesterol': 'Used to make hormones, vitamin D, and substances that help digest foods. The body produces all it needs, so dietary intake should be moderate.',
+    'calories': 'Unit of energy from food. Balance calorie intake with physical activity to maintain healthy weight. Needs vary based on age, gender, activity level, and goals.',
+    
+    // Vitamins
+    'vitamin a': 'Critical for vision, immune function, cell growth, and maintaining healthy organs. Found in colorful fruits and vegetables like carrots and sweet potatoes.',
+    'vitamin c': 'Powerful antioxidant that supports immune health, collagen production, and helps with iron absorption. Found in citrus fruits, bell peppers, and berries.',
+    'vitamin d': 'Essential for calcium absorption, bone health, immune function, and mood regulation. Often called the "sunshine vitamin" as it\'s produced when skin is exposed to sunlight.',
+    'vitamin e': 'Powerful antioxidant that protects cells from damage, supports immune function, and promotes skin health. Found in nuts, seeds, and vegetable oils.',
+    'vitamin k': 'Necessary for blood clotting, bone health, and may help prevent arterial calcification. Found in leafy greens and fermented foods.',
+    'vitamin b1': 'Also known as thiamine. Essential for energy metabolism and nerve, muscle, and heart function. Found in whole grains, meat, and legumes.',
+    'vitamin b2': 'Also known as riboflavin. Helps convert food into energy and supports cellular function, growth, and development. Found in dairy, eggs, and leafy greens.',
+    'vitamin b3': 'Also known as niacin. Helps convert nutrients into energy, repairs DNA, and supports nervous system health. Found in meat, fish, and fortified cereals.',
+    'vitamin b5': 'Also known as pantothenic acid. Important for making blood cells and converting food into energy. Found in meat, broccoli, and avocados.',
+    'vitamin b6': 'Important for brain development, immune function, and helps create neurotransmitters like serotonin and dopamine. Found in poultry, fish, and bananas.',
+    'vitamin b7': 'Also known as biotin. Supports hair, skin, and nail health, and helps metabolize carbohydrates and fats. Found in eggs, nuts, and seeds.',
+    'vitamin b9': 'Also known as folate or folic acid. Critical for DNA synthesis, cell division, and preventing neural tube defects. Found in leafy greens and legumes.',
+    'vitamin b12': 'Essential for nerve function, brain health, red blood cell formation, and DNA synthesis. Found primarily in animal products.',
+    'folate': 'Important for cell division, DNA synthesis, and preventing neural tube defects during pregnancy. Found in leafy greens, legumes, and fortified foods.',
+    'riboflavin': 'Helps convert food into energy and is important for growth, development, and maintaining healthy skin and eyes. Found in dairy, eggs, and enriched grains.',
+    'niacin': 'Helps convert nutrients into energy, repairs DNA, and acts as an antioxidant. May help lower cholesterol levels. Found in meat, fish, and peanuts.',
+    'thiamine': 'Essential for energy metabolism, nerve function, and muscle contraction. Prevents beriberi disease. Found in whole grains, meat, and legumes.',
+    'pantothenic acid': 'Vital for making blood cells and converting food into energy. Found in meat, broccoli, avocados, and whole grains.',
+    'biotin': 'Supports metabolism of fats, carbohydrates, and proteins. Important for hair, skin, and nail health. Found in eggs, nuts, and seeds.',
+    
+    // Minerals
+    'calcium': 'Critical for bone and teeth health, muscle function, nerve signaling, and blood clotting. Found in dairy products, fortified plant milks, and leafy greens.',
+    'iron': 'Essential for oxygen transport in the blood, energy production, and immune function. Prevents anemia. Found in red meat, legumes, and fortified cereals.',
+    'potassium': 'Regulates fluid balance, muscle contractions, and nerve signals. May help lower blood pressure. Found in bananas, potatoes, and legumes.',
+    'magnesium': 'Involved in over 300 enzyme reactions, including energy creation, protein formation, and muscle movements. Found in nuts, seeds, and whole grains.',
+    'zinc': 'Important for immune function, wound healing, DNA synthesis, and growth and development. Found in meat, shellfish, and legumes.',
+    'phosphorus': 'Essential for bone health, energy production, cellular function, and properly functioning kidneys. Found in dairy, meat, and whole grains.',
+    'selenium': 'Acts as an antioxidant, especially when paired with vitamin E. Supports thyroid and immune function. Found in Brazil nuts, seafood, and meats.',
+    'iodine': 'Necessary for thyroid function and metabolism. Deficiency can lead to goiter and developmental issues. Found in iodized salt and seafood.',
+    'copper': 'Important for iron metabolism, connective tissue formation, and neurotransmitter synthesis. Found in shellfish, nuts, and seeds.',
+    'manganese': 'Involved in metabolism, bone development, wound healing, and antioxidant defenses. Found in whole grains, nuts, and leafy greens.',
+    'chromium': 'Enhances insulin action and influences carbohydrate, fat, and protein metabolism. Found in meat, whole grains, and broccoli.',
+    'molybdenum': 'Cofactor for enzymes that help metabolize toxins and drugs in the body. Found in legumes, grains, and nuts.'
+  };
+  
+  // Return description if available, otherwise check for partial matches
+  const exactMatch = descriptions[name.toLowerCase()];
+  if (exactMatch) return exactMatch;
+  
+  // Try to find partial matches for important nutrients
+  const lowercaseName = name.toLowerCase();
+  
+  // Check for B vitamins with different formats
+  if (lowercaseName.includes('vitamin b') || lowercaseName.match(/b\d+/) || lowercaseName.includes('b vitamin')) {
+    return 'B vitamins are essential for energy production, brain function, and cell metabolism. They help convert food into energy and are important for nervous system health.';
+  }
+  
+  // Check for other vitamin partial matches
+  if (lowercaseName.includes('vitamin')) {
+    return 'Vitamins are essential micronutrients that support various bodily functions including immune health, energy production, and cell repair.';
+  }
+  
+  // Check for mineral partial matches
+  const minerals = ['iron', 'calcium', 'zinc', 'magnesium', 'potassium', 'sodium', 'copper', 'manganese', 'selenium'];
+  for (const mineral of minerals) {
+    if (lowercaseName.includes(mineral)) {
+      return descriptions[mineral] || 'Essential mineral that supports various bodily functions and overall health.';
+    }
+  }
+  
+  // Default description
+  return 'Important nutrient for overall health and wellbeing. Part of a balanced diet that supports bodily functions.';
+};
+
+// Helper function to categorize micronutrients into groups
+const categorizeNutrients = (nutrients: Nutrient[] = []): Record<string, Nutrient[]> => {
+  if (!nutrients || nutrients.length === 0) return {};
+  
+  // Define category groups for better display
+  const categories: Record<string, Nutrient[]> = {
+    'Vitamins': [],
+    'Minerals': [],
+    'Antioxidants': [],
+    'Essential Fatty Acids': [],
+    'Other': []
+  };
+  
+  // Sort each nutrient into its appropriate category
+  nutrients.forEach(nutrient => {
+    if (!nutrient || !nutrient.name) return;
+    
+    const name = nutrient.name.toLowerCase();
+    const category = nutrient.category || 'unknown';
+    
+    if (category === 'vitamin' || name.includes('vitamin')) {
+      categories['Vitamins'].push(nutrient);
+    } else if (category === 'mineral' || 
+       ['calcium', 'iron', 'zinc', 'magnesium', 'potassium', 'sodium', 'phosphorus'].some(m => name.includes(m))) {
+      categories['Minerals'].push(nutrient);
+    } else if (category === 'antioxidant' || 
+       ['flavonoid', 'carotenoid', 'lycopene', 'lutein', 'resveratrol', 'polyphenol'].some(a => name.includes(a))) {
+      categories['Antioxidants'].push(nutrient);
+    } else if (category === 'fatty-acid' || 
+       ['omega', 'dha', 'epa', 'fatty acid'].some(f => name.includes(f))) {
+      categories['Essential Fatty Acids'].push(nutrient);
+    } else {
+      categories['Other'].push(nutrient);
+    }
+  });
+  
+  // Remove empty categories
+  Object.keys(categories).forEach(key => {
+    if (categories[key].length === 0) {
+      delete categories[key];
+    }
+  });
+  
+  return categories;
+};
+
+// Helper function to categorize micronutrients
+const categorizeMicronutrients = () => {
+  // This function has been replaced by the improved categorizeNutrients function
+  return {};
+};
+
+// New helper function to generate nutrient status badge
+const getNutrientBadge = (nutrient: Nutrient): { label: string; color: string } | null => {
+  if (!nutrient.percentDailyValue) return null;
+  
+  const dv = nutrient.percentDailyValue;
+  const name = nutrient.name.toLowerCase();
+  
+  // High nutrient content (good for most nutrients)
+  if (dv >= 50) {
+    // For nutrients we typically want to limit
+    if (name.includes('sodium') || name.includes('sugar') || name.includes('saturated fat') || name.includes('cholesterol')) {
+      return { label: 'High', color: 'bg-red-500' };
+    }
+    // For beneficial nutrients
+    return { label: 'Excellent Source', color: 'bg-green-500' };
+  }
+  
+  // Good nutrient content
+  if (dv >= 25) {
+    // For nutrients we typically want to limit
+    if (name.includes('sodium') || name.includes('sugar') || name.includes('saturated fat') || name.includes('cholesterol')) {
+      return { label: 'Moderate', color: 'bg-yellow-500' };
+    }
+    // For beneficial nutrients
+    return { label: 'Good Source', color: 'bg-blue-500' };
+  }
+  
+  // Low nutrient content
+  if (dv < 10) {
+    // For nutrients we typically want to limit
+    if (name.includes('sodium') || name.includes('sugar') || name.includes('saturated fat') || name.includes('cholesterol')) {
+      return { label: 'Low', color: 'bg-green-500' };
+    }
+    // For beneficial nutrients that might be concerning if too low
+    if (name.includes('protein') || name.includes('fiber') || name.includes('vitamin') || mineralNames.some(m => name.includes(m))) {
+      return { label: 'Low', color: 'bg-yellow-500' };
+    }
+  }
+  
+  return null;
+};
+
+// Render a nutrient bar with description and badge
+const renderNutrientBar = (nutrient: Nutrient, index: number) => {
+  // Calculate personalized daily value for this nutrient
+  const personalizedDV = getPersonalDailyValue(nutrient, userProfile);
+  
+  // Use personalized value if available, otherwise use the standard one
+  const displayValue = personalizedDV || nutrient.percentDailyValue || 0;
+  
+  // Cap percentage at 100% for display purposes
+  const displayPercentage = Math.min(displayValue, 100);
+  
+  // Choose appropriate color based on type of nutrient
+  let barColor = 'bg-blue-500';
+  
+  // Protein: Blue
+  if (nutrient.name.toLowerCase().includes('protein')) {
+    barColor = 'bg-blue-500';
+  } 
+  // Carbs: Green
+  else if (nutrient.name.toLowerCase().includes('carb')) {
+    barColor = 'bg-green-500';
+  } 
+  // Fats: Yellow/orange
+  else if (nutrient.name.toLowerCase().includes('fat')) {
+    barColor = 'bg-amber-500';
+  }
+  // Fiber: Purple
+  else if (nutrient.name.toLowerCase().includes('fiber')) {
+    barColor = 'bg-purple-500';
+  }
+  // Sugars: Red (usually try to minimize)
+  else if (nutrient.name.toLowerCase().includes('sugar')) {
+    barColor = 'bg-red-500';
+  }
+  
+  // Get nutrient badge if applicable - use personalized DV for badge calculation
+  const personalizedNutrient = {...nutrient, percentDailyValue: displayValue};
+  const badge = getNutrientBadge(personalizedNutrient);
+  
+  return (
+    <div className="mb-4">
+      <div className="flex justify-between items-center mb-1">
+        <div className="flex items-center">
+          <h3 className="text-base font-medium text-cyan-accent">{nutrient.name}</h3>
+          <span className="text-blue-100 ml-2">
+            {nutrient.amount} {nutrient.unit} 
+            <span className="text-blue-100/60 ml-1">
+              {displayValue > 0 ? `(${displayValue}% DV${personalizedDV !== nutrient.percentDailyValue ? '*' : ''})` : '(DV not available)'}
+            </span>
+          </span>
+        </div>
+        
+        {/* Show nutrient status badge */}
+        {badge && (
+          <span className={`text-xs font-medium px-2 py-1 rounded-full text-white ${badge.color}`}>
+            {badge.label}
+          </span>
+        )}
+      </div>
+      
+      <div className="h-2 w-full bg-darkBlue-accent/30 rounded-full">
+        <div 
+          className={`h-full ${barColor} rounded-full`} 
+          style={{ width: `${displayPercentage}%` }}
+        />
+      </div>
+      
+      {nutrient.description && (
+        <p className="text-xs text-blue-100/70 mt-1">
+          {nutrient.description}
+        </p>
+      )}
+      
+      {personalizedDV !== nutrient.percentDailyValue && (
+        <p className="text-xs text-cyan-accent mt-1">
+          *Personalized to your profile
+        </p>
+      )}
+    </div>
+  );
+};
+
+// Helper function to get personal daily value targets based on user profile
+const getPersonalDailyValue = (nutrient: Nutrient, userProfile: any): number => {
+  // Default percentDailyValue
+  if (nutrient.percentDailyValue) {
+    return nutrient.percentDailyValue;
+  }
+  
+  // If no user profile or no adjustments needed
+  if (!userProfile) {
+    return 0;
+  }
+  
+  const name = nutrient.name.toLowerCase();
+  const { gender, age, weight, height, goal, activityLevel } = userProfile;
+  
+  // Define base reference values for an average adult
+  const baseValues: Record<string, number> = {
+    'protein': 50, // g
+    'carbohydrates': 275, // g
+    'fat': 78, // g
+    'fiber': 28, // g
+    'calcium': 1000, // mg
+    'iron': 18, // mg
+    'vitamin c': 90, // mg
+    'vitamin d': 20, // mcg
+    'vitamin a': 900, // mcg
+    'vitamin e': 15, // mg
+    'vitamin k': 120, // mcg
+    'vitamin b12': 2.4, // mcg
+    'folate': 400, // mcg
+    'potassium': 3500, // mg
+    'magnesium': 400, // mg
+    'zinc': 11, // mg
+    'sodium': 2300, // mg
+    'cholesterol': 300 // mg
+  };
+  
+  // Adjust protein needs based on weight and goal
+  if (name === 'protein' || name.includes('protein')) {
+    let proteinMultiplier = 0.8; // Default is 0.8g per kg for general health
+    
+    if (goal?.toLowerCase().includes('muscle') || goal?.toLowerCase().includes('strength')) {
+      proteinMultiplier = 1.6; // Higher protein for muscle gain (1.6g per kg)
+    } else if (goal?.toLowerCase().includes('weight loss')) {
+      proteinMultiplier = 1.2; // Slightly higher protein for weight loss to preserve muscle
+    } else if (goal?.toLowerCase().includes('endurance') || goal?.toLowerCase().includes('athlete')) {
+      proteinMultiplier = 1.4; // Endurance athletes need more protein
+    }
+    
+    if (weight) {
+      // Convert lbs to kg if necessary (assuming weight is in pounds)
+      const weightInKg = weight * 0.453592;
+      // Calculate personalized protein target in grams
+      const proteinTarget = weightInKg * proteinMultiplier;
+      // Calculate what percentage of target this meal provides
+      return Math.round((nutrient.amount / proteinTarget) * 100);
+    }
+  }
+  
+  // Adjust calorie needs based on gender, age, weight, height, and activity level
+  if (name === 'calories' || name === 'calorie' || name === 'energy') {
+    let bmr = 0;
+    
+    // Calculate BMR using Mifflin-St Jeor Equation
+    if (gender && weight && height && age) {
+      const weightInKg = weight * 0.453592;
+      const heightInCm = height * 2.54;
+      
+      if (gender.toLowerCase() === 'male') {
+        bmr = 10 * weightInKg + 6.25 * heightInCm - 5 * age + 5;
+      } else {
+        bmr = 10 * weightInKg + 6.25 * heightInCm - 5 * age - 161;
+      }
+      
+      // Apply activity multiplier
+      let activityMultiplier = 1.2; // Sedentary
+      
+      if (activityLevel) {
+        if (activityLevel.toLowerCase().includes('moderate')) {
+          activityMultiplier = 1.55;
+        } else if (activityLevel.toLowerCase().includes('active') || activityLevel.toLowerCase().includes('high')) {
+          activityMultiplier = 1.725;
+        } else if (activityLevel.toLowerCase().includes('very') && activityLevel.toLowerCase().includes('active')) {
+          activityMultiplier = 1.9;
+        }
+      }
+      
+      const calorieTarget = bmr * activityMultiplier;
+      return Math.round((nutrient.amount / calorieTarget) * 100);
+    }
+  }
+  
+  // Gender-specific adjustments
+  if (gender) {
+    if (gender.toLowerCase() === 'female') {
+      if (name === 'iron') {
+        if (age >= 19 && age <= 50) {
+          return Math.round((nutrient.amount / 18) * 100); // Women 19-50 need 18mg iron
+        } else {
+          return Math.round((nutrient.amount / 8) * 100); // Women 51+ need 8mg iron
+        }
+      } else if (name === 'calcium') {
+        if (age >= 51) {
+          return Math.round((nutrient.amount / 1200) * 100); // Women 51+ need 1200mg calcium
+        }
+      }
+    }
+  }
+  
+  // Age-specific adjustments
+  if (age) {
+    if (age >= 70 && name === 'vitamin d') {
+      return Math.round((nutrient.amount / 25) * 100); // Seniors need 25mcg vitamin D
+    }
+    
+    if (age >= 50 && name === 'vitamin b12') {
+      return Math.round((nutrient.amount / 2.6) * 100); // Older adults may need more B12
+    }
+  }
+  
+  // Use base values if no personalized calculation was done
+  if (baseValues[name]) {
+    return Math.round((nutrient.amount / baseValues[name]) * 100);
+  }
+  
+  // Default
+  return nutrient.percentDailyValue || 0;
+};
+
+// Helper function to generate personalized recommendations
+const getPersonalizedRecommendations = (analysisData: MealAnalysisData, userGoal?: string): string[] => {
+  // Return existing suggestions if available
+  if (analysisData.suggestions && analysisData.suggestions.length > 0) {
+    return analysisData.suggestions;
+  }
+  
+  // Otherwise, generate some basic recommendations
+  const recommendations: string[] = [];
+  
+  // Check for goal-specific recommendations
+  if (userGoal) {
+    const goalLower = userGoal.toLowerCase();
+    
+    if (goalLower.includes('weight loss')) {
+      recommendations.push('Focus on protein-rich foods to help with satiety and preserve muscle mass.');
+      recommendations.push('Include plenty of fiber-rich vegetables to help you feel full longer.');
+    } 
+    else if (goalLower.includes('muscle') || goalLower.includes('strength')) {
+      recommendations.push('Ensure adequate protein intake (about 1.6-2.2g per kg of body weight) to support muscle recovery and growth.');
+      recommendations.push('Include carbohydrates to replenish muscle glycogen stores.');
+    }
+    else if (goalLower.includes('energy') || goalLower.includes('fatigue')) {
+      recommendations.push('Include complex carbohydrates for sustained energy throughout the day.');
+      recommendations.push('Ensure adequate B-vitamin intake, which plays a crucial role in energy metabolism.');
+    }
+    else if (goalLower.includes('heart') || goalLower.includes('cardiac')) {
+      recommendations.push('Focus on foods low in sodium and saturated fat to support heart health.');
+      recommendations.push('Include omega-3 rich foods and fiber to help manage cholesterol levels.');
+    }
+  }
+  
+  // Add general recommendations if we don't have enough
+  if (recommendations.length < 3) {
+    recommendations.push('Aim for a colorful plate with a variety of fruits and vegetables for optimal nutrition.');
+    recommendations.push('Stay hydrated by drinking water throughout the day.');
+    recommendations.push('Consider portion sizes to align with your individual energy needs and goals.');
+  }
+  
+  return recommendations;
+};
+
+// Helper function to safely extract data from nested objects
+function safeExtractData(data: any, path: string[], defaultValue: any = null) {
+  try {
+    let current = data;
+    for (const key of path) {
+      if (current === null || current === undefined || typeof current !== 'object') {
+        return defaultValue;
+      }
+      current = current[key];
+    }
+    return current === undefined ? defaultValue : current;
+  } catch (e) {
+    console.error('Error extracting data:', e);
+    return defaultValue;
+  }
+}
+
+// Helper to handle various data structures from different sources
+function extractNutrientsFromMealData(mealData: MealAnalysisData | null | undefined) {
+  if (!mealData) return { macros: [] as Nutrient[], micros: [] as Nutrient[] };
+  
+  // First normalize the data structure to avoid duplicates
+  const normalizedData = normalizeDataStructure(mealData);
+  
+  // Now extract the data from consistent locations
+  const extractedMacros = normalizedData.macronutrients || [] as Nutrient[];
+  const extractedMicros = normalizedData.micronutrients || [] as Nutrient[];
+  
+  // Ensure arrays
+  return { 
+    macros: Array.isArray(extractedMacros) ? extractedMacros : [], 
+    micros: Array.isArray(extractedMicros) ? extractedMicros : [] 
+  };
+}
+
+// Helper to normalize data structure to avoid duplicates
+function normalizeDataStructure(data: any): any {
+  if (!data) return data;
+  
+  // Create a deep copy to avoid modifying the original
+  const normalizedData = JSON.parse(JSON.stringify(data));
+  
+  // Step 1: Handle case where nutrients are in multiple places
+  // If we have nutrients in different locations, consolidate them
+  
+  // For macronutrients
+  let consolidatedMacros: Nutrient[] = [];
+  
+  // Collect from all possible locations
+  if (normalizedData.macronutrients && Array.isArray(normalizedData.macronutrients)) {
+    consolidatedMacros = [...normalizedData.macronutrients];
+  }
+  
+  if (normalizedData.analysis?.macronutrients && Array.isArray(normalizedData.analysis.macronutrients)) {
+    // Only add nutrients that aren't already in the array
+    normalizedData.analysis.macronutrients.forEach((nutrient: Nutrient) => {
+      if (!consolidatedMacros.some(m => m.name === nutrient.name)) {
+        consolidatedMacros.push(nutrient);
+      }
+    });
+  }
+  
+  if (normalizedData.nutrients?.macronutrients && Array.isArray(normalizedData.nutrients.macronutrients)) {
+    // Only add nutrients that aren't already in the array
+    normalizedData.nutrients.macronutrients.forEach((nutrient: Nutrient) => {
+      if (!consolidatedMacros.some(m => m.name === nutrient.name)) {
+        consolidatedMacros.push(nutrient);
+      }
+    });
+  }
+  
+  // Set the consolidated list at the root level
+  normalizedData.macronutrients = consolidatedMacros;
+  
+  // Remove from other locations to avoid duplicates
+  if (normalizedData.analysis) {
+    delete normalizedData.analysis.macronutrients;
+  }
+  
+  if (normalizedData.nutrients) {
+    delete normalizedData.nutrients.macronutrients;
+  }
+  
+  // Do the same for micronutrients
+  let consolidatedMicros: Nutrient[] = [];
+  
+  if (normalizedData.micronutrients && Array.isArray(normalizedData.micronutrients)) {
+    consolidatedMicros = [...normalizedData.micronutrients];
+  }
+  
+  if (normalizedData.analysis?.micronutrients && Array.isArray(normalizedData.analysis.micronutrients)) {
+    normalizedData.analysis.micronutrients.forEach((nutrient: Nutrient) => {
+      if (!consolidatedMicros.some(m => m.name === nutrient.name)) {
+        consolidatedMicros.push(nutrient);
+      }
+    });
+  }
+  
+  if (normalizedData.nutrients?.micronutrients && Array.isArray(normalizedData.nutrients.micronutrients)) {
+    normalizedData.nutrients.micronutrients.forEach((nutrient: Nutrient) => {
+      if (!consolidatedMicros.some(m => m.name === nutrient.name)) {
+        consolidatedMicros.push(nutrient);
+      }
+    });
+  }
+  
+  // Set the consolidated list at the root level
+  normalizedData.micronutrients = consolidatedMicros;
+  
+  // Remove from other locations to avoid duplicates
+  if (normalizedData.analysis) {
+    delete normalizedData.analysis.micronutrients;
+  }
+  
+  if (normalizedData.nutrients) {
+    delete normalizedData.nutrients.micronutrients;
+  }
+  
+  // Clean up empty objects
+  if (normalizedData.nutrients && Object.keys(normalizedData.nutrients).length === 0) {
+    delete normalizedData.nutrients;
+  }
+  
+  return normalizedData;
+}
+
+function formatPercentage(value: number): string {
+  if (isNaN(value) || value === null || value === undefined) {
+    return '0%';
+  }
+  return `${Math.round(value)}%`;
+}
+
+// Create a simple tooltip component since the original one wasn't found
+const SimpleTooltip: React.FC<{ content: string; children: React.ReactNode }> = ({ content, children }) => {
+  return (
+    <div className="group relative inline-block">
+      {children}
+      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 -translate-y-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity duration-200 z-10 w-48 p-2 text-xs bg-gray-900 text-gray-200 rounded shadow-lg">
+        {content}
+      </div>
+    </div>
+  );
+};
+
+const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps> = ({ 
+  analysisData, 
+  userGoal 
+}) => {
+  const { user } = useAuth();
+  const [personalizedRecommendations, setPersonalizedRecommendations] = useState<string[]>([]);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch user profile data from Supabase
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      try {
+        const supabase = createClientComponentClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user?.id) {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+            
+          if (!error && data) {
+            setUserProfile(data);
+          } else {
+            console.warn('Error fetching user profile:', error);
+          }
+        }
+        
+        // Try to get profile from localStorage backup if not found in Supabase
+        if (!userProfile) {
+          try {
+            const savedProfile = localStorage.getItem('profile_backup');
+            if (savedProfile) {
+              setUserProfile(JSON.parse(savedProfile));
+            }
+          } catch (e) {
+            console.warn('Error loading profile from localStorage:', e);
+          }
+        }
+      } catch (error) {
+        console.error('Error in fetchUserProfile:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchUserProfile();
+  }, []);
+
+  // Initialize recommendations when component mounts
+  useEffect(() => {
+    // Ensure analysisData is valid
+    if (!analysisData) {
+      setPersonalizedRecommendations([]);
+      return;
+    }
+    
+    const recommendations = getPersonalizedRecommendations(analysisData, userGoal);
+    setPersonalizedRecommendations(recommendations);
+  }, [analysisData, userGoal]);
+  
+  // Store meal data in localStorage as backup
+  useEffect(() => {
+    if (analysisData?.id) {
+      try {
+        localStorage.setItem(`meal_analysis_${analysisData.id}`, JSON.stringify(analysisData));
+      } catch (e) {
+        console.warn('Error saving meal data to localStorage:', e);
+      }
+      
+      // Add data-meal-id attribute to container for the client-side fix script
+      const container = document.querySelector('.meal-analysis-container');
+      if (container && analysisData?.id) {
+        container.setAttribute('data-meal-id', analysisData.id);
+      }
+    }
+  }, [analysisData]);
+  
+  // Extract nutrients using the helper function
+  const { macros, micros } = extractNutrientsFromMealData(analysisData);
+  
+  // Get phytonutrients safely
+  const phytonutrients = getArrayOrEmpty(analysisData?.phytonutrients);
+  
+  // Categorize micronutrients from the extracted micros
+  const categorizedMicronutrients = categorizeMicronutrients();
+
+  // Enhanced rendering of nutrient badges with more info
+  const renderNutrientBadges = (nutrients: Nutrient[] = []) => {
+    if (!nutrients || nutrients.length === 0) return null;
+    
+    // Get nutrients with status
+    const highNutrients = nutrients.filter(n => (n.status === 'high' || (n.percentDailyValue || 0) > 25));
+    const lowNutrients = nutrients.filter(n => (n.status === 'low' || (n.percentDailyValue || 0) < 10));
+    
+    if (highNutrients.length === 0 && lowNutrients.length === 0) return null;
+    
+    return (
+      <div className="mb-4">
+        <div className="flex flex-wrap gap-2">
+          {highNutrients.map((nutrient, index) => (
+            <span 
+              key={`high-${index}`} 
+              className="py-1 px-3 bg-green-900/40 text-green-300 rounded-full text-xs font-medium"
+              title={nutrient.description || `High in ${nutrient.name}`}
+            >
+              High {nutrient.name}
+            </span>
+          ))}
+          
+          {lowNutrients.map((nutrient, index) => (
+            <span 
+              key={`low-${index}`} 
+              className="py-1 px-3 bg-amber-900/40 text-amber-300 rounded-full text-xs font-medium"
+              title={nutrient.description || `Low in ${nutrient.name}`}
+            >
+              Low {nutrient.name}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // Enhanced function to render micronutrients by category with fixed Tooltip component 
+  const renderEnhancedMicronutrients = () => {
+    if (!analysisData) return null;
+    
+    // Get micronutrients data
+    const { micros } = extractNutrientsFromMealData(analysisData);
+    
+    if (!micros || micros.length === 0) {
+      return (
+        <div className="text-gray-400 text-center py-4">
+          No micronutrient data available
+        </div>
+      );
+    }
+    
+    // Process nutrients with personalized daily values
+    const enhancedMicros = micros.map(nutrient => {
+      // Calculate personalized DV if possible
+      const personalizedDV = getPersonalDailyValue(nutrient, userProfile);
+      return {
+        ...nutrient,
+        personalizedDV
+      };
+    });
+    
+    // Group by category
+    const categorizedMicros = categorizeNutrients(enhancedMicros);
+    
+    return (
+      <div>
+        {/* Nutrient status badges */}
+        {renderNutrientBadges(enhancedMicros)}
+        
+        {/* Categorized nutrients */}
+        {Object.entries(categorizedMicros).map(([category, nutrients]) => (
+          <div key={category} className="mb-6">
+            <h3 className="text-sm text-cyan-accent font-semibold mb-2">{category}</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+              {nutrients.map((nutrient, index) => {
+                // Use personalized DV if available, otherwise fall back to standard DV
+                const dvToShow = nutrient.personalizedDV || nutrient.percentDailyValue || 0;
+                
+                return (
+                  <div key={index} className="flex justify-between items-center text-sm">
+                    <div className="flex-1">
+                      <SimpleTooltip content={nutrient.description || `${nutrient.name} is an essential nutrient for health.`}>
+                        <span className="cursor-help border-b border-dotted border-gray-600">
+                          {nutrient.name}
+                        </span>
+                      </SimpleTooltip>
+                    </div>
+                    <div className="flex-1 flex justify-end items-center">
+                      <span className="text-xs text-gray-400 mr-2">
+                        {nutrient.amount} {nutrient.unit}
+                      </span>
+                      <div className="w-16 bg-darkBlue-accent/20 h-2 rounded overflow-hidden">
+                        <div 
+                          className={`h-full ${dvToShow > 66 ? 'bg-green-500' : dvToShow > 33 ? 'bg-cyan-accent' : 'bg-amber-500'}`}
+                          style={{ width: `${Math.min(100, dvToShow)}%` }}
+                        />
+                      </div>
+                      <span className="text-xs ml-1 w-8 text-right">
+                        {dvToShow}%
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  return (
+    <div className="bg-gray-800 rounded-xl p-6 mb-6">
+      <h2 className="text-2xl font-semibold mb-4 text-white">Personalized Health Insights</h2>
+      
+      {/* Display personalized AI insights at the top if available */}
+      {renderPersonalizedInsights()}
+      
+      {/* Macronutrients Section */}
+      <div className="mb-8">
+        <h3 className="text-lg font-semibold mb-4 text-cyan-accent">Macronutrients</h3>
+        {renderMacronutrients()}
+      </div>
+      
+      {/* Micronutrients Section - use enhanced categorized view */}
+      <div className="mb-8">
+        <h3 className="text-lg font-semibold mb-4 text-cyan-accent">Micronutrients</h3>
+        {renderEnhancedMicronutrients()}
+      </div>
+      
+      {/* Additional Benefits and Suggestions */}
+      {renderBenefits()}
+      {renderSuggestions()}
+      
+      {/* Ingredient Summary if available */}
+      {renderIngredientsList()}
+    </div>
+  );
+};
+
+export default PersonalizedNutritionAnalysis; 

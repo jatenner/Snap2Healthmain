@@ -1,0 +1,66 @@
+import React from 'react';
+import './globals.css';
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import Script from 'next/script';
+import { ClientAuthProvider } from './components/client/ClientAuthProvider';
+import { ProfileProvider } from './lib/profile-context';
+import NavBar from './components/NavBar';
+import AuthInitializer from './components/client/AuthInitializer';
+
+const inter = Inter({ subsets: ['latin'] });
+
+export const metadata: Metadata = {
+  title: 'Snap2Health',
+  description: 'Your personal nutrition assistant',
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="en">
+      <head>
+        <Script src="/fix-upload-progress.js" strategy="beforeInteractive" />
+        <Script src="/fix-all-routes.js" strategy="beforeInteractive" />
+        <Script src="/bypass-meal-analysis.js" strategy="beforeInteractive" />
+        <Script src="/fix-auth-cookies.js" strategy="beforeInteractive" />
+        <Script src="/fix-meal-data-saving.js" strategy="beforeInteractive" />
+        <Script src="/auth-debug.js" strategy="afterInteractive" />
+        <Script src="/fix-http-431-direct.js" strategy="afterInteractive" />
+        <Script src="/clean-app-state.js" strategy="afterInteractive" />
+        <Script src="/fix-image-analysis.js" strategy="afterInteractive" />
+        <Script src="/reset-profile-state.js" strategy="afterInteractive" />
+        <Script src="/fix-meal-url.js" strategy="afterInteractive" />
+        <Script src="/fix-meal-analysis.js" strategy="afterInteractive" />
+        <Script src="/profile-debug.js" strategy="afterInteractive" />
+        <Script src="/profile-fix.js" strategy="afterInteractive" />
+        <Script src="/meal-analysis-fallback.js" strategy="afterInteractive" />
+        <Script src="/fix-analysis-errors.js" strategy="afterInteractive" />
+        <Script src="/fix-meal-profile-connection.js" strategy="afterInteractive" />
+        <Script src="/debug-image-upload.js" strategy="afterInteractive" />
+        <Script src="/verify-auth-status.js" strategy="afterInteractive" />
+        <Script src="/fix-auth-detection.js" strategy="afterInteractive" />
+        <Script src="/fix-gpt4o-errors.js" strategy="afterInteractive" />
+        <Script src="/test-gpt4o.js" strategy="lazyOnload" />
+        <script src="/ensure-env-setup.js" async defer></script>
+        <script src="/fix-meal-data-saving.js" async></script>        <script src="/fix-meal-data-saving.js" async></script>      </head>
+      <body className={`${inter.className} bg-gray-900 text-gray-200`}>
+        <AuthInitializer>
+          <ClientAuthProvider>
+            <ProfileProvider>
+              <div className="min-h-screen bg-gray-900 text-white">
+                <NavBar />
+                <main className="container mx-auto px-4 pt-16 pb-8">
+                  {children}
+                </main>
+              </div>
+            </ProfileProvider>
+          </ClientAuthProvider>
+        </AuthInitializer>
+      </body>
+    </html>
+  );
+}

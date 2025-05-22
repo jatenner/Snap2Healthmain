@@ -1,4 +1,5 @@
 {
+<<<<<<< HEAD
   "version": 2,
   "cleanUrls": true,
   "buildCommand": "next build",
@@ -44,3 +45,9 @@
     }
   ]
 }
+=======
+  "buildCommand": "npm run build",
+  "ignoreCommand": "echo 'Proceeding with build'",
+  "installCommand": "npm install"
+} 
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)

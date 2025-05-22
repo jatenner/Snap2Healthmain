@@ -1,0 +1,47 @@
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: false,
+  images: {
+    domains: ['images.unsplash.com', 'localhost'],
+  },
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      // Fix Node.js module polyfills for browser environment
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+      };
+    }
+    
+    // Fix rule.test.test errors by ensuring all rules have proper test properties
+    config.module.rules.forEach(rule => {
+      if (rule.test && typeof rule.test.test !== 'function') {
+        // Skip non-regex test properties instead of calling .test on them
+        const originalTest = rule.test;
+        rule.test = {
+          test: (path) => {
+            try {
+              if (originalTest instanceof RegExp) {
+                return originalTest.test(path);
+              }
+              return false;
+            } catch (error) {
+              return false;
+            }
+          }
+        };
+      }
+    });
+    
+    return config;
+  },
+  experimental: {
+    // Only keep working experimental features
+    optimizeCss: true,
+    scrollRestoration: true,
+  },
+};
+
+module.exports = nextConfig;

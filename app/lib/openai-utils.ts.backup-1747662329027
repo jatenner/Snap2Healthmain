@@ -1,0 +1,464 @@
+import OpenAI from 'openai';
+import { retryWithExponentialBackoff, validateMealAnalysisData } from './api-utils';
+import { mealJsonParse } from '@/app/api/analyze-meal/json-fix';
+import { safeStringify } from '@/utils/json-helpers';
+import { getCompatibleOpenAIKey } from '@/utils/openai-key-fix';
+
+// Initialize OpenAI client with proper error handling
+let openaiClient: OpenAI | null = null;
+let isMockMode = false;
+
+try {
+  const apiKey = process.env.OPENAI_API_KEY;
+  
+  // Check if we should enable mock mode
+  if (!apiKey || apiKey === 'mock') {
+    console.warn('[openai-utils] Missing or mock API key detected. Enabling MOCK mode.');
+    isMockMode = true;
+  } else {
+    // Get a compatible API key (handles project-based keys)
+    const compatibleKey = getCompatibleOpenAIKey(apiKey);
+    openaiClient = configureOpenAIClient(compatibleKey);
+    console.log('[openai-utils] OpenAI client initialized successfully');
+  }
+} catch (error) {
+  console.error('[openai-utils] Failed to initialize OpenAI client:', error);
+  isMockMode = true;
+}
+
+// Helper to configure OpenAI client correctly based on key format
+function configureOpenAIClient(apiKey: string) {
+  // If it's a project-based API key (starts with sk-proj-)
+  if (apiKey.startsWith('sk-proj-')) {
+    console.log('[openai-utils] Using project-based API key with special configuration');
+    
+    // Create a patched client with custom fetch implementation to handle JSON parsing errors
+    return new OpenAI({
+      apiKey: apiKey,
+      baseURL: 'https://api.openai.com/v1',
+      defaultHeaders: {
+        'Content-Type': 'application/json',
+        'OpenAI-Beta': 'assistants=v1'  // Add beta header for project keys
+      },
+      fetch: async (url, init) => {
+        // Use the standard fetch
+        const response = await fetch(url, init);
+        
+        // Create a patched response with custom json method to handle parsing errors
+        const originalJson = response.json;
+        response.json = async () => {
+          try {
+            // Try the original json method first
+            return await originalJson.call(response);
+          } catch (error) {
+            console.warn('[openai-utils] JSON parse error in fetch, attempting fix:', error);
+            
+            // Clone the response to get the text again
+            const clonedResponse = response.clone();
+            const text = await clonedResponse.text();
+            
+            // Use our custom JSON parser to handle problematic formats
+            return mealJsonParse(text, {});
+          }
+        };
+        
+        return response;
+      }
+    });
+  } else {
+    // Standard API key configuration
+    console.log('[openai-utils] Using standard API key configuration');
+    return new OpenAI({
+      apiKey: apiKey
+    });
+  }
+}
+
+/**
+ * Get a validated OpenAI client instance
+ * @returns OpenAI client instance
+ * @throws Error if client is not initialized
+ */
+export function getOpenAIClient(): OpenAI {
+  if (!openaiClient) {
+    throw new Error('OpenAI client is not initialized. Please set OPENAI_API_KEY environment variable.');
+  }
+  return openaiClient;
+}
+
+/**
+ * Check if mock mode is enabled
+ */
+export function isMockModeEnabled(): boolean {
+  return isMockMode || process.env.MOCK_OPENAI === 'true';
+}
+
+/**
+ * Extract JSON from a string that might contain other text
+ * @param text The text that might contain JSON
+ * @returns Extracted JSON object or null
+ */
+function extractJsonFromText(text: string): any {
+  // Try to find JSON in markdown code blocks
+  const jsonBlockMatch = text.match(/```(?:json)?\n([\s\S]*?)\n```/);
+  if (jsonBlockMatch && jsonBlockMatch[1]) {
+    return mealJsonParse(jsonBlockMatch[1], null);
+  }
+
+  // Try to find JSON between curly braces (including nested ones)
+  // This is a naive approach but works for most cases
+  let openBraces = 0;
+  let startIndex = -1;
+  let endIndex = -1;
+
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '{') {
+      if (openBraces === 0) {
+        startIndex = i;
+      }
+      openBraces++;
+    } else if (text[i] === '}') {
+      openBraces--;
+      if (openBraces === 0 && startIndex !== -1) {
+        endIndex = i;
+        const jsonCandidate = text.substring(startIndex, endIndex + 1);
+        const parsed = mealJsonParse(jsonCandidate, null);
+        if (parsed) {
+          return parsed;
+        }
+      }
+    }
+  }
+
+  // If all else fails, try to parse the whole string
+  return mealJsonParse(text, null);
+}
+
+/**
+ * Generate a fallback meal analysis when OpenAI is unavailable
+ * This allows the app to continue functioning even without API access
+ */
+export function generateFallbackMealAnalysis(imageUrl = '', goal = 'General Health'): any {
+  console.log('[openai-utils] Generating fallback meal analysis');
+  
+  // Basic meal analysis with standard macro and micronutrients
+  return {
+    mealName: 'Food Analysis (Fallback)',
+    calories: 500,
+    goal: goal,
+    macronutrients: [
+      { name: "Protein", amount: 25, unit: "g", percentDailyValue: 50 },
+      { name: "Carbs", amount: 50, unit: "g", percentDailyValue: 17 },
+      { name: "Fat", amount: 20, unit: "g", percentDailyValue: 31 }
+    ],
+    micronutrients: [
+      { name: "Vitamin C", amount: 45, unit: "mg", percentDailyValue: 50 },
+      { name: "Iron", amount: 2.5, unit: "mg", percentDailyValue: 14 },
+      { name: "Calcium", amount: 200, unit: "mg", percentDailyValue: 15 }
+    ],
+    foods: [
+      { name: "Mixed Vegetables", amount: "1 serving" },
+      { name: "Protein Source", amount: "3 oz" },
+      { name: "Carbohydrates", amount: "1/2 cup" }
+    ],
+    insights: "This is a fallback analysis generated because the AI analysis service is currently unavailable. The nutritional information shown is an estimate and not specific to your meal. Please try again later for an accurate analysis.",
+    _generated: "fallback",
+    _timestamp: new Date().toISOString()
+  };
+}
+
+/**
+ * Process an image for meal analysis with retry logic
+ * @param imageInput Base64 encoded image string or a direct image URL
+ * @param userGoal User's health goal
+ * @param mockMode Enable mock mode for testing without a real API key
+ * @returns Processed analysis data
+ */
+export async function analyzeImageWithGPT(
+  imageInput: string, 
+  userGoal: string = 'General Health',
+  mockMode: boolean = false
+): Promise<any> {
+  // Check if mock mode is enabled (for testing)
+  if (mockMode || isMockModeEnabled() || process.env.MOCK_OPENAI === 'true') {
+    console.log('[openai-utils] Running in MOCK mode - returning synthetic data');
+    return {
+      mealName: "Healthy Salad",
+      calories: 350,
+      macronutrients: [
+        { name: "Protein", amount: 25, unit: "g", percentDailyValue: 50 },
+        { name: "Carbs", amount: 30, unit: "g", percentDailyValue: 10 },
+        { name: "Fat", amount: 15, unit: "g", percentDailyValue: 23 }
+      ],
+      micronutrients: [
+        { name: "Vitamin A", amount: 300, unit: "mcg", percentDailyValue: 33 },
+        { name: "Vitamin C", amount: 45, unit: "mg", percentDailyValue: 50 },
+        { name: "Iron", amount: 2.5, unit: "mg", percentDailyValue: 14 }
+      ],
+      insights: `This meal is balanced and aligns with your ${userGoal} goal. It provides good protein for muscle maintenance, moderate carbs for energy, and healthy fats for satiety.`
+    };
+  }
+  
+  const client = getOpenAIClient();
+  
+  // Create the system prompt for meal analysis
+  const systemPrompt = `
+You are a professional nutrition analysis AI. Your task is to analyze the food image and:
+1. Identify the food items
+2. Calculate their nutritional content
+3. Structure results in JSON format with these fields:
+- mealName: Brief descriptive name of the meal shown
+- calories: Total calorie estimate (number only)
+- macronutrients: Array of { name, amount, unit, percentDailyValue }
+- micronutrients: Array of { name, amount, unit, percentDailyValue }
+- insights: Personalized analysis considering the user's goal: "${userGoal}"
+
+The JSON output MUST:
+- Include all fields
+- Have macronutrients array with AT LEAST protein, carbs, and fat
+- Have numeric values for all measurements
+- Have strings for names and units
+- Have insights focused on ${userGoal}
+
+Do not include observations, explanations, or text outside the JSON structure.
+Return only a valid JSON object.
+`;
+
+  const userPrompt = "Analyze this food image and return nutritional information in valid JSON format.";
+  
+  try {
+    // Make the request with retry
+    return await retryWithExponentialBackoff(async () => {
+      // Determine if the input is a URL or base64 data
+      let imageContent: {
+        type: 'image_url';
+        image_url: { url: string; detail?: 'high' | 'low' };
+      };
+      
+      if (imageInput.startsWith('http://') || imageInput.startsWith('https://')) {
+        // This is a URL, pass it directly
+        imageContent = {
+          type: 'image_url',
+          image_url: {
+            url: imageInput,
+            detail: 'high'
+          }
+        };
+        console.log('[openai-utils] Using direct image URL for analysis');
+      } else {
+        // Treat as base64 data
+        imageContent = {
+          type: 'image_url',
+          image_url: {
+            url: `data:image/jpeg;base64,${imageInput}`,
+            detail: 'high'
+          }
+        };
+        console.log('[openai-utils] Using base64 image data for analysis');
+      }
+      
+      // Make the OpenAI request
+      const response = await client.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { 
+            role: 'user', 
+            content: [
+              { type: 'text', text: userPrompt },
+              imageContent
+            ]
+          }
+        ],
+        temperature: 0.2,
+        response_format: { type: 'json_object' }
+      });
+      
+      // Extract and validate response
+      const analysisText = response.choices[0]?.message?.content || '';
+      let analysisData;
+      
+      // First, try to extract JSON from the response text
+      analysisData = extractJsonFromText(analysisText);
+      
+      if (!analysisData) {
+        console.error('[openai-utils] Failed to parse OpenAI response as JSON:', analysisText);
+        throw new Error('Invalid JSON response from OpenAI');
+      }
+      
+      // Validate the analysis data against our schema
+      const validation = validateMealAnalysisData(analysisData);
+      if (!validation.isValid) {
+        console.error('[openai-utils] Invalid meal analysis data:', validation.errors);
+        throw new Error(`Invalid analysis data: ${validation.errors.join(', ')}`);
+      }
+      
+      return analysisData;
+    }, 2, 1000, 60000);
+  } catch (error) {
+    console.error('[openai-utils] Image analysis failed after multiple attempts:', error);
+    
+    // After all retries have failed, return a fallback response
+    return generateFallbackMealAnalysis(imageInput, userGoal);
+  }
+}
+
+/**
+ * Request reanalysis for invalid or malformed responses
+ * @param previousResponse Previous invalid response
+ * @param validationErrors Validation errors to fix
+ * @returns Corrected analysis data
+ */
+export async function reanalyzeWithCorrections(
+  previousResponse: string,
+  validationErrors: string[]
+): Promise<any> {
+  const client = getOpenAIClient();
+  
+  const systemPrompt = `
+You are a data correction specialist for nutrition analysis. A previous analysis returned invalid JSON.
+Your task is to fix the data according to these validation errors and return proper JSON.
+
+Required JSON structure:
+{
+  "mealName": string,
+  "calories": number,
+  "macronutrients": [
+    { "name": string, "amount": number, "unit": string, "percentDailyValue": number }
+  ],
+  "micronutrients": [
+    { "name": string, "amount": number, "unit": string, "percentDailyValue": number }
+  ],
+  "insights": string
+}
+
+The macronutrients MUST include entries for protein, carbs, and fat.
+All numeric values must be numbers, not strings. All percentages should be represented as numbers.
+`;
+
+  const errorsDescription = validationErrors.map(error => `- ${error}`).join('\n');
+  const userPrompt = `
+Fix the following JSON response. These validation errors need to be corrected:
+${errorsDescription}
+
+Previous response:
+${previousResponse}
+
+Please return only valid JSON with all required fields and proper types.
+`;
+
+  try {
+    return await retryWithExponentialBackoff(async () => {
+      const response = await client.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.1,
+        response_format: { type: 'json_object' }
+      });
+      
+      const correctedText = response.choices[0]?.message?.content || '';
+      
+      // Extract JSON from the corrected text
+      const parsedData = extractJsonFromText(correctedText);
+      
+      if (!parsedData) {
+        console.error('[openai-utils] Failed to parse corrected response as JSON:', correctedText);
+        throw new Error('Invalid JSON in corrected response');
+      }
+      
+      return parsedData;
+    }, 2, 1000, 30000);
+  } catch (error) {
+    console.error('[openai-utils] Reanalysis failed after multiple attempts:', error);
+    // Return a standardized fallback response instead of throwing
+    return {
+      mealName: "Food Analysis",
+      calories: 0,
+      macronutrients: [
+        { name: "Protein", amount: 0, unit: "g", percentDailyValue: 0 },
+        { name: "Carbs", amount: 0, unit: "g", percentDailyValue: 0 },
+        { name: "Fat", amount: 0, unit: "g", percentDailyValue: 0 }
+      ],
+      micronutrients: [],
+      insights: "We couldn't properly analyze this image. Please try again with a clearer picture of the food."
+    };
+  }
+}
+
+/**
+ * Generate personalized health insights based on meal analysis and user profile
+ * @param mealData Meal analysis data
+ * @param userProfile User profile data
+ * @returns Enhanced insights
+ */
+export async function generatePersonalizedInsights(
+  mealData: any,
+  userProfile: any
+): Promise<string> {
+  if (!mealData) {
+    return "No meal data available for generating insights.";
+  }
+  
+  const client = getOpenAIClient();
+  
+  // Build profile summary for context
+  const profileSummary = userProfile ? 
+    `User is a ${userProfile.age || 'adult'} year old ${userProfile.gender || 'person'} with a goal of ${userProfile.goal || 'general health'}.` +
+    (userProfile.weight ? ` Weight: ${userProfile.weight}${userProfile.weightUnit || 'kg'}.` : '') +
+    (userProfile.height ? ` Height: ${userProfile.height}${userProfile.heightUnit || 'cm'}.` : '') +
+    (userProfile.activity_level ? ` Activity level: ${userProfile.activity_level}.` : '') +
+    (userProfile.dietary_restrictions ? ` Dietary restrictions: ${userProfile.dietary_restrictions}.` : '')
+    : 'Limited user profile information available.';
+  
+  // Build meal summary
+  const mealSummary = {
+    name: mealData.mealName,
+    calories: mealData.calories,
+    macronutrients: mealData.macronutrients || [],
+    micronutrients: mealData.micronutrients || []
+  };
+  
+  const systemPrompt = `
+You are a personalized nutrition coach providing health insights about a meal.
+Consider the user's profile and their specific goals when analyzing this meal.
+Provide concise but thorough analysis focusing on how this meal aligns with the user's health objectives.
+`;
+
+  const userPrompt = `
+USER PROFILE:
+${profileSummary}
+
+MEAL ANALYSIS:
+${safeStringify(mealSummary)}
+
+Please provide personalized insights about this meal considering the user's profile.
+Focus on:
+1. How this meal supports or conflicts with their goals
+2. Key nutritional strengths of this meal
+3. Areas that could be improved
+4. Specific recommendations for next steps
+`;
+
+  try {
+    return await retryWithExponentialBackoff(async () => {
+      const response = await client.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.3,
+        max_tokens: 500
+      });
+      
+      return response.choices[0]?.message?.content || 
+        "Unable to generate personalized insights at this time. Please try again later.";
+    }, 1, 1000, 30000);
+  } catch (error) {
+    console.error('[openai-utils] Failed to generate personalized insights:', error);
+    return "An error occurred while generating personalized insights. Please try again later.";
+  }
+} 

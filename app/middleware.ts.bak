@@ -1,0 +1,67 @@
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
+
+// Define critical API endpoints that should ALWAYS be accessible
+const CRITICAL_API_PATHS = [
+  '/api/ping',
+  '/api/public/',
+  '/api/public-test',
+  '/api/analyze-meal',
+  '/api/meals/',
+  '/api/auth/check'
+];
+
+// Public pages and routes that don't require auth
+const PUBLIC_PATHS = [
+  // Auth routes
+  '/login',
+  '/logout',
+  '/register',
+  '/auth/callback',
+  '/api/auth/callback',
+  
+  // Public pages
+  '/',
+  '/about',
+  '/privacy',
+  '/terms',
+  '/test-upload.html',
+  '/basic-login.html',
+  '/test-meal-save',
+  '/emergency-entry.html',
+  '/test-upload-fix.html',
+  '/test-ui.html',
+  '/api-test.html',
+  '/status-check.html',
+  '/api-checker.html',
+  '/analysis',
+  '/analysis/*',
+  
+  // Static assets and paths
+  '/.well-known',
+  '/favicon.ico',
+  '/robots.txt',
+  '/placeholder-meal.jpg'
+];
+
+// Public file extensions
+const PUBLIC_EXTENSIONS = ['.js', '.css', '.jpg', '.jpeg', '.png', '.ico', '.svg', '.gif', '.woff', '.woff2', '.ttf', '.eot', '.html'];
+
+export function middleware(req: NextRequest) {
+  console.log(`[Simple Middleware] Path: ${req.nextUrl.pathname}`);
+  
+  // Special case: Always allow api/ping without auth
+  if (req.nextUrl.pathname === '/api/ping') {
+    console.log('[Simple Middleware] Bypassing for /api/ping');
+    return NextResponse.next();
+  }
+  
+  // Always allow all paths for now
+  return NextResponse.next();
+}
+
+// Configure middleware to run on specific paths
+export const config = {
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+}; 

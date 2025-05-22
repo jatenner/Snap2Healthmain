@@ -17,6 +17,7 @@ INSERT INTO public.goals (name, description) VALUES
   ('Diabetes Management', 'Manage blood sugar levels and prevent complications'),
   ('General Wellness', 'Maintain overall health and well-being');
 
+<<<<<<< HEAD
 -- Create the meal_history table
 CREATE TABLE IF NOT EXISTS public.meal_history (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -96,6 +97,32 @@ CREATE POLICY "Users can delete their own meal images"
     ON storage.objects
     FOR DELETE
     USING (bucket_id = 'meal-images' AND auth.uid() = owner);
+=======
+-- Create meals table
+CREATE TABLE public.meals (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES auth.users(id),
+  goal TEXT,
+  image_url TEXT,
+  caption TEXT,
+  analysis JSONB,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Set up Row Level Security (RLS)
+ALTER TABLE public.meals ENABLE ROW LEVEL SECURITY;
+
+-- Create policies
+CREATE POLICY "Users can view their own meals"
+  ON public.meals
+  FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own meals"
+  ON public.meals
+  FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+>>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
 
 -- Allow public access to goals
 ALTER TABLE public.goals ENABLE ROW LEVEL SECURITY;
