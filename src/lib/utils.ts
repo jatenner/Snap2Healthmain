@@ -1,20 +1,11 @@
-<<<<<<< HEAD
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
-=======
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
->>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
 
 /**
  * Combines multiple class names using clsx and tailwind-merge
  */
 export function cn(...inputs: ClassValue[]) {
-<<<<<<< HEAD
   return twMerge(clsx(inputs))
-=======
-  return twMerge(clsx(inputs));
->>>>>>> b4a8cf4 (Fresh clean commit - no node_modules)
 }
 
 /**
