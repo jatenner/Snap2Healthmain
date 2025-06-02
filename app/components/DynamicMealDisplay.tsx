@@ -4,16 +4,16 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import Image from 'next/image';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Skeleton } from './ui/skeleton';
 import { getEffectiveProfile, validateNutrientData, calculatePersonalizedDailyTargets, categorizePDV, getEffectiveProfileSync } from '../lib/profile-utils';
 import AIHealthReview from './AIHealthReview';
 import Link from 'next/link';
 import EnhancedNutrientDisplay from './EnhancedNutrientDisplay';
-import { Button } from '@/components/ui/button';
+import { Button } from './ui/button';
 import NutrientDisplay from './NutrientDisplay';
-import { useProfile } from '@/app/lib/profile-context';
+import { useProfile } from '../lib/profile-context';
 import MacroChart from './MacroChart';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { UserProfile } from '../lib/nutrition-utils';
 
 // Safe toLowerCase function to prevent errors
