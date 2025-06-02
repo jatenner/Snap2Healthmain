@@ -11,7 +11,7 @@ import { Button } from '../../components/ui/button';
 import { Loader2, FileImage, Upload, Trash2 } from 'lucide-react';
 import FoodAnalysis from './FoodAnalysis';
 import LoadingSpinner from './LoadingSpinner';
-import { useAuth } from '@/context/auth';
+import { useAuth } from '../context/auth';
 
 type FormState = 'idle' | 'uploading' | 'analyzing' | 'results' | 'error';
 

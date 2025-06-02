@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
-import { useAuth } from '@/context/auth';
+import React, { useState, useEffect } from 'react';
+import { Button } from './ui/button';
+import { useAuth } from '../context/auth';
 import { FaUser, FaRuler, FaWeight, FaCalendar } from 'react-icons/fa';
 import { BiBody } from 'react-icons/bi';
 

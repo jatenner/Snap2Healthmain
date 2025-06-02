@@ -2,7 +2,8 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useAuth } from '@/context/auth';
+import { Button } from './ui/button';
+import { useAuth } from '../context/auth';
 
 export default function Header() {
   const { user, signOut } = useAuth();

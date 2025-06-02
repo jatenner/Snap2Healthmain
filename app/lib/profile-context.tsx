@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { useAuth } from '@/context/auth';
+import { useAuth } from '../context/auth';
 import { saveProfileData, loadProfileData, initializeProfilePersistence } from './profile-persistence';
 
 // Profile interface

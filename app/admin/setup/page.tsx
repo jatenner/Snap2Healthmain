@@ -4,8 +4,8 @@
 export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabaseClient';
-import { useAuth } from '@/context/auth';
+import { supabase } from '../../lib/supabase/client';
+import { useAuth } from '../../context/auth';
 
 export default function SetupPage() {
   const [tableStatus, setTableStatus] = useState<any>(null);

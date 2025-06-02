@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import StandaloneMealAnalysis from '@/app/components/StandaloneMealAnalysis';
+import StandaloneMealAnalysis from '../../components/StandaloneMealAnalysis';
 
 // Export this to ensure dynamic data is fetched on each request
 export const dynamic = 'force-dynamic';

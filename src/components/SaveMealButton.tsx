@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
+import { Button } from './ui/button';
+import { Save } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { supabase } from '../lib/supabaseClient';
 import { FaSave, FaCheck, FaSpinner } from 'react-icons/fa';
-import supabase from '@/lib/supabaseClient';
 
 interface SaveMealButtonProps {
   mealId?: string;

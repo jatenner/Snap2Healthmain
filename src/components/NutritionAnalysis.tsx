@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FaAppleAlt, FaCarrot, FaChartPie, FaLightbulb, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
 import { BiInfoCircle } from 'react-icons/bi';
-import { useAuth } from '@/context/auth';
-import { Card, CardContent } from '../../components/ui/card';
+import { useAuth } from '../context/auth';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import Image from 'next/image';
 import { Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -136,19 +136,40 @@ const calculatePersonalizedDV = (nutrientName: string, userProfile?: any): numbe
     case 'total fat':
     case 'fat':
       // Fat: 20-35% of total calories
-      const fatCals = totalCals || (gender === 'male' ? 2000 : 1800);
-      return Math.round((fatCals * 0.30) / 9); // 30% of calories from fat, 9 cal/g
+      let fatTotalCals = 2000;
+      if (activityLevel.includes('high') || activityLevel.includes('very active')) {
+        fatTotalCals = gender === 'male' ? 2500 : 2200;
+      } else if (activityLevel.includes('moderate') || activityLevel.includes('active')) {
+        fatTotalCals = gender === 'male' ? 2200 : 1900;
+      } else {
+        fatTotalCals = gender === 'male' ? 1800 : 1600;
+      }
+      return Math.round((fatTotalCals * 0.30) / 9); // 30% of calories from fat, 9 cal/g
       
     case 'saturated fat':
       // Saturated fat: <10% of total calories
-      const satFatCals = totalCals || (gender === 'male' ? 2000 : 1800);
-      return Math.round((satFatCals * 0.10) / 9);
+      let satFatTotalCals = 2000;
+      if (activityLevel.includes('high') || activityLevel.includes('very active')) {
+        satFatTotalCals = gender === 'male' ? 2500 : 2200;
+      } else if (activityLevel.includes('moderate') || activityLevel.includes('active')) {
+        satFatTotalCals = gender === 'male' ? 2200 : 1900;
+      } else {
+        satFatTotalCals = gender === 'male' ? 1800 : 1600;
+      }
+      return Math.round((satFatTotalCals * 0.10) / 9);
       
     case 'dietary fiber':
     case 'fiber':
       // Fiber: 14g per 1000 calories
-      const fiberCals = totalCals || (gender === 'male' ? 2000 : 1800);
-      return Math.round((fiberCals / 1000) * 14);
+      let fiberTotalCals = 2000;
+      if (activityLevel.includes('high') || activityLevel.includes('very active')) {
+        fiberTotalCals = gender === 'male' ? 2500 : 2200;
+      } else if (activityLevel.includes('moderate') || activityLevel.includes('active')) {
+        fiberTotalCals = gender === 'male' ? 2200 : 1900;
+      } else {
+        fiberTotalCals = gender === 'male' ? 1800 : 1600;
+      }
+      return Math.round((fiberTotalCals / 1000) * 14);
       
     case 'sodium':
       // Sodium: 2300mg for most adults, 1500mg for older adults or hypertension risk

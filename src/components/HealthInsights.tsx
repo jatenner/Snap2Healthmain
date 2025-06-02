@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { useAuth } from '@/context/auth';
+import { FaHeart, FaShieldAlt } from 'react-icons/fa';
+import { useAuth } from '../context/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 
 interface HealthInsightsProps {
