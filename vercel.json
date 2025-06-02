@@ -1,7 +1,5 @@
 {
   "version": 2,
-  "name": "snap2health",
-  "alias": ["snap2health"],
   "framework": "nextjs",
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
@@ -20,7 +18,7 @@
       "maxDuration": 60
     },
     "app/api/analyze-meal/route.ts": {
-      "maxDuration": 300
+      "maxDuration": 60
     }
   },
   "headers": [
