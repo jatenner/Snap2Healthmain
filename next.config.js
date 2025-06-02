@@ -127,4 +127,61 @@ const nextConfig = {
   pageExtensions: ['tsx', 'ts', 'jsx', 'js'],
 };
 
+// Environment variable validation for production
+function validateEnvironmentVariables() {
+  console.log('[next.config.js] Checking environment variables at startup:');
+  
+  const requiredEnvVars = [
+    'NEXT_PUBLIC_SUPABASE_URL',
+    'NEXT_PUBLIC_SUPABASE_ANON_KEY', 
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'OPENAI_API_KEY'
+  ];
+
+  const missing = [];
+  
+  requiredEnvVars.forEach(envVar => {
+    if (process.env[envVar]) {
+      console.log(`[next.config.js] ${envVar}: OK`);
+    } else {
+      console.log(`[next.config.js] ${envVar}: MISSING`);
+      missing.push(envVar);
+    }
+  });
+
+  console.log(`[next.config.js] Server startup time: ${new Date().toISOString()}`);
+  console.log(`[next.config.js] NODE_ENV: ${process.env.NODE_ENV}`);
+  
+  if (process.env.NODE_ENV === 'production') {
+    console.log('[next.config.js] Running in PRODUCTION mode');
+  } else {
+    console.log('[next.config.js] Running in DEVELOPMENT mode');
+  }
+
+  // Only throw error in development - let production continue with warnings
+  if (missing.length > 0 && process.env.NODE_ENV !== 'production') {
+    console.log(`[next.config.js] ERROR: Missing required environment variables:`);
+    missing.forEach(envVar => {
+      console.log(`[next.config.js] - ${envVar}`);
+    });
+    console.log('[next.config.js] Please set these variables in .env.local or .env.production');
+    throw new Error('Missing required environment variables');
+  } else if (missing.length > 0) {
+    console.log(`[next.config.js] WARNING: Missing environment variables in production:`);
+    missing.forEach(envVar => {
+      console.log(`[next.config.js] - ${envVar}`);
+    });
+  }
+}
+
+// Run validation
+try {
+  validateEnvironmentVariables();
+} catch (error) {
+  console.error('[next.config.js] Environment validation failed:', error.message);
+  if (process.env.NODE_ENV !== 'production') {
+    throw error;
+  }
+}
+
 module.exports = nextConfig;
