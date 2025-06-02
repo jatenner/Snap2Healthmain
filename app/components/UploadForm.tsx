@@ -2,16 +2,13 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { supabase } from '../lib/supabase/client';
 import { useAuth } from '../context/auth';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
 import { AlertCircle, Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import Image from 'next/image';
-import { analyzeImage } from '@/lib/analyzeImage';
 
 // Define the ApiResponse type used in the component
 type ApiResponse = {
@@ -42,7 +39,6 @@ export default function UploadForm() {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
-  const supabase = createClientComponentClient();
   const { user, loading } = useAuth();
   
   // Check authentication status
@@ -311,30 +307,30 @@ export default function UploadForm() {
     <div className="w-full max-w-2xl mx-auto p-4 space-y-6">
       {/* Authentication status banner - show confirmation of login, not warning */}
       {authStatus === 'authenticated' && (
-        <Alert variant="success" className="bg-green-900/20 text-green-200 border-green-800">
-          <AlertDescription className="flex items-center">
+        <div className="bg-green-900/20 text-green-200 border-green-800 p-4 rounded-lg">
+          <p className="flex items-center">
             <div className="h-2 w-2 bg-green-500 rounded-full mr-2"></div>
             Logged in successfully. Your meal will be saved to your history.
-          </AlertDescription>
-        </Alert>
+          </p>
+        </div>
       )}
       
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="space-y-2">
           <Label htmlFor="goal">Nutritional Goal</Label>
-          <Select value={goal} onValueChange={setGoal}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select your nutritional goal" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="General Wellness">General Wellness</SelectItem>
-              <SelectItem value="Weight Loss">Weight Loss</SelectItem>
-              <SelectItem value="Muscle Gain">Muscle Gain</SelectItem>
-              <SelectItem value="Athletic Performance">Athletic Performance</SelectItem>
-              <SelectItem value="Heart Health">Heart Health</SelectItem>
-              <SelectItem value="Diabetes Management">Diabetes Management</SelectItem>
-            </SelectContent>
-          </Select>
+          <select
+            id="goal"
+            value={goal}
+            onChange={(e) => setGoal(e.target.value)}
+            className="w-full bg-gray-900 border border-gray-800 text-gray-300 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2"
+          >
+            <option value="General Wellness">General Wellness</option>
+            <option value="Weight Loss">Weight Loss</option>
+            <option value="Muscle Gain">Muscle Gain</option>
+            <option value="Athletic Performance">Athletic Performance</option>
+            <option value="Heart Health">Heart Health</option>
+            <option value="Diabetes Management">Diabetes Management</option>
+          </select>
           <p className="text-sm text-gray-400">
             This helps us provide more relevant nutritional feedback
           </p>
@@ -381,18 +377,21 @@ export default function UploadForm() {
         </div>
         
         {error && (
-          <Alert variant="destructive" className="bg-red-900/20 text-red-200 border-red-800">
-            <AlertCircle className="h-4 w-4 mr-2" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
+          <div className="bg-red-900/20 text-red-200 border-red-800 p-4 rounded-lg">
+            <p className="flex items-center">
+              <AlertCircle className="h-4 w-4 mr-2" />
+              {error}
+            </p>
+          </div>
         )}
         
         {uploadSuccess && (
-          <Alert variant="success" className="bg-green-900/20 text-green-200 border-green-800">
-            <AlertDescription>
+          <div className="bg-green-900/20 text-green-200 border-green-800 p-4 rounded-lg">
+            <p className="flex items-center">
+              <div className="h-2 w-2 bg-green-500 rounded-full mr-2"></div>
               Image uploaded successfully! Redirecting to analysis...
-            </AlertDescription>
-          </Alert>
+            </p>
+          </div>
         )}
         
         <Button 
