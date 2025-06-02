@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
-import { getLocalMealById, shouldUseLocalStorage } from '@/utils/localStorageMeals';
+import { getLocalMealById, shouldUseLocalStorage } from '../../../../src/utils/localStorageMeals';
+import { safeJsonParse } from '../../analyze-meal/json-fix';
 
 export async function GET(
   request: NextRequest,

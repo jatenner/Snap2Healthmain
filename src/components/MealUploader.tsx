@@ -2,7 +2,8 @@
 import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useRouter } from 'next/navigation';
-import { useProfile } from '@/app/lib/profile-context';
+import { useProfile } from '../../app/lib/profile-context';
+import Image from 'next/image';
 
 // Simple inline components with dark theme styling
 const Button = ({ children, onClick, disabled, className = '', variant = 'default', ...props }: any) => (
