@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { safeJsonParse } from '@/app/api/analyze-meal/json-fix';
+import { safeJsonParse } from '../analyze-meal/json-fix';
 
 // Initialize Supabase clients
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createDynamicResponse, apiResponse } from '@/lib/api-route-helper';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { getUserIdFromSession } from '@/lib/auth';
+import { getUserIdFromSession } from '../../lib/auth';
 
 // Explicitly mark this route as dynamic to prevent build errors
 export const dynamic = 'force-dynamic';

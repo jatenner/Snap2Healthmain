@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import MealUploader from '@/src/components/MealUploader';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import MealUploader from '../../src/components/MealUploader';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
