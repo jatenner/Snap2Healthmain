@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { Button } from '@/components/ui/button';
+import Link from 'next/link';
+import { Button } from './ui/button';
 import { useAuth } from '../context/auth';
 import { useProfile } from '../lib/profile-context';
 

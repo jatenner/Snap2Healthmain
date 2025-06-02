@@ -1,9 +1,9 @@
 'use client';
 
-import React from 'react';
-import { useAuth } from '../../context/auth';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+import { useAuth } from '../../context/auth';
+import { Button } from '../ui/button';
 
 export default function AuthStatusButton() {
   const { user, loading, logout } = useAuth();

@@ -8,8 +8,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from '../context/auth';
 import { createClient } from '@supabase/supabase-js';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '../components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { 
   Calendar, 
   Clock, 

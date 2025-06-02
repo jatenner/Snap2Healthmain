@@ -7,10 +7,10 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/auth';
 import { useProfile } from '../lib/profile-context';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Button } from '../components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
 import Link from 'next/link';
 import { ArrowLeft, Camera, Save, User, CheckCircle, AlertCircle, Target, Activity, Scale, Ruler } from 'lucide-react';
 
