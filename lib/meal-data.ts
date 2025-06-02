@@ -1,0 +1,696 @@
+/**
+ * Functions for retrieving and processing meal data
+ */
+
+import { v4 as uuidv4 } from 'uuid';
+import { cookies } from 'next/headers';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { Database } from '@/types/supabase';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+
+// Define more comprehensive interfaces for nutrient data
+export interface Nutrient {
+  name: string;
+  amount: number;
+  unit: string;
+  percentDailyValue?: number;
+  description?: string;
+  status?: 'low' | 'adequate' | 'high'; 
+  category?: 'vitamin' | 'mineral' | 'macronutrient' | 'antioxidant' | 'fatty-acid' | 'other';
+  personalizedDV?: number;
+}
+
+// Interface for meal data
+export interface MealData {
+  mealName: string;
+  imageUrl: string;
+  mealId?: string;
+  id?: string;
+  image_url?: string;
+  mealContents?: Array<{name: string}>;
+  analysis?: any;
+  goal?: string;
+  tags?: string[];
+  detectedFood?: string;
+  dish_name?: string;
+  nutrients?: any;
+  benefits?: string[] | any;
+  concerns?: string[] | any;
+  suggestions?: string[] | any;
+  caption?: string;
+  calories?: number;
+  macronutrients?: Nutrient[] | any;
+  micronutrients?: Nutrient[] | any;
+  phytonutrients?: Nutrient[] | any;
+  personalized_insights?: string;
+  insights_summary?: string;
+}
+
+// Constants for nutrient categorization 
+const VITAMIN_NAMES = [
+  'vitamin a', 'vitamin c', 'vitamin d', 'vitamin e', 'vitamin k', 
+  'vitamin b1', 'vitamin b2', 'vitamin b3', 'vitamin b5', 'vitamin b6', 'vitamin b7', 'vitamin b9', 'vitamin b12',
+  'thiamine', 'thiamin', 'riboflavin', 'niacin', 'folate', 'folic acid', 'cobalamin', 'biotin', 'pantothenic acid',
+  'retinol', 'ascorbic', 'calciferol', 'tocopherol', 'pyridoxine', 'cyanocobalamin'
+];
+
+const MINERAL_NAMES = [
+  'calcium', 'iron', 'zinc', 'magnesium', 'potassium', 'sodium', 'phosphorus', 
+  'iodine', 'selenium', 'copper', 'manganese', 'chromium', 'molybdenum', 'fluoride', 
+  'chloride', 'sulfur', 'cobalt', 'boron', 'silicon', 'vanadium', 'nickel', 'tin', 'lithium'
+];
+
+const ANTIOXIDANT_NAMES = [
+  'flavonoid', 'carotenoid', 'lycopene', 'lutein', 'zeaxanthin', 'resveratrol', 'anthocyanin',
+  'catechin', 'quercetin', 'polyphenol', 'antioxidant', 'beta-carotene', 'alpha-carotene',
+  'coq10', 'glutathione', 'curcumin', 'ellagic acid', 'astaxanthin'
+];
+
+const FATTY_ACID_NAMES = [
+  'omega-3', 'omega-6', 'omega-9', 'epa', 'dha', 'ala', 'fatty acid', 'pufa', 'mufa', 
+  'polyunsaturated', 'monounsaturated', 'polyunsaturated fat', 'monounsaturated fat',
+  'linoleic', 'linolenic', 'arachidonic', 'docosahexaenoic', 'eicosapentaenoic'
+];
+
+const MACRONUTRIENT_NAMES = [
+  'protein', 'carb', 'carbohydrate', 'fat', 'fiber', 'sugar', 'starch', 'cholesterol',
+  'saturated', 'unsaturated', 'trans', 'ketone', 'amino acid', 'glucoside', 'lipid',
+  'calorie', 'energy'
+];
+
+/**
+ * Categorize nutrients and enhance them with additional metadata
+ * @param nutrients Array of nutrients to categorize
+ * @returns Enhanced nutrients with category and status fields
+ */
+export function categorizeNutrients(nutrients: Nutrient[], userProfile?: any): Nutrient[] {
+  if (!nutrients || !Array.isArray(nutrients)) return [];
+  
+  return nutrients.map(nutrient => {
+    if (!nutrient || !nutrient.name) {
+      console.warn('Invalid nutrient object:', nutrient);
+      return nutrient;
+    }
+    
+    const name = nutrient.name.toLowerCase();
+    const dv = nutrient.percentDailyValue || 0;
+    let category: 'vitamin' | 'mineral' | 'macronutrient' | 'antioxidant' | 'fatty-acid' | 'other' = 'other';
+    let status: 'low' | 'adequate' | 'high' = 'adequate';
+    let personalizedDV = dv;
+    
+    // Categorize by type
+    if (VITAMIN_NAMES.some(v => name.includes(v)) || name.includes('vitamin')) {
+      category = 'vitamin';
+    } else if (MINERAL_NAMES.some(m => name.includes(m))) {
+      category = 'mineral';
+    } else if (ANTIOXIDANT_NAMES.some(a => name.includes(a))) {
+      category = 'antioxidant';
+    } else if (FATTY_ACID_NAMES.some(f => name.includes(f))) {
+      category = 'fatty-acid';
+    } else if (MACRONUTRIENT_NAMES.some(m => name.includes(m))) {
+      category = 'macronutrient';
+    }
+    
+    // Calculate personalized DV if we have user profile data
+    if (userProfile) {
+      const { gender, age, weight, goal } = userProfile;
+      
+      // Protein calculations based on weight and goals
+      if (name.includes('protein')) {
+        let proteinPerLb = 0.8; // Default (grams per pound of bodyweight)
+        
+        // Adjust based on goal
+        if (goal?.toLowerCase().includes('muscle') || goal?.toLowerCase().includes('strength')) {
+          proteinPerLb = 1.2; // Higher for muscle building
+        } else if (goal?.toLowerCase().includes('endurance')) {
+          proteinPerLb = 1.0; // Moderate for endurance
+        } else if (goal?.toLowerCase().includes('weight loss')) {
+          proteinPerLb = 1.0; // Moderate-high for weight loss
+        }
+        
+        if (weight) {
+          // Calculate daily protein needs
+          const proteinDailyNeeds = weight * proteinPerLb;
+          // Calculate personalized DV percentage
+          personalizedDV = Math.round((nutrient.amount / proteinDailyNeeds) * 100);
+        }
+      }
+      
+      // Adjust iron needs based on gender and age
+      if (name.includes('iron')) {
+        // Women of reproductive age need more iron
+        if (gender?.toLowerCase() === 'female' && age && age >= 19 && age <= 50) {
+          personalizedDV = Math.round((nutrient.amount / 18) * 100); // 18mg daily need
+        } else {
+          personalizedDV = Math.round((nutrient.amount / 8) * 100); // 8mg for most others
+        }
+      }
+      
+      // Adjust calcium needs based on age
+      if (name.includes('calcium')) {
+        let calciumNeeds = 1000; // Default 1000mg for adults
+        
+        if (age) {
+          if (age < 19) {
+            calciumNeeds = 1300; // Teens need more
+          } else if (age > 50) {
+            calciumNeeds = 1200; // Older adults need more
+          }
+        }
+        
+        personalizedDV = Math.round((nutrient.amount / calciumNeeds) * 100);
+      }
+      
+      // Adjust vitamin D needs based on age
+      if (name.includes('vitamin d')) {
+        let vitaminDNeeds = 15; // 15 mcg (600 IU) standard
+        
+        if (age && age > 70) {
+          vitaminDNeeds = 20; // 20 mcg (800 IU) for seniors
+        }
+        
+        personalizedDV = Math.round((nutrient.amount / vitaminDNeeds) * 100);
+      }
+    }
+    
+    // Determine status based on personalized %DV
+    const dvToUse = personalizedDV || dv;
+    
+    if (dvToUse >= 50) {
+      // For nutrients we typically want to limit
+      if (name.includes('sodium') || name.includes('sugar') || name.includes('saturated fat') || name.includes('cholesterol')) {
+        status = 'high';
+      } else {
+        // For beneficial nutrients
+        status = 'high';
+      }
+    } else if (dvToUse < 10) {
+      // For nutrients we typically want to limit
+      if (name.includes('sodium') || name.includes('sugar') || name.includes('saturated fat') || name.includes('cholesterol')) {
+        status = 'low';
+      } else if (name.includes('protein') || name.includes('fiber') || category === 'vitamin' || category === 'mineral') {
+        // For beneficial nutrients that might be concerning if too low
+        status = 'low';
+      }
+    }
+    
+    // Add a default description if none exists
+    if (!nutrient.description) {
+      const descriptions = {
+        'protein': 'Essential for muscle building, tissue repair, and overall growth.',
+        'carbohydrates': 'Primary source of energy for the body and brain.',
+        'fat': 'Important for absorbing vitamins, supporting brain health, and providing long-lasting energy.',
+        'fiber': 'Aids digestion, helps maintain bowel health, and can reduce cholesterol.',
+        'vitamin a': 'Important for vision, immune function, and cell growth.',
+        'vitamin c': 'Supports immune function, acts as an antioxidant, and aids iron absorption.',
+        'vitamin d': 'Essential for calcium absorption and bone health.',
+        'vitamin e': 'Acts as an antioxidant, protects cells from damage.',
+        'calcium': 'Builds and maintains strong bones and teeth.',
+        'iron': 'Helps carry oxygen in the blood and supports energy production.',
+        'zinc': 'Important for immune function, wound healing, and cell division.',
+        'magnesium': 'Supports muscle and nerve function, energy production.',
+        'potassium': 'Helps regulate fluid balance and muscle contractions.',
+        'omega-3': 'Supports heart and brain health, reduces inflammation.'
+      };
+      
+      for (const [key, desc] of Object.entries(descriptions)) {
+        if (name.includes(key)) {
+          nutrient.description = desc;
+          break;
+        }
+      }
+      
+      // Generic description based on category if no specific one was found
+      if (!nutrient.description) {
+        if (category === 'vitamin') {
+          nutrient.description = 'Essential micronutrient that supports overall health and bodily functions.';
+        } else if (category === 'mineral') {
+          nutrient.description = 'Important mineral that helps regulate bodily processes and maintain health.';
+        } else if (category === 'antioxidant') {
+          nutrient.description = 'Helps protect cells from damage and may reduce risk of chronic diseases.';
+        } else if (category === 'fatty-acid') {
+          nutrient.description = 'Supports cell membrane function and overall health.';
+        } else {
+          nutrient.description = 'Nutrient that contributes to overall health and nutrition.';
+        }
+      }
+    }
+    
+    // Use type assertion to ensure the returned object matches the Nutrient type
+    return {
+      ...nutrient,
+      category,
+      status,
+      // Use personalized DV if calculated, otherwise keep the existing value
+      personalizedDV
+    } as Nutrient;
+  });
+}
+
+/**
+ * Normalize meal data to ensure consistent structure
+ * @param mealData Raw meal data
+ * @returns Normalized meal data with consistent structure
+ */
+export function normalizeMealData(mealData: MealData): MealData {
+  if (!mealData) return { mealName: 'Unknown Meal', imageUrl: '' };
+  
+  // Create a deep copy to avoid modifying the original
+  const normalized = JSON.parse(JSON.stringify(mealData));
+  
+  // Ensure core fields exist
+  normalized.mealName = normalized.mealName || normalized.caption || normalized.dish_name || 'Analyzed Meal';
+  normalized.caption = normalized.caption || normalized.mealName;
+  normalized.imageUrl = normalized.imageUrl || normalized.image_url || '';
+  normalized.image_url = normalized.image_url || normalized.imageUrl;
+  normalized.calories = normalized.calories || 
+                       (normalized.analysis && normalized.analysis.calories) || 
+                       (normalized.analysis && normalized.analysis.totalCalories) || 0;
+  
+  // Consolidate nutrients data from different potential locations
+  let macros: Nutrient[] = [];
+  let micros: Nutrient[] = [];
+  
+  // Get macronutrients from all possible sources and merge them
+  const macroSources = [
+    normalized.macronutrients,
+    normalized.analysis?.macronutrients,
+    normalized.nutrients?.macronutrients
+  ].filter(source => Array.isArray(source) && source.length > 0);
+  
+  // Merge all macronutrient sources, avoiding duplicates
+  const macroMap = new Map();
+  macroSources.forEach(source => {
+    source.forEach(nutrient => {
+      if (nutrient && nutrient.name) {
+        const key = nutrient.name.toLowerCase();
+        if (!macroMap.has(key) || !macroMap.get(key).amount) {
+          macroMap.set(key, nutrient);
+        }
+      }
+    });
+  });
+  macros = Array.from(macroMap.values());
+  
+  // Get micronutrients from all possible sources and merge them
+  const microSources = [
+    normalized.micronutrients,
+    normalized.analysis?.micronutrients,
+    normalized.nutrients?.micronutrients
+  ].filter(source => Array.isArray(source) && source.length > 0);
+  
+  // Merge all micronutrient sources, avoiding duplicates
+  const microMap = new Map();
+  microSources.forEach(source => {
+    source.forEach(nutrient => {
+      if (nutrient && nutrient.name) {
+        const key = nutrient.name.toLowerCase();
+        if (!microMap.has(key) || !microMap.get(key).amount) {
+          microMap.set(key, nutrient);
+        }
+      }
+    });
+  });
+  micros = Array.from(microMap.values());
+  
+  // Enhance nutrients with categories and status
+  normalized.macronutrients = categorizeNutrients(macros);
+  normalized.micronutrients = categorizeNutrients(micros);
+  
+  // Process phytonutrients if available
+  if (normalized.phytonutrients) {
+    normalized.phytonutrients = categorizeNutrients(normalized.phytonutrients);
+  }
+  
+  // Ensure benefits, concerns, suggestions are arrays
+  normalized.benefits = ensureArray(normalized.benefits || normalized.analysis?.benefits);
+  normalized.concerns = ensureArray(normalized.concerns || normalized.analysis?.concerns);
+  normalized.suggestions = ensureArray(normalized.suggestions || normalized.analysis?.suggestions);
+  
+  // Extract personalized insights if available
+  normalized.personalized_insights = normalized.personalized_insights || 
+                                    normalized.analysis?.personalized_insights ||
+                                    normalized.insights_summary;
+  
+  normalized.insights_summary = normalized.insights_summary || 
+                               normalized.personalized_insights || 
+                               normalized.analysis?.insights_summary;
+  
+  return normalized;
+}
+
+/**
+ * Helper function to ensure a value is an array
+ */
+function ensureArray(value: any): any[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') return [value];
+  if (typeof value === 'object') {
+    // Check if it's an object with an 'items' property that is an array
+    if (value.items && Array.isArray(value.items)) return value.items;
+    // Otherwise convert object values to array
+    return Object.values(value);
+  }
+  return [value];
+}
+
+/**
+ * Saves meal data to the user's history
+ */
+export async function saveMealToHistory(mealData: MealData): Promise<{
+  success: boolean;
+  mealId?: string;
+  message?: string;
+}> {
+  try {
+    // Generate a new meal ID if not provided
+    const mealId = mealData.id || mealData.mealId || crypto.randomUUID();
+    
+    // Normalize data for consistency
+    const normalizedData = normalizeMealData({...mealData, id: mealId});
+    
+    // First, save to localStorage as backup
+    try {
+      localStorage.setItem(`meal_analysis_${mealId}`, JSON.stringify(normalizedData));
+      console.log(`Saved meal data to localStorage with key: meal_analysis_${mealId}`);
+      
+      // Also save as last_meal_analysis for backup
+      localStorage.setItem('last_meal_analysis', JSON.stringify(normalizedData));
+    } catch (error) {
+      console.error('Error saving to localStorage:', error);
+    }
+
+    // Attempt to save to Supabase using RPC functions
+    console.log('Saving meal to Supabase...');
+    const supabase = createClientComponentClient();
+    
+    // Get the authenticated user's ID
+    const { data: { user } } = await supabase.auth.getUser();
+    const userId = user?.id;
+    
+    if (!userId) {
+      console.log('No authenticated user found, skipping database save');
+      return {
+        success: false,
+        mealId: mealId,
+        message: 'No authenticated user found. Data saved to localStorage only.'
+      };
+    }
+    
+    console.log(`User authenticated: ${userId}`);
+    
+    // Prepare data for Supabase - ensure all data is JSON safe
+    const safeData = ensureJsonbFormat(normalizedData);
+    
+    // Step 1: Try the emergency_insert_meal RPC function first (most reliable)
+    try {
+      console.log('Attempting to save meal using emergency_insert_meal RPC function');
+      
+      // Extract the caption and image URL
+      const caption = safeData.caption || safeData.mealName || safeData.dish_name || 'Analyzed Meal';
+      const imageUrl = safeData.image_url || safeData.imageUrl || '';
+      
+      // Convert the entire meal data to JSONB
+      const allDataJson = JSON.stringify({
+        ...safeData,
+        id: mealId
+      });
+      
+      const { data: rpcResult, error: rpcError } = await supabase.rpc('emergency_insert_meal', {
+        p_user_id: userId,
+        p_caption: caption,
+        p_image_url: imageUrl,
+        p_all_data: allDataJson
+      });
+      
+      if (rpcError) {
+        console.error('Error with emergency_insert_meal RPC:', rpcError);
+        // Continue to fallback methods
+      } else {
+        console.log('Successfully saved meal using emergency_insert_meal:', rpcResult);
+        return {
+          success: true,
+          mealId: rpcResult || mealId
+        };
+      }
+    } catch (rpcError) {
+      console.error('Exception in emergency_insert_meal:', rpcError);
+      // Continue to fallback methods
+    }
+    
+    // Step 2: Direct insert into meals table with careful field handling
+    try {
+      console.log('Attempting direct insert with prepared fields');
+      
+      // Extract normalized values for direct insert
+      const mealName = safeData.caption || safeData.mealName || 'Analyzed Meal';
+      const imageUrl = safeData.image_url || safeData.imageUrl || '';
+      const calories = typeof safeData.calories === 'number' ? safeData.calories : 
+                      (safeData.analysis && typeof safeData.analysis.calories === 'number' ? 
+                       safeData.analysis.calories : 0);
+      
+      // Ensure all complex data is properly serialized for JSONB
+      const macronutrients = JSON.stringify(safeData.macronutrients || []);
+      const micronutrients = JSON.stringify(safeData.micronutrients || []);
+      const benefits = JSON.stringify(safeData.benefits || []);
+      const analysis = JSON.stringify(safeData.analysis || {});
+      const nutrients = JSON.stringify(safeData.nutrients || {});
+      
+      // Direct insert with each field properly formatted
+      const { data, error } = await supabase
+        .from('meals')
+        .insert({
+          id: mealId,
+          user_id: userId,
+          caption: mealName,
+          name: mealName,
+          image_url: imageUrl,
+          calories: calories,
+          macronutrients,
+          micronutrients,
+          benefits,
+          analysis,
+          nutrients,
+          data: JSON.stringify(safeData) // Store all data in data field for backup
+        })
+        .select();
+      
+      if (error) {
+        console.error('Error with direct insert:', error);
+        throw error;
+      }
+      
+      console.log('Successfully saved meal via direct insert');
+      return {
+        success: true,
+        mealId
+      };
+    } catch (insertError) {
+      console.error('Exception in direct insert:', insertError);
+      
+      // Step 3: Final fallback to localStorage only
+      return {
+        success: false,
+        mealId,
+        message: 'Failed to save to database. Data saved to localStorage only.'
+      };
+    }
+  } catch (error: any) {
+    console.error('Error in saveMealToHistory:', error);
+    return {
+      success: false,
+      message: error.message || 'An unknown error occurred'
+    };
+  }
+}
+
+// Helper function to ensure data is JSON safe for PostgreSQL JSONB
+function ensureJsonbFormat(data: any): any {
+  if (data === undefined || data === null) {
+    return null;
+  }
+
+  // For arrays, we need to properly convert them to objects with items property
+  // This avoids the "malformed array literal" PostgreSQL error
+  if (Array.isArray(data)) {
+    // Don't wrap arrays in 'items' for normalized nutrients that are already properly structured
+    if (data.length > 0 && typeof data[0] === 'object' && (data[0].name !== undefined || data[0].amount !== undefined)) {
+      // This is likely a nutrient array, so properly structure each item
+      return data.map(item => {
+        if (typeof item === 'object' && item !== null) {
+          return ensureJsonbFormat(item);
+        }
+        return item;
+      });
+    }
+    // Regular arrays (like benefits, concerns, suggestions) need to be in JSONB compatible format
+    return { items: data };
+  }
+
+  // For objects, first check if it's already a string
+  if (typeof data === 'string') {
+    try {
+      // Try to parse as JSON to see if it's already a JSON string
+      const parsed = JSON.parse(data);
+      // If it parsed successfully as an object, return it as is
+      if (typeof parsed === 'object' && parsed !== null) {
+        return parsed;
+      } else {
+        // It's a primitive wrapped in a string, return as is
+        return data;
+      }
+    } catch (e) {
+      // Not valid JSON, return as is (plain string)
+      return data;
+    }
+  }
+  
+  // For objects, recursively ensure all properties are JSONB-safe
+  if (typeof data === 'object' && data !== null) {
+    // Make a copy to avoid mutating the original
+    const result: Record<string, any> = {};
+    
+    // Handle nested properties
+    Object.entries(data).forEach(([key, value]) => {
+      // Handle nested arrays
+      if (Array.isArray(value)) {
+        // If it's a nutrient array (has objects with name or amount properties)
+        if (value.length > 0 && typeof value[0] === 'object' && (value[0].name !== undefined || value[0].amount !== undefined)) {
+          result[key] = value.map(item => ensureJsonbFormat(item));
+        } else {
+          // Regular arrays need to be wrapped
+          result[key] = { items: value };
+        }
+      } 
+      // Handle nested objects
+      else if (typeof value === 'object' && value !== null) {
+        result[key] = ensureJsonbFormat(value);
+      } 
+      // Primitives stay as is
+      else {
+        result[key] = value;
+      }
+    });
+    
+    return result;
+  }
+  
+  // Return primitives as is
+  return data;
+} 
+
+// Enhanced normalize function for meal data
+export function normalizeMealData(mealData: MealData): MealData {
+  const normalized: MealData = { ...mealData };
+  
+  // Ensure caption/name consistency
+  if (normalized.mealName && !normalized.caption) {
+    normalized.caption = normalized.mealName;
+  }
+  if (normalized.caption && !normalized.mealName) {
+    normalized.mealName = normalized.caption;
+  }
+
+  // Extract nutrients from analysis if needed
+  if (normalized.analysis) {
+    // Handle macronutrients
+    if (!normalized.macronutrients && normalized.analysis.macronutrients) {
+      normalized.macronutrients = ensureArray(normalized.analysis.macronutrients);
+    }
+    
+    // Handle micronutrients with better extraction
+    if (!normalized.micronutrients && normalized.analysis.micronutrients) {
+      normalized.micronutrients = ensureArray(normalized.analysis.micronutrients);
+    }
+    
+    // Handle benefits, concerns, suggestions
+    if (!normalized.benefits && normalized.analysis.benefits) {
+      normalized.benefits = ensureArray(normalized.analysis.benefits);
+    }
+    if (!normalized.concerns && normalized.analysis.concerns) {
+      normalized.concerns = ensureArray(normalized.analysis.concerns);
+    }
+    if (!normalized.suggestions && normalized.analysis.suggestions) {
+      normalized.suggestions = ensureArray(normalized.analysis.suggestions);
+    }
+    
+    // Set calories if missing
+    if (!normalized.calories && (normalized.analysis.calories || normalized.analysis.totalCalories)) {
+      normalized.calories = normalized.analysis.calories || normalized.analysis.totalCalories || 0;
+    }
+  }
+
+  // Ensure all arrays are properly structured
+  normalized.macronutrients = ensureArray(normalized.macronutrients);
+  normalized.micronutrients = ensureArray(normalized.micronutrients);
+  normalized.benefits = ensureArray(normalized.benefits);
+  normalized.concerns = ensureArray(normalized.concerns);
+  normalized.suggestions = ensureArray(normalized.suggestions);
+  
+  return normalized;
+}
+
+// Calculate personalized daily values based on user profile
+export function calculatePersonalizedDailyValues(profile: any): Record<string, number> {
+  if (!profile) return {};
+  
+  const values: Record<string, number> = {};
+  const weight = profile.weight || 70; // kg
+  const weightLbs = weight * 2.20462; // convert to pounds
+  const gender = profile.gender || 'unknown';
+  const age = profile.age || 30;
+  const goal = profile.goal || 'General Health';
+  
+  // Protein requirements (in grams)
+  if (goal === 'Muscle Gain' || goal === 'Strength Training') {
+    values.protein = weightLbs * 1.2; // 1.2g per pound for muscle gain
+  } else if (goal === 'Weight Loss') {
+    values.protein = weightLbs * 1.0; // 1.0g per pound for weight loss
+  } else {
+    values.protein = weightLbs * 0.8; // 0.8g per pound for general health
+  }
+  
+  // Carbohydrate requirements (in grams)
+  if (goal === 'Muscle Gain') {
+    values.carbohydrates = weightLbs * 2.0; // 2g per pound
+  } else if (goal === 'Weight Loss') {
+    values.carbohydrates = weightLbs * 1.0; // 1g per pound
+  } else {
+    values.carbohydrates = weightLbs * 1.5; // 1.5g per pound
+  }
+  
+  // Fat requirements (in grams)
+  if (goal === 'Weight Loss') {
+    values.fat = weightLbs * 0.3; // 0.3g per pound
+  } else {
+    values.fat = weightLbs * 0.4; // 0.4g per pound
+  }
+  
+  // Calorie requirements
+  let bmr = 0;
+  if (gender === 'male') {
+    bmr = 88.362 + (13.397 * weight) + (4.799 * (profile.height || 175)) - (5.677 * age);
+  } else if (gender === 'female') {
+    bmr = 447.593 + (9.247 * weight) + (3.098 * (profile.height || 163)) - (4.330 * age);
+  } else {
+    // Average for unknown gender
+    bmr = 370 + (21.6 * (1 - 0.27) * weight);
+  }
+  
+  // Activity factor
+  let activityFactor = 1.2; // Sedentary
+  if (profile.activity_level === 'Light') activityFactor = 1.375;
+  else if (profile.activity_level === 'Moderate') activityFactor = 1.55;
+  else if (profile.activity_level === 'High') activityFactor = 1.725;
+  else if (profile.activity_level === 'Very High') activityFactor = 1.9;
+  
+  // Calculate daily calories
+  values.calories = bmr * activityFactor;
+  
+  // Adjust calories based on goal
+  if (goal === 'Weight Loss') values.calories *= 0.8;
+  else if (goal === 'Muscle Gain') values.calories *= 1.1;
+  
+  return values;
+}

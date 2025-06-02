@@ -1,0 +1,326 @@
+# Dependencies
+node_modules/
+/.pnp
+.pnp.js
+yarn.lock
+package-lock.json
+
+# Next.js build output
+.next/
+out/
+.swc/
+.turbo
+
+# Production
+/build
+/dist/
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local environment files
+.env
+.env.*
+# Allow .env.local for consistent environment setup
+!.env.local
+!.env.example
+
+# VS Code
+.vscode/
+
+# macOS
+.DS_Store
+*.pem
+
+# Cache
+.cache/
+
+# Testing
+/coverage
+
+# Logs
+logs
+*.log
+
+# Vercel
+.vercel/
+
+# Supabase
+supabase/.branches/
+supabase/.temp/
+
+# Large binaries
+*.node
+node_modules/supabase/bin/
+node_modules/**/*.bin
+
+# Public uploads (local dev)
+public/uploads/*
+!public/uploads/.gitkeep
+
+# Exclude some environment files but allow example
+.env.development
+.env.production
+
+# Backup files
+*.backup*
+*.bak
+*.backup-*
+.vercel
+
+# Production builds
+/.next/
+/out/
+/build/
+/dist/
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.production
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# nyc test coverage
+.nyc_output
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+.parcel-cache
+
+# Next.js build output
+.next
+
+# Nuxt.js build / generate output
+.nuxt
+dist
+
+# Storybook build outputs
+.out
+.storybook-out
+
+# Temporary folders
+tmp/
+temp/
+
+# Editor directories and files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Cursor AI
+.cursor/
+
+# Test and development files
+/app/test-*/
+/app/debug/
+/app/emergency/
+/src/app-backup/
+/public/test-*.html
+/public/test-*.js
+/public/force-*.js
+/public/verify-*.js
+/public/upload-*.js
+/public/reset-*.js
+/public/profile-*.js
+/public/meal-*.js
+/public/fix-*.js
+/public/inject-*.js
+/public/standalone-*.html
+/public/schema-*.html
+/public/snap2health-test.html
+/public/ultimate-*.html
+/public/working-page.html
+/public/startup-diagnostic.html
+/public/real-user-test.html
+/public/recovery-helper.js
+/public/reload-schema.html
+/public/reset-app.html
+/public/no-scripts-solution.html
+/public/openai-api-monitor.js
+/public/override-meal-display.js.disabled
+/public/meal-analysis-*.html
+/public/meal-analysis-*.js
+/public/meal-shortcuts.html
+/public/meal-table-fix.js
+/public/meal.html
+/public/mock-food-data.js
+/public/manually-fix-formatting.js
+/public/login.html
+/public/index.html
+/public/health-check.html
+/public/hydration-fix.js
+/public/functional-demo.html
+/public/images/
+/scripts/
+/utils/
+/prisma/node_modules/
+
+# Backup files
+*.backup
+*.bak
+*.bak-*
+*.old
+*.original
+*.fix
+*.broken
+*.minimal
+*.minimalist
+
+# Development documentation
+ANALYSIS_FIXES_SUMMARY.md
+EXPERT_MACRONUTRIENT_GUIDE.md
+FRAMEWORK.md
+NUTRIENT_ANALYSIS_IMPROVEMENTS.md
+
+# Test files
+test-*.js
+validate-*.js
+*-test.js
+*-fix.js
+
+# API route backups
+/app/api/*/original-*.ts
+/app/api/*/route.ts.fix
+/app/api/*/mock-*.ts
+
+# Component backups
+/app/components/*.fixed.tsx
+/app/components/*.backup.tsx
+
+# Layout backups
+/app/layout.tsx.*
+/app/middleware.ts.bak-*
+
+# Cache files
+.cache/
+*.cache
+
+# Grunt intermediate storage (https://gruntjs.com/creating-plugins#storing-task-files)
+.grunt
+
+# Bower dependency directory (https://bower.io/)
+bower_components
+
+# node-waf configuration
+.lock-wscript
+
+# Compiled binary addons (https://nodejs.org/api/addons.html)
+build/Release
+
+# Development directories
+/test/
+/tests/
+/debug/
+/scripts/
+/docs/
+/backup/
+/temp/
+/emergency/
+
+# Development files
+*.md
+!README.md
+!CHANGELOG.md
+*.txt
+!package.json
+!tsconfig.json
+!tailwind.config.js
+!postcss.config.js
+!next.config.js
+
+# Temporary files
+*.tmp
+*.temp
+temp_*
+tmp_*
+
+# API keys and sensitive data
+*api-key*
+*openai*
+*supabase-env*
+clean-env.*
+create_env_local.*
+complete-reset-and-fix.*
+
+# Build artifacts
+*.tgz
+*.tar.gz
+*.zip
+
+# Storybook
+.storybook/
+storybook-static/
+
+# Prisma
+prisma/migrations/
+!prisma/schema.prisma
+
+# Uploads
+uploads/
+public/uploads/
+!public/uploads/.gitkeep

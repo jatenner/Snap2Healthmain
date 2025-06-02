@@ -1,0 +1,159 @@
+require('dotenv').config({ path: require('path').resolve(process.cwd(), '.env.local') });
+
+// Also explicitly load the .env file
+require('dotenv').config();
+
+// Check for development mode
+const isDevelopment = process.env.NODE_ENV === 'development';
+const isAuthBypass = process.env.AUTH_BYPASS === 'true' || process.env.DEV_MODE === 'true';
+
+// Validate required environment variables
+const REQUIRED_ENV_VARS = [
+  'NEXT_PUBLIC_SUPABASE_URL',
+  'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+  'SUPABASE_SERVICE_ROLE_KEY',
+  'OPENAI_API_KEY'
+];
+
+// Check for missing environment variables
+const missingEnvVars = REQUIRED_ENV_VARS.filter(varName => !process.env[varName]);
+
+// Log environment variable status
+console.log('[next.config.js] Checking environment variables at startup:');
+REQUIRED_ENV_VARS.forEach(varName => {
+  const status = process.env[varName] ? 'OK' : 'MISSING';
+  console.log(`[next.config.js] ${varName}: ${status}`);
+});
+
+// Fail build if required environment variables are missing
+if (missingEnvVars.length > 0) {
+  console.error('\n[next.config.js] ERROR: Missing required environment variables:');
+  missingEnvVars.forEach(varName => {
+    console.error(`[next.config.js] - ${varName}`);
+  });
+  console.error('[next.config.js] Please set these variables in .env.local or .env file');
+  
+  // Fail the build if env vars are missing
+  process.exit(1);
+}
+
+// Display startup time for logging
+console.log(`[next.config.js] Server startup time: ${new Date().toISOString()}`);
+console.log(`[next.config.js] NODE_ENV: ${process.env.NODE_ENV || 'not set'}`);
+
+if (isDevelopment) {
+  console.log('[next.config.js] Running in DEVELOPMENT mode');
+  if (isAuthBypass) {
+    console.log('[next.config.js] Authentication bypass is ENABLED');
+  }
+}
+
+// Create the environment variables object, only including defined variables
+const envVars = {
+  NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+};
+
+// Only add service role key if it's defined
+if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  envVars.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+}
+
+// Add OpenAI API key if defined
+if (process.env.OPENAI_API_KEY) {
+  envVars.OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+}
+
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: false,
+  // Skip middleware in development mode
+  skipMiddlewareUrlNormalize: true,
+  skipTrailingSlashRedirect: true,
+
+  // Log useful debug info at startup
+  onDemandEntries: {
+    // Keep pages in memory for longer in development
+    maxInactiveAge: 60 * 60 * 1000, // 1 hour
+  },
+
+  // Configure webpack to allow proper fallbacks for node modules
+  webpack: (config, { isServer }) => {
+    // Log environment variables at startup
+    if (isServer) {
+      console.log('[next.config.js] Checking environment variables at startup:');
+      console.log('[next.config.js] NEXT_PUBLIC_SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL ? 'OK' : 'MISSING');
+      console.log('[next.config.js] NEXT_PUBLIC_SUPABASE_ANON_KEY:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'OK' : 'MISSING');
+      console.log('[next.config.js] SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'OK' : 'MISSING');
+      console.log('[next.config.js] OPENAI_API_KEY:', process.env.OPENAI_API_KEY ? 'OK' : 'MISSING');
+      console.log('[next.config.js] Server startup time:', new Date().toISOString());
+      console.log('[next.config.js] NODE_ENV:', process.env.NODE_ENV);
+      
+      // Log if we're running in dev mode with auth bypass
+      if (isDevelopment) {
+        console.log('[next.config.js] Running in DEVELOPMENT mode with authentication bypass enabled');
+      }
+    }
+
+    if (!isServer) {
+      // Client-side polyfills for Node.js modules
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        stream: require.resolve('stream-browserify'),
+        crypto: require.resolve('crypto-browserify'),
+        buffer: require.resolve('buffer'),
+      };
+    }
+
+    return config;
+  },
+
+  // Experimental features
+  experimental: {
+    // Increase page data size limit
+    largePageDataBytes: 512 * 1024, // 512KB, increased from default for large meal data
+    // Development optimizations
+    ...(isDevelopment && {
+      // Optimize in-memory caching for faster development
+      serverMinification: false,
+      serverSourceMaps: true,
+      swcMinify: false,
+      optimizeCss: false,
+      webVitalsAttribution: ['CLS', 'LCP'],
+    }),
+  },
+
+  // Environment variables
+  env: {
+    ...envVars,
+    NEXTAUTH_URL: 'http://localhost:3001',
+    NEXT_PUBLIC_APP_ENV: process.env.NODE_ENV || 'development',
+    // For development mode only
+    ...(isDevelopment && {
+      DEV_MODE: 'true',
+      AUTH_BYPASS: 'true',
+      NEXT_PUBLIC_FORCE_DEV_MODE: 'true',
+    }),
+  },
+  // Images configuration
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+    ],
+    domains: ['localhost', 'cyrztlmzanhfybqsakgc.supabase.co'],
+  },
+  // Ignore TypeScript errors during build
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    // Warning: This allows production builds to successfully complete even if
+    // your project has ESLint errors.
+    ignoreDuringBuilds: true,
+  },
+};
+
+module.exports = nextConfig;

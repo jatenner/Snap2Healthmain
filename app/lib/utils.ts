@@ -1,0 +1,166 @@
+/**
+ * Safe array helper functions that handle null/undefined arrays
+ */
+
+/**
+ * Safely iterate over an array with forEach, handling null/undefined arrays
+ * @param arr The array to iterate over (or null/undefined)
+ * @param callback The callback function to execute for each element
+ */
+export function safeForEach<T>(arr: T[] | null | undefined, callback: (item: T, index: number, array: T[]) => void): void {
+  if (!arr || !Array.isArray(arr)) return;
+  arr.forEach(callback);
+}
+
+/**
+ * Safely map over an array, handling null/undefined arrays
+ * @param arr The array to map over (or null/undefined)
+ * @param callback The mapping function to apply to each element
+ * @returns A new array with the results, or an empty array if input is null/undefined
+ */
+export function safeMap<T, U>(arr: T[] | null | undefined, callback: (item: T, index: number, array: T[]) => U): U[] {
+  if (!arr || !Array.isArray(arr)) return [];
+  return arr.map(callback);
+}
+
+/**
+ * Safely filter an array, handling null/undefined arrays
+ * @param arr The array to filter (or null/undefined)
+ * @param callback The predicate function to test each element
+ * @returns A new filtered array, or an empty array if input is null/undefined
+ */
+export function safeFilter<T>(arr: T[] | null | undefined, callback: (item: T, index: number, array: T[]) => boolean): T[] {
+  if (!arr || !Array.isArray(arr)) return [];
+  return arr.filter(callback);
+}
+
+/**
+ * Check if an array is empty or null/undefined
+ * @param arr The array to check
+ * @returns True if the array is null, undefined, or empty
+ */
+export function isEmptyArray<T>(arr: T[] | null | undefined): boolean {
+  return !arr || !Array.isArray(arr) || arr.length === 0;
+}
+
+/**
+ * Safely get an array or return an empty array if null/undefined
+ * @param arr The array or null/undefined
+ * @returns The original array or an empty array
+ */
+export function getArrayOrEmpty<T>(arr: T[] | null | undefined): T[] {
+  return Array.isArray(arr) ? arr : [];
+}
+
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+/**
+ * Merges class names with Tailwind CSS classes using clsx and tailwind-merge
+ * This helps to avoid conflicts when combining Tailwind classes
+ */
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+/**
+ * Format a number with commas as thousands separators
+ */
+export function formatNumber(value: number): string {
+  return value.toLocaleString();
+}
+
+/**
+ * Truncate a string to a maximum length and add ellipsis
+ */
+export function truncate(str: string, maxLength: number): string {
+  if (!str) return '';
+  return str.length > maxLength ? `${str.substring(0, maxLength)}...` : str;
+}
+
+/**
+ * Calculate percentage with safety checks
+ */
+export function calculatePercentage(value: number, total: number): number {
+  if (!total || isNaN(total) || !value || isNaN(value)) return 0;
+  return Math.round((value / total) * 100);
+}
+
+/**
+ * Parse a number from a string or return a default value
+ */
+export function parseNumberOrDefault(value: any, defaultValue: number | null = 0): number | null {
+  if (value === undefined || value === null || value === '') return defaultValue;
+  
+  const parsed = parseFloat(value);
+  return isNaN(parsed) ? defaultValue : parsed;
+}
+
+/**
+ * Get an appropriate color for a percentage value
+ */
+export function getColorForPercentage(percentage: number): string {
+  if (percentage >= 80) return 'text-green-500';
+  if (percentage >= 50) return 'text-blue-500';
+  if (percentage >= 30) return 'text-yellow-500';
+  return 'text-red-500';
+}
+
+/**
+ * Safe JSON parsing with error handling
+ */
+export function safeJsonParse<T>(json: string, fallback: T): T {
+  try {
+    return JSON.parse(json) as T;
+  } catch (e) {
+    console.error('Error parsing JSON:', e);
+    return fallback;
+  }
+}
+
+export function formatDate(date: Date | string): string {
+  try {
+    const d = typeof date === 'string' ? new Date(date) : date;
+    return d.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  } catch (e) {
+    console.error('Error formatting date:', e);
+    return 'Invalid date';
+  }
+}
+
+export function formatTime(date: Date | string): string {
+  try {
+    const d = typeof date === 'string' ? new Date(date) : date;
+    return d.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  } catch (e) {
+    console.error('Error formatting time:', e);
+    return 'Invalid time';
+  }
+}
+
+// Generate slug from string
+export function generateSlug(str: string): string {
+  return str
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, '')
+    .replace(/[\s_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+// Safely turn a value into a number
+export function toNumber(value: any, fallback: number = 0): number {
+  const parsed = parseFloat(value);
+  return isNaN(parsed) ? fallback : parsed;
+}
+
+// Delay execution
+export function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+} 

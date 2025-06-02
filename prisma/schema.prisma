@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model for authentication
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  accounts      Account[]
+}
+
+// Necessary for Next auth
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Meal {
+  id            String    @id @default(cuid())
+  userId        String    // Relation to User model needed if it's per user
+  // user       User   @relation(fields: [userId], references: [id]) // Example relation
+  name          String?
+  caption       String?
+  image_url     String?
+  calories      Int?
+  protein       Float?
+  fat           Float?
+  carbs         Float?
+  macronutrients Json?     // Detailed macronutrients
+  micronutrients Json?     // Detailed micronutrients
+  nutrients     Json?     // General or combined nutrients column
+  ingredients   String[]  // List of ingredients
+  benefits      String[]
+  concerns      String[]
+  suggestions   String[]
+  analysis      Json?     // General analysis JSON blob
+  goal          String?   // User's goal for this meal
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // If you have a direct relation to the User model
+  // user User @relation(fields: [userId], references: [id])
+  // @@index([userId])
+} 

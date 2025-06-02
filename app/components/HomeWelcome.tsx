@@ -1,0 +1,44 @@
+'use client';
+
+import React from 'react';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '../context/auth';
+import { useProfile } from '../lib/profile-context';
+
+export default function HomeWelcome() {
+  const { user, loading } = useAuth();
+  const { profile } = useProfile();
+  const [userName, setUserName] = React.useState('');
+  
+  // Extract user name from profile, not from meal data
+  React.useEffect(() => {
+    // Debug: Log the current profile data
+    console.log('HomeWelcome: Profile data:', profile);
+    console.log('HomeWelcome: Latest meal data:', localStorage.getItem('last_meal_analysis'));
+    
+    // Only extract name from profile data, never from meal data
+    if (profile?.full_name) {
+      setUserName(profile.full_name);
+    } else if (user?.email) {
+      // Fallback to email username if profile not loaded
+      const emailName = user.email.split('@')[0];
+      setUserName(emailName);
+    }
+  }, [profile, user]);
+
+  if (loading || !user) {
+    return null;
+  }
+
+  return (
+    <div className="text-center mb-8">
+      <div className="inline-block bg-blue-900/30 text-blue-300 px-4 py-2 rounded-full text-sm">
+        {userName ? (
+          <span className="font-medium">Welcome back, {userName}!</span>
+        ) : (
+          <span className="font-medium">Welcome back!</span>
+        )} You're signed in and ready to analyze meals.
+      </div>
+    </div>
+  );
+} 
