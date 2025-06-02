@@ -1,0 +1,12 @@
+.next
+node_modules
+.env.local
+.env.development
+*.log
+.DS_Store
+coverage
+.nyc_output
+.cache
+.parcel-cache
+.vscode
+.idea 
