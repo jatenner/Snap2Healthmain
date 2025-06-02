@@ -14,15 +14,6 @@
     }
   },
   "regions": ["iad1"],
-  "functions": {
-    "app/api/**/*.ts": {
-      "maxDuration": 60,
-      "runtime": "@vercel/node@2"
-    },
-    "app/api/analyze-meal/route.ts": {
-      "maxDuration": 60
-    }
-  },
   "headers": [
     {
       "source": "/api/(.*)",

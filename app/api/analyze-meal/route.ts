@@ -7,7 +7,7 @@ import { getFullUserProfile } from '../../lib/profile-server-utils';
 import { analyzeMealWithOpenAI } from '../../lib/openai-utils';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 120; // Allow up to 120 seconds for OpenAI processing
+export const maxDuration = 60; // Reduced to 60 seconds for Vercel hobby plan compatibility
 
 // Validate environment variables
 function validateEnvironment() {
