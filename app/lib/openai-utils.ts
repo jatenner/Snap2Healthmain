@@ -1,9 +1,27 @@
 import OpenAI from 'openai';
 import { retryWithExponentialBackoff } from './api-utils';
-import { safeStringify } from '@/utils/json-helpers';
-import { fixApiKeyLineBreaks, getOpenAIApiKey } from './openai-key-fix';
 import { z } from 'zod';
 import { UserProfile } from '@/app/lib/profile-utils';
+
+// Helper functions for OpenAI API key handling
+function fixApiKeyLineBreaks(apiKey: string): string {
+  if (!apiKey) return apiKey;
+  return apiKey.replace(/\\n/g, '\n').trim();
+}
+
+function getOpenAIApiKey(): string {
+  return process.env.OPENAI_API_KEY || '';
+}
+
+// Helper function for safe JSON stringifying
+function safeStringify(obj: any): string {
+  try {
+    return JSON.stringify(obj, null, 2);
+  } catch (error) {
+    console.error('Error stringifying object:', error);
+    return '[Unable to stringify object]';
+  }
+}
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,

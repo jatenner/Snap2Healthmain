@@ -1,253 +1,107 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { createClient, SupabaseClient, type User as SupabaseUser } from '@supabase/supabase-js';
-import { getCookie, setCookie, deleteCookie } from 'cookies-next';
-import { useRouter } from 'next/navigation';
-
-// Add TypeScript declaration for window.ENV
-declare global {
-  interface Window {
-    ENV?: {
-      NEXT_PUBLIC_SUPABASE_URL?: string;
-      NEXT_PUBLIC_SUPABASE_ANON_KEY?: string;
-      NEXT_PUBLIC_MOCK_AUTH?: string;
-      NEXT_PUBLIC_AUTH_BYPASS?: string;
-      NEXT_PUBLIC_APP_ENV?: string;
-    };
-  }
-}
-
-// Check if we're in mock mode - only enable if explicitly set to 'true'
-const mockAuth = 
-  typeof window !== 'undefined' && 
-  (window.ENV?.NEXT_PUBLIC_MOCK_AUTH === 'true' || 
-   window.localStorage.getItem('MOCK_AUTH') === 'true' || 
-   process.env.NEXT_PUBLIC_MOCK_AUTH === 'true' || 
-   process.env.NEXT_PUBLIC_AUTH_BYPASS === 'true');
-
-if (mockAuth) {
-  console.log('Auth bypass enabled, skipping auth check');
-}
-
-// Create a Supabase client (or a mock one if in mock mode)
-let supabase: SupabaseClient;
-
-try {
-  if (mockAuth) {
-    // Use a basic client with no actual connection in mock mode
-    console.log('Using mock Supabase client');
-    // Create a complete mock implementation that won't try to validate URLs
-    supabase = {
-      auth: {
-        getSession: async () => ({ data: { session: null }, error: null }),
-        onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } }, error: null }),
-        signInWithPassword: async () => ({ data: { user: null, session: null }, error: null }),
-        signUp: async () => ({ data: { user: null, session: null }, error: null }),
-        signOut: async () => ({ error: null }),
-        getUser: async () => ({ data: { user: null }, error: null })
-      },
-      from: () => ({
-        select: () => ({
-          eq: () => ({
-            order: () => ({
-              range: () => Promise.resolve({ data: [], error: null })
-            })
-          })
-        })
-      }),
-      storage: { 
-        from: () => ({
-          upload: async () => ({ data: null, error: null }),
-          getPublicUrl: () => ({ data: { publicUrl: "" } })
-        })
-      }
-    } as unknown as SupabaseClient;
-  } else {
-    const supabaseUrl = typeof window !== 'undefined' && window.ENV?.NEXT_PUBLIC_SUPABASE_URL 
-      ? window.ENV.NEXT_PUBLIC_SUPABASE_URL 
-      : process.env.NEXT_PUBLIC_SUPABASE_URL;
-      
-    const supabaseKey = typeof window !== 'undefined' && window.ENV?.NEXT_PUBLIC_SUPABASE_ANON_KEY
-      ? window.ENV.NEXT_PUBLIC_SUPABASE_ANON_KEY
-      : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Supabase credentials missing - falling back to mock');
-    }
-    
-    supabase = createClient(supabaseUrl, supabaseKey);
-  }
-} catch (error) {
-  console.error('Error initializing Supabase client:', error);
-  // Fallback to mock client with more complete implementation
-  console.log('Falling back to mock Supabase client due to error');
-  supabase = {
-    auth: {
-      getSession: async () => ({ data: { session: null }, error: null }),
-      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } }, error: null }),
-      signInWithPassword: async () => ({ data: { user: null, session: null }, error: null }),
-      signUp: async () => ({ data: { user: null, session: null }, error: null }),
-      signOut: async () => ({ error: null }),
-      getUser: async () => ({ data: { user: null }, error: null })
-    },
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          order: () => ({
-            range: () => Promise.resolve({ data: [], error: null })
-          })
-        })
-      })
-    }),
-    storage: { 
-      from: () => ({
-        upload: async () => ({ data: null, error: null }),
-        getPublicUrl: () => ({ data: { publicUrl: "" } })
-      })
-    }
-  } as unknown as SupabaseClient;
-}
-
-interface User {
-  id: string;
-  email: string;
-  name: string;
-  avatar?: string;
-  user_metadata?: {
-    username?: string;
-    defaultGoal?: string;
-    height?: string;
-    weight?: string;
-    age?: string;
-    gender?: string;
-    avatar_url?: string;
-  };
-}
+import { createClient, SupabaseClient, User } from '@supabase/supabase-js';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  isLoading?: boolean; // For backwards compatibility
   signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signUp: (email: string, password: string, name: string) => Promise<{ success: boolean; error?: string }>;
+  signUp: (email: string, password: string, name: string) => Promise<{ success: boolean; error?: string; data?: any }>;
   signOut: () => Promise<void>;
   isAuthenticated: boolean;
-  setMockUser?: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Create a default mock user
-const createMockUser = () => ({
-  id: 'mock-user-id',
-  email: 'user@example.com',
-  user_metadata: { username: 'Demo User' },
-  role: 'authenticated',
-  aud: 'authenticated',
-  app_metadata: {},
-  created_at: new Date().toISOString(),
-  confirmed_at: new Date().toISOString(),
-  last_sign_in_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
-  identities: [],
-  factors: [],
-} as unknown as User);
+// Create a single Supabase client instance
+let supabaseClient: SupabaseClient | null = null;
+
+function getSupabaseClient() {
+  if (supabaseClient) return supabaseClient;
+  
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.warn('Supabase credentials missing, using mock auth');
+    return null;
+  }
+  
+  try {
+    supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+    return supabaseClient;
+  } catch (error) {
+    console.error('Error creating Supabase client:', error);
+    return null;
+  }
+}
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
   
-  // Configure Supabase client
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  
-  // Only use mock in development if explicitly enabled
-  const useMockAuth = process.env.NEXT_PUBLIC_AUTH_BYPASS === 'true';
-  
-  // Initialize Supabase client if credentials are available
-  const supabase = supabaseUrl && supabaseAnonKey ? 
-    createClient(supabaseUrl, supabaseAnonKey) : 
-    null;
-  
-  if (!supabase && !useMockAuth) {
-    console.warn('Supabase client not initialized and mock auth not enabled');
-  } else if (!supabase) {
-    console.log('Using mock Supabase client');
-  }
+  const supabase = getSupabaseClient();
 
-  // Initialize user session on load
   useEffect(() => {
     const initializeAuth = async () => {
-      setLoading(true);
-      
+      if (!supabase) {
+        // Mock user for development
+        console.log('Using mock authentication');
+        setUser({
+          id: 'demo-user',
+          email: 'demo@snap2health.com',
+          user_metadata: { name: 'Demo User' },
+          app_metadata: {},
+          aud: 'authenticated',
+          created_at: new Date().toISOString(),
+        } as User);
+        setLoading(false);
+        return;
+      }
+
       try {
-        if (useMockAuth) {
-          // Use mock user in development if auth bypass is enabled
-          console.log('Auth bypass enabled, using demo user');
-          setUser({
-            id: 'mock-user-id',
-            email: 'demo@snap2health.com',
-            name: 'Demo User',
-            avatar: '/avatar-placeholder.png'
-          });
-        } else if (supabase) {
-          // Check for existing session with Supabase
-          const { data: { session } } = await supabase.auth.getSession();
-          
-          if (session) {
-            const { user: supabaseUser } = session;
-            
-            if (supabaseUser) {
-              // Get user profile data
-              const { data: profile } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', supabaseUser.id)
-                .single();
-              
-              setUser({
-                id: supabaseUser.id,
-                email: supabaseUser.email || '',
-                name: profile?.name || 'User',
-                avatar: profile?.avatar_url
-              });
-            }
+        // Get initial session
+        const { data: { session } } = await supabase.auth.getSession();
+        setUser(session?.user ?? null);
+
+        // Listen for auth changes
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+          (event, session) => {
+            console.log('Auth state changed:', event, session?.user?.email);
+            setUser(session?.user ?? null);
+            setLoading(false);
           }
-        }
+        );
+
+        return () => subscription.unsubscribe();
       } catch (error) {
         console.error('Error initializing auth:', error);
+        setUser(null);
       } finally {
         setLoading(false);
       }
     };
 
     initializeAuth();
-  }, [supabase, useMockAuth]);
+  }, [supabase]);
 
-  // Authentication functions
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    if (!supabase) {
+      // Mock sign in for development
+      console.log('Mock sign in for:', email);
+      setUser({
+        id: 'demo-user',
+        email,
+        user_metadata: { name: 'Demo User' },
+        app_metadata: {},
+        aud: 'authenticated',
+        created_at: new Date().toISOString(),
+      } as User);
+      return { success: true };
+    }
+
     try {
-      if (useMockAuth) {
-        // Simulate successful login in development
-        setUser({
-          id: 'mock-user-id',
-          email: email || 'demo@snap2health.com',
-          name: 'Demo User',
-          avatar: '/avatar-placeholder.png',
-          user_metadata: {
-            username: 'Demo User',
-            defaultGoal: 'General Wellness'
-          }
-        });
-        return { success: true };
-      }
-      
-      if (!supabase) {
-        return { success: false, error: 'Authentication service unavailable' };
-      }
-
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -257,131 +111,65 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { success: false, error: error.message };
       }
 
-      if (data.user) {
-        // Get user profile data
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', data.user.id)
-          .single();
-        
-        setUser({
-          id: data.user.id,
-          email: data.user.email || '',
-          name: profile?.name || 'User',
-          avatar: profile?.avatar_url
-        });
-        
-        return { success: true };
-      }
-      
-      return { success: false, error: 'Something went wrong' };
-    } catch (error) {
-      console.error('Sign in error:', error);
-      return { success: false, error: 'Failed to sign in' };
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Sign in failed' };
     }
   };
 
-  const signUp = async (email: string, password: string, name: string) => {
-    try {
-      if (useMockAuth) {
-        // Simulate successful signup in development
-        setUser({
-          id: 'mock-user-id',
-          email,
-          name,
-          avatar: '/avatar-placeholder.png',
-          user_metadata: {
-            username: name,
-            defaultGoal: 'General Wellness'
-          }
-        });
-        return { success: true };
-      }
-      
-      if (!supabase) {
-        return { success: false, error: 'Authentication service unavailable' };
-      }
+  const signUp = async (email: string, password: string, name: string): Promise<{ success: boolean; error?: string; data?: any }> => {
+    if (!supabase) {
+      // Mock sign up for development
+      console.log('Mock sign up for:', email);
+      return { success: true, data: { user: { email, user_metadata: { name } } } };
+    }
 
+    try {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          data: {
+            name: name,
+          }
+        }
       });
 
       if (error) {
         return { success: false, error: error.message };
       }
 
-      if (data.user) {
-        // Create user profile
-        await supabase
-          .from('profiles')
-          .insert([{ 
-            id: data.user.id, 
-            name,
-            email,
-            created_at: new Date().toISOString() 
-          }]);
-        
-        setUser({
-          id: data.user.id,
-          email: data.user.email || '',
-          name,
-        });
-        
-        return { success: true };
-      }
-      
-      return { success: false, error: 'Something went wrong' };
-    } catch (error) {
-      console.error('Sign up error:', error);
-      return { success: false, error: 'Failed to sign up' };
+      return { success: true, data };
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Sign up failed' };
     }
   };
 
-  const signOut = async () => {
-    if (useMockAuth) {
-      // Just clear the user in development
+  const signOut = async (): Promise<void> => {
+    if (!supabase) {
       setUser(null);
-      router.push('/login');
       return;
     }
-    
-    if (supabase) {
+
+    try {
       await supabase.auth.signOut();
       setUser(null);
-      router.push('/login');
+    } catch (error) {
+      console.error('Error signing out:', error);
     }
   };
 
-  const setMockUser = () => {
-    if (useMockAuth) {
-      setUser({
-        id: 'mock-user-id',
-        email: 'demo@snap2health.com',
-        name: 'Demo User',
-        avatar: '/avatar-placeholder.png',
-        user_metadata: {
-          username: 'Demo User',
-          defaultGoal: 'General Wellness'
-        }
-      });
-    }
+  const value: AuthContextType = {
+    user,
+    loading,
+    signIn,
+    signUp,
+    signOut,
+    isAuthenticated: !!user,
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        isLoading: loading,
-        signIn,
-        signUp,
-        signOut,
-        isAuthenticated: !!user,
-        setMockUser,
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
