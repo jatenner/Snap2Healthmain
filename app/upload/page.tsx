@@ -3,13 +3,13 @@
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/app/context/auth';
-import { useProfile } from '@/app/lib/profile-context';
+import { useAuth } from '../context/auth';
+import { useProfile } from '../lib/profile-context';
 import { useDropzone } from 'react-dropzone';
 import Image from 'next/image';
-import Logo from '@/app/components/Logo';
+import Logo from '../components/Logo';
 import { 
   Camera, 
   Upload, 
@@ -28,6 +28,8 @@ import {
   Clock,
   Award
 } from 'lucide-react';
+import UploadForm from '../components/UploadForm';
+import AuthButton from '../components/AuthButton';
 
 interface AnalysisResult {
   mealId: string;

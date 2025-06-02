@@ -24,9 +24,7 @@
     ],
     "paths": {
       "@/*": [
-        "./app/*",
-        "./src/*",
-        "./*"
+        "./app/*"
       ]
     },
     "strictNullChecks": true
