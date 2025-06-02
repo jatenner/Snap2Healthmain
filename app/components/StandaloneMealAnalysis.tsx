@@ -7,7 +7,7 @@ import { ChevronsLeft, Star, Share2, Download, HelpCircle, Info, User, Activity,
 import LoadingSpinner from './LoadingSpinner';
 import MealImage from './MealImage';
 import { useAuth } from '../context/auth';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { supabase } from '../lib/supabase/client';
 import EnhancedNutrientDisplay from './EnhancedNutrientDisplay';
 import AIHealthReview from './AIHealthReview';
 import EnhancedMealAnalysisDisplay from './EnhancedMealAnalysisDisplay';
@@ -238,7 +238,6 @@ export default function StandaloneMealAnalysis({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const { user } = useAuth();
-  const supabase = createClientComponentClient();
   
   // State for image upload and analysis
   const [file, setFile] = useState<File | null>(null);

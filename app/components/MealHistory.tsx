@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { supabase } from '../lib/supabase/client';
+import { useAuth } from '../context/auth';
 import Image from 'next/image';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
@@ -63,15 +64,17 @@ export default function MealHistory({
   const [loading, setLoading] = useState(true);
   const [meals, setMeals] = useState<Meal[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const supabase = createClientComponentClient();
+  const { user } = useAuth();
   
   const loadMeals = async () => {
-    setLoading(true);
-    setError(null);
+    if (!user?.id) {
+      setError('Please log in to view your meal history');
+      return;
+    }
+    
     try {
       // Get user ID
-      const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id;
+      const userId = user.id;
       
       // Array to hold all meals
       let combinedMeals: Meal[] = [];

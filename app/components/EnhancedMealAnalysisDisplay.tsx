@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { CalendarDays, Target, Lightbulb, AlertTriangle, ChefHat, Activity, Flame, Heart, ArrowLeft, Utensils, BarChart3, Brain, Star, Zap, Shield, TrendingUp, AlertCircle, Info, CheckCircle2, CheckCircle, Sparkles } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button } from './ui/button';
 import Image from 'next/image';
 
 interface Nutrient {

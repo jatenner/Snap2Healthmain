@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { supabase } from './supabase/client';
 import { useAuth } from '../context/auth';
 import { saveProfileData, loadProfileData, initializeProfilePersistence } from './profile-persistence';
 
@@ -40,7 +40,6 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
-  const supabase = createClientComponentClient();
 
   // Initialize persistence system
   useEffect(() => {
