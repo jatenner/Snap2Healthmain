@@ -11,6 +11,8 @@ import NavBar from './components/NavBar';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+// Force fresh build - Updated: 2025-06-02T21:50:00Z
+
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {

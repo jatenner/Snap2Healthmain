@@ -1,5 +1,7 @@
 'use client';
 
+// Force fresh build - Updated: 2025-06-02T21:50:00Z
+
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import MealUploader from '../../src/components/MealUploader';
