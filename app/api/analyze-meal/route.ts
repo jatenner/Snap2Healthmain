@@ -338,12 +338,24 @@ export async function POST(request: NextRequest) {
       
     } catch (openaiError: any) {
       console.error('[analyze-meal] OpenAI analysis failed:', openaiError);
+      console.error('[analyze-meal] Error details:', {
+        message: openaiError.message,
+        name: openaiError.name,
+        stack: openaiError.stack?.substring(0, 500),
+        type: typeof openaiError
+      });
       
       // Provide specific error messages based on the type of OpenAI failure
       let errorMessage = 'Unable to analyze the meal image at this time';
       let userMessage = 'Please try uploading the image again.';
       
-      if (openaiError.message?.includes('declined to analyze')) {
+      if (openaiError.message?.includes('API key')) {
+        errorMessage = 'OpenAI API Configuration Error';
+        userMessage = 'The AI service is temporarily misconfigured. Please contact support or try again later.';
+      } else if (openaiError.message?.includes('timeout')) {
+        errorMessage = 'Analysis Timeout';
+        userMessage = 'The image analysis took too long. Please try with a smaller image or try again.';
+      } else if (openaiError.message?.includes('declined to analyze')) {
         errorMessage = 'AI Analysis Declined';
         userMessage = 'The AI was unable to analyze this specific image. Please try with a clearer photo that shows food items more distinctly. Ensure good lighting and that the food is clearly visible.';
       } else if (openaiError.message?.includes('invalid JSON')) {

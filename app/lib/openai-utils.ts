@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import { retryWithExponentialBackoff } from './api-utils';
 import { z } from 'zod';
-import { UserProfile } from '@/app/lib/profile-utils';
+import { UserProfile } from './profile-utils';
 
 // Helper functions for OpenAI API key handling
 function fixApiKeyLineBreaks(apiKey: string): string {
@@ -10,7 +10,14 @@ function fixApiKeyLineBreaks(apiKey: string): string {
 }
 
 function getOpenAIApiKey(): string {
-  return process.env.OPENAI_API_KEY || '';
+  const apiKey = process.env.OPENAI_API_KEY || '';
+  console.log('[openai-utils] API Key check:', {
+    hasKey: !!apiKey,
+    keyLength: apiKey.length,
+    keyPrefix: apiKey ? apiKey.substring(0, 10) + '...' : 'none',
+    environment: process.env.NODE_ENV
+  });
+  return apiKey;
 }
 
 // Helper function for safe JSON stringifying
@@ -160,14 +167,26 @@ function getOpenAIClient(): OpenAI {
   const modelName = getOpenAIModelName();
 
   if (!apiKey) {
-    console.error('[openai-utils] OPENAI_API_KEY is not defined in environment variables and no fallback found');
-    throw new Error('OpenAI API key is missing');
+    console.error('[openai-utils] CRITICAL: OPENAI_API_KEY is missing');
+    console.error('[openai-utils] Environment variables check:', {
+      NODE_ENV: process.env.NODE_ENV,
+      hasOpenAIKey: !!process.env.OPENAI_API_KEY,
+      processEnvKeys: Object.keys(process.env).filter(key => key.includes('OPENAI'))
+    });
+    throw new Error('OpenAI API key is missing - please check your environment configuration');
+  }
+
+  // Validate API key format
+  if (!apiKey.startsWith('sk-')) {
+    console.error('[openai-utils] CRITICAL: Invalid OpenAI API key format');
+    throw new Error('Invalid OpenAI API key format - must start with sk-');
   }
 
   try {
     // Server-side configuration for OpenAI client
     const openaiConfig: any = {
       apiKey,
+      timeout: 60000, // 60 second timeout for Vercel compatibility
     };
     
     // Only add organization if it exists
