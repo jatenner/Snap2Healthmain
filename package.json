@@ -20,6 +20,9 @@
     "@radix-ui/react-tabs": "^1.1.12",
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/supabase-js": "^2.43.4",
+    "@types/node": "^20.17.57",
+    "@types/react": "^18.3.23",
+    "@types/react-dom": "^18.3.7",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
@@ -31,12 +34,10 @@
     "react-dropzone": "^14.2.3",
     "tailwind-merge": "^2.3.0",
     "tailwindcss-animate": "^1.0.7",
+    "typescript": "^5.8.3",
     "uuid": "^11.1.0"
   },
   "devDependencies": {
-    "@types/node": "^20.17.57",
-    "@types/react": "^18.3.23",
-    "@types/react-dom": "^18.3.7",
     "autoprefixer": "^10.4.21",
     "eslint": "^8.57.0",
     "eslint-config-next": "14.2.29",
@@ -44,8 +45,7 @@
     "postcss-flexbugs-fixes": "^5.0.2",
     "postcss-import": "^16.1.0",
     "postcss-preset-env": "^10.2.0",
-    "tailwindcss": "^4.1.8",
-    "typescript": "^5.8.3"
+    "tailwindcss": "^4.1.8"
   },
   "engines": {
     "node": ">=18.17.0",
