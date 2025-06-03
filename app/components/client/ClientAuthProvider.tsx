@@ -26,7 +26,15 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within a ClientAuthProvider');
+    // Instead of throwing an error, return safe defaults
+    console.warn('useAuth called outside of ClientAuthProvider - returning safe defaults');
+    return {
+      user: null,
+      isLoading: true,
+      isAuthenticated: false,
+      signOut: async () => {},
+      refreshUser: async () => {}
+    };
   }
   return context;
 }

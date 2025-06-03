@@ -2,7 +2,6 @@ import React from 'react';
 import './globals.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import Script from 'next/script';
 import { ClientAuthProvider } from './components/client/ClientAuthProvider';
 import { ProfileProvider } from './lib/profile-context';
 import NavBar from './components/NavBar';
@@ -10,6 +9,8 @@ import NavBar from './components/NavBar';
 // Force dynamic rendering for the entire app
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+// Force fresh build - Updated: 2025-06-02T23:00:00Z
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -30,13 +31,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <head>
-        <Script 
-          id="fix-ui-styles" 
-          src="/fix-ui-styles.js" 
-          strategy="afterInteractive" 
-        />
-      </head>
+      <head></head>
       <body className={`${inter.className} bg-gray-900 text-gray-200`}>
         <ClientAuthProvider>
           <ProfileProvider>

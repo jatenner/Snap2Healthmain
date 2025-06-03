@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import Script from 'next/script';
 import { Loader2, CheckCircle } from 'lucide-react';
 import { Button } from '../components/ui/button';
+import DebugInfo from './debug-info';
 
 export default function UploadPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -125,6 +126,9 @@ export default function UploadPage() {
           };
         `}
       </Script>
+
+      {/* Debug info to verify correct deployment */}
+      <DebugInfo />
     </div>
   );
 } 
