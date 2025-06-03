@@ -3,11 +3,11 @@
 import React from 'react';
 import Link from 'next/link';
 import { Button } from './ui/button';
-import { useAuth } from '../context/auth';
+import { useAuth } from './client/ClientAuthProvider';
 import { useProfile } from '../lib/profile-context';
 
 export default function HomeWelcome() {
-  const { user, loading } = useAuth();
+  const { user, isLoading } = useAuth();
   const { profile } = useProfile();
   const [userName, setUserName] = React.useState('');
   
@@ -27,7 +27,7 @@ export default function HomeWelcome() {
     }
   }, [profile, user]);
 
-  if (loading || !user) {
+  if (isLoading || !user) {
     return null;
   }
 
