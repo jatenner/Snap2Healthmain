@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../context/auth';
 import { safeForEach, safeMap, safeFilter, getArrayOrEmpty } from '../lib/utils';
-import { createBrowserClient } from '@supabase/ssr';
+import { createClient } from '@/lib/supabase/client';
 import ReactMarkdown from 'react-markdown';
 
 // Enhanced interfaces to support all nutrient data
@@ -846,10 +847,7 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
 
       console.log('[generatePersonalizedInsights] Sending payload:', payload);
 
-      const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
+      const supabase = createClient();
 
       const response = await fetch('/api/generate-personalized-insights', {
         method: 'POST',

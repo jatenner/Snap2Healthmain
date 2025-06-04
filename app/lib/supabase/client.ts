@@ -13,54 +13,75 @@ let supabaseClient: any = null;
 
 // Check environment variables and create appropriate client
 const shouldUseMockAuth = (): boolean => {
-  return !process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  // Only use mock auth in development when environment variables are explicitly set to placeholder values
+  if (process.env.NODE_ENV === 'production') return false;
+  
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  
+  // Use mock only if variables are missing or contain placeholder text
+  return !url || !key || 
+         url.includes('placeholder') || 
+         key.includes('placeholder') ||
+         url === 'your-project-url' ||
+         key === 'your-anon-key';
 };
 
-if (shouldUseMockAuth()) {
-  console.warn('[Supabase Client] Development mode with placeholder environment - using mock client');
-  
-  // Create a mock client for development
-  supabaseClient = {
-    auth: {
-      getUser: () => Promise.resolve({ data: { user: null }, error: null }),
-      getSession: () => Promise.resolve({ data: { session: null }, error: null }),
-      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
-      signUp: () => Promise.resolve({ data: { user: null }, error: { message: 'Mock mode' } }),
-      signInWithPassword: () => Promise.resolve({ data: { user: null }, error: { message: 'Mock mode' } }),
-      signOut: () => Promise.resolve({ error: null })
-    },
-    from: () => ({
-      select: () => ({ data: [], error: null }),
-      insert: () => ({ data: null, error: { message: 'Mock mode' } }),
-      update: () => ({ data: null, error: { message: 'Mock mode' } }),
-      delete: () => ({ data: null, error: { message: 'Mock mode' } })
-    }),
-    storage: {
-      from: () => ({
-        upload: () => Promise.resolve({ data: null, error: { message: 'Mock mode' } }),
-        getPublicUrl: () => ({ data: { publicUrl: '/placeholder-meal.jpg' } })
-      })
-    }
-  };
-} else {
-  // Create real Supabase client
-  supabaseClient = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-}
-
-// Export the default client creation function
+// Create the client
 export function createClient() {
+  if (supabaseClient) return supabaseClient;
+  
+  if (shouldUseMockAuth()) {
+    console.warn('[Supabase Client] Development mode with placeholder environment - using mock client');
+    
+    // Create a mock client for development
+    supabaseClient = {
+      auth: {
+        getUser: () => Promise.resolve({ data: { user: null }, error: null }),
+        getSession: () => Promise.resolve({ data: { session: null }, error: null }),
+        onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+        signUp: () => Promise.resolve({ data: { user: null }, error: { message: 'Mock mode' } }),
+        signInWithPassword: () => Promise.resolve({ data: { user: null }, error: { message: 'Mock mode' } }),
+        signOut: () => Promise.resolve({ error: null })
+      },
+      from: () => ({
+        select: () => ({ data: [], error: null }),
+        insert: () => ({ data: null, error: { message: 'Mock mode' } }),
+        update: () => ({ data: null, error: { message: 'Mock mode' } }),
+        delete: () => ({ data: null, error: { message: 'Mock mode' } })
+      }),
+      storage: {
+        from: () => ({
+          upload: () => Promise.resolve({ data: null, error: { message: 'Mock mode' } }),
+          getPublicUrl: () => ({ data: { publicUrl: '/placeholder-meal.jpg' } })
+        })
+      }
+    };
+  } else {
+    // Create real Supabase client
+    supabaseClient = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        auth: {
+          flowType: 'pkce',
+          autoRefreshToken: true,
+          persistSession: true,
+          detectSessionInUrl: true
+        }
+      }
+    );
+  }
+  
   return supabaseClient;
 }
 
 // Export legacy compatibility functions
-export const createSafeSupabaseClient = () => supabaseClient;
+export const createSafeSupabaseClient = createClient;
 export { shouldUseMockAuth };
 
 // Default export for legacy compatibility
-export const supabase = supabaseClient;
+export const supabase = createClient();
 
 // Database verification functions
 export const verifyDatabaseTables = async () => {

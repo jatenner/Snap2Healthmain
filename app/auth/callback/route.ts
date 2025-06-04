@@ -1,37 +1,20 @@
-import { createServerClient } from '@supabase/ssr';
+import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
-  const redirectTo = requestUrl.searchParams.get('next') || '/dashboard';
 
   if (code) {
-    const cookieStore = cookies();
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value;
-          },
-          set(name: string, value: string, options: any) {
-            cookieStore.set({ name, value, ...options });
-          },
-          remove(name: string, options: any) {
-            cookieStore.set({ name, value: '', ...options });
-          },
-        },
-      }
-    );
+    const supabase = createClient();
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
     
-    // Exchange the auth code for a session
-    await supabase.auth.exchangeCodeForSession(code);
+    if (error) {
+      console.error('Auth callback error:', error);
+      return NextResponse.redirect(`${requestUrl.origin}/login?error=auth_failed`);
+    }
   }
 
-  // URL to redirect to after sign in process completes
-  // Use the redirectTo parameter if available, or default to dashboard
-  return NextResponse.redirect(new URL(redirectTo, request.url));
+  // Redirect to upload page after successful authentication
+  return NextResponse.redirect(`${requestUrl.origin}/upload`);
 } 
