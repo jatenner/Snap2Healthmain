@@ -1,71 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@/lib/supabase/server';
 
 /**
  * Get the user's profile data
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    // Create a Supabase client
-    const supabase = createRouteHandlerClient({ cookies });
+    const supabase = createClient();
     
-    // Get the user session
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
     
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    
-    const userId = session.user.id;
-    
-    // First, retrieve user metadata from auth
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    
-    if (userError) {
-      console.error('Error getting user data:', userError);
-      return NextResponse.json({ error: 'Failed to get user data' }, { status: 500 });
-    }
-    
-    // Then check for separate profile data from the profiles table
-    const { data: profileData, error: profileError } = await supabase
+
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', userId)
+      .eq('id', user.id)
       .single();
-    
-    if (profileError && profileError.code !== 'PGRST116') { // Not found error is ok
-      console.error('Error getting profile data:', profileError);
+
+    if (profileError) {
+      console.error('Error fetching profile:', profileError);
+      return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
-    
-    // Combine user metadata and profile data
-    const userMetadata = userData.user.user_metadata || {};
-    const profile = profileData || {};
-    
-    // Default profile values
-    const defaultProfileValues = {
-      age: 35,
-      gender: 'prefer-not-to-say',
-      height: null,
-      weight: 70,
-      dietaryPreferences: null,
-      healthGoals: 'General Wellness',
-      activityLevel: 'Moderate',
-    };
-    
-    // Combine all data sources with defaults
-    const combinedProfile = {
-      ...defaultProfileValues,
-      ...profile,
-      ...userMetadata,
-      id: userId,
-      email: userData.user.email,
-    };
-    
-    return NextResponse.json({ profile: combinedProfile });
-    
+
+    return NextResponse.json({ profile });
   } catch (error) {
-    console.error('Error in profile GET route:', error);
+    console.error('Profile fetch error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -76,7 +38,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Create a Supabase client
-    const supabase = createRouteHandlerClient({ cookies });
+    const supabase = createClient();
     
     // Get the user session
     const { data: { session } } = await supabase.auth.getSession();

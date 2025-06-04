@@ -5,8 +5,15 @@
  * Centralized profile management to ensure consistency across the app
  */
 
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '@supabase/ssr';
 import * as clientAuth from './supabase/client-auth';
+
+function getSupabaseClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
 
 // Define the UserProfile interface for type safety
 export interface UserProfile {

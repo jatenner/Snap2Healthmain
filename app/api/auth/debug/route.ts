@@ -1,46 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@/lib/supabase/server';
+
+export const dynamic = 'force-dynamic';
 
 // API route to check authentication status and reset sessions if needed
-export async function GET(req: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    // Get the Supabase client
-    const cookieStore = cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    const supabase = createClient();
     
-    // Get the current session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    const { data: { user }, error } = await supabase.auth.getUser();
     
-    // Get URL params
-    const { searchParams } = new URL(req.url);
-    const reset = searchParams.get('reset') === 'true';
-    
-    // If reset is true, sign out the user
-    if (reset) {
-      await supabase.auth.signOut();
-      return NextResponse.json({ 
-        status: 'success', 
-        message: 'Session cleared successfully',
-        wasAuthenticated: !!session
-      });
-    }
-    
-    // Return the debug info
     return NextResponse.json({
-      authenticated: !!session,
-      user: session?.user ? {
-        id: session.user.id,
-        email: session.user.email,
-        lastSignIn: session.user.last_sign_in_at
+      user: user ? {
+        id: user.id,
+        email: user.email,
+        name: user.user_metadata?.full_name || 'Unknown'
       } : null,
-      error: sessionError,
-      cookiesPresent: {
-        accessToken: !!cookieStore.get('sb-access-token'),
-        refreshToken: !!cookieStore.get('sb-refresh-token')
-      }
+      error: error?.message || null,
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to get authentication info' }, { status: 500 });
+    console.error('Auth debug error:', error);
+    return NextResponse.json({ 
+      error: 'Internal server error',
+      timestamp: new Date().toISOString()
+    }, { status: 500 });
   }
 } 

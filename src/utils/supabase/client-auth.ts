@@ -10,17 +10,25 @@
  * and should be used instead of server.ts for client components.
  */
 
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import type { User } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '@supabase/ssr';
+import type { User } from '@supabase/supabase-js';
 
 // Cache the current user to avoid multiple redundant requests
 let cachedUser: User | null = null;
+
+// Create a helper function to get the configured client
+function getSupabaseClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
 
 /**
  * Sign in with email and password
  */
 export async function signIn(email: string, password: string) {
-  const supabase = createClientComponentClient();
+  const supabase = getSupabaseClient();
   const result = await supabase.auth.signInWithPassword({
     email,
     password,
@@ -37,7 +45,7 @@ export async function signIn(email: string, password: string) {
  * Sign up with email and password
  */
 export async function signUp(email: string, password: string) {
-  const supabase = createClientComponentClient();
+  const supabase = getSupabaseClient();
   const result = await supabase.auth.signUp({
     email,
     password,
@@ -53,7 +61,7 @@ export async function signUp(email: string, password: string) {
  * Sign out the current user
  */
 export async function signOut() {
-  const supabase = createClientComponentClient();
+  const supabase = getSupabaseClient();
   const result = await supabase.auth.signOut();
   cachedUser = null;
   return result;
@@ -63,7 +71,7 @@ export async function signOut() {
  * Get the current user's session
  */
 export async function getSession() {
-  const supabase = createClientComponentClient();
+  const supabase = getSupabaseClient();
   const result = await supabase.auth.getSession();
   
   if (result.data?.session?.user) {
@@ -81,7 +89,7 @@ export async function getUser() {
     return { data: { user: cachedUser }, error: null };
   }
   
-  const supabase = createClientComponentClient();
+  const supabase = getSupabaseClient();
   const result = await supabase.auth.getUser();
   
   if (result.data?.user) {
@@ -103,7 +111,7 @@ export async function isAuthenticated() {
  * Update user profile data in the profiles table
  */
 export async function updateProfile(userId: string, profileData: any) {
-  const supabase = createClientComponentClient();
+  const supabase = getSupabaseClient();
   
   return await supabase
     .from('profiles')
@@ -120,7 +128,7 @@ export async function updateProfile(userId: string, profileData: any) {
 export async function getProfile(userId: string) {
   if (!userId) return { data: null, error: new Error('User ID is required') };
   
-  const supabase = createClientComponentClient();
+  const supabase = getSupabaseClient();
   
   return await supabase
     .from('profiles')

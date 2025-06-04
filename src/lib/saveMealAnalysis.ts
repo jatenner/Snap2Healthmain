@@ -1,6 +1,15 @@
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '@supabase/ssr';
 import { v4 as uuidv4 } from 'uuid';
-import { Database } from '@/types/supabase';
+
+export interface MealAnalysisResult {
+  mealName: string;
+  calories: number;
+  macronutrients: any[];
+  micronutrients: any[];
+  benefits?: string[];
+  concerns?: string[];
+  goal?: string;
+}
 
 interface MealData {
   userId: string;
@@ -8,6 +17,13 @@ interface MealData {
   mealName: string;
   analysis: any;
   goal?: string;
+}
+
+function getSupabaseClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 }
 
 /**
@@ -49,7 +65,7 @@ export async function saveMealAnalysis(mealData: MealData): Promise<{
     }
     
     // In production, save to Supabase
-    const supabase = createClientComponentClient<Database>();
+    const supabase = getSupabaseClient();
     
     const { data, error } = await supabase
       .from('meals')
@@ -110,7 +126,7 @@ export async function getMealHistory(userId: string): Promise<{
     }
     
     // In production, get from Supabase
-    const supabase = createClientComponentClient<Database>();
+    const supabase = getSupabaseClient();
     
     const { data, error } = await supabase
       .from('meals')

@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useAuth } from './client/ClientAuthProvider';
 import { safeForEach, safeMap, safeFilter, getArrayOrEmpty } from '../lib/utils';
-import { createClient } from '../lib/supabase/client';
+import { createBrowserClient } from '@supabase/ssr';
 import ReactMarkdown from 'react-markdown';
 
 // Enhanced interfaces to support all nutrient data
@@ -789,7 +788,6 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
   analysisData, 
   userGoal 
 }) => {
-  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'nutrients' | 'ai-insights'>('nutrients');
   const [personalizedInsights, setPersonalizedInsights] = useState<string>('');
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
@@ -831,7 +829,7 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
 
     try {
       // Get user profile from multiple sources
-      const currentUserProfile = user || (typeof window !== 'undefined' ? window.currentUserProfile : null) || {};
+      const currentUserProfile = typeof window !== 'undefined' ? window.currentUserProfile : null;
       
       const payload = {
         mealData: {
@@ -847,6 +845,11 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
       };
 
       console.log('[generatePersonalizedInsights] Sending payload:', payload);
+
+      const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
 
       const response = await fetch('/api/generate-personalized-insights', {
         method: 'POST',
@@ -869,21 +872,18 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
         const mealId = analysisData.id || analysisData.mealId;
         if (mealId && mealId !== 'temp-enhanced' && !mealId.includes('temp')) {
           try {
-            const supabase = createClient();
-            if (supabase) {
-              const { error: updateError } = await supabase
-                .from('meals')
-                .update({ 
-                  insights: data.insights,
-                  personalized_insights: data.insights 
-                })
-                .eq('id', mealId);
+            const { error: updateError } = await supabase
+              .from('meals')
+              .update({ 
+                insights: data.insights,
+                personalized_insights: data.insights 
+              })
+              .eq('id', mealId);
 
-              if (updateError) {
-                console.error('[generatePersonalizedInsights] Error updating meal with insights:', updateError);
-              } else {
-                console.log('[generatePersonalizedInsights] Successfully saved insights to database');
-              }
+            if (updateError) {
+              console.error('[generatePersonalizedInsights] Error updating meal with insights:', updateError);
+            } else {
+              console.log('[generatePersonalizedInsights] Successfully saved insights to database');
             }
           } catch (saveError) {
             console.error('[generatePersonalizedInsights] Error saving insights to database:', saveError);

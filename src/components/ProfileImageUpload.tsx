@@ -3,14 +3,19 @@ import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { uploadImageToSupabase } from '@/lib/uploadImageToSupabase';
 import Image from 'next/image';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { Database } from '@/types/supabase';
+import { createBrowserClient } from '@supabase/ssr';
 import { Loader2, Camera } from 'lucide-react';
-import { getSupabaseClient } from '@/src/lib/supabase-singleton';
 
 interface ProfileImageUploadProps {
   user: any;
   onImageUploaded?: (url: string) => void;
+}
+
+function getSupabaseClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 }
 
 export function ProfileImageUpload({ user, onImageUploaded }: ProfileImageUploadProps) {

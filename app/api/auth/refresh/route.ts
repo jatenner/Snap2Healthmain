@@ -1,40 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@/lib/supabase/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createRouteHandlerClient({ cookies });
+    const supabase = createClient();
     
-    // Attempt to refresh the session
-    const { data, error } = await supabase.auth.refreshSession();
+    const { data: { user }, error } = await supabase.auth.getUser();
     
     if (error) {
-      console.error('Error refreshing auth session:', error);
-      return NextResponse.json({
-        success: false,
-        error: error.message
-      }, { status: 400 });
+      return NextResponse.json({ error: error.message }, { status: 401 });
     }
     
-    if (data?.session) {
-      return NextResponse.json({
-        success: true,
-        userId: data.session.user.id,
-        email: data.session.user.email,
-        expires: new Date(data.session.expires_at * 1000).toISOString()
-      });
-    } else {
-      return NextResponse.json({
-        success: false,
-        error: 'No session data returned'
-      }, { status: 400 });
-    }
+    return NextResponse.json({ 
+      success: true, 
+      user: user ? {
+        id: user.id,
+        email: user.email,
+        name: user.user_metadata?.full_name
+      } : null 
+    });
   } catch (error) {
-    console.error('Exception in auth refresh:', error);
-    return NextResponse.json({
-      success: false,
-      error: 'Server error during refresh'
+    console.error('Refresh error:', error);
+    return NextResponse.json({ 
+      error: 'Internal server error' 
     }, { status: 500 });
   }
 } 

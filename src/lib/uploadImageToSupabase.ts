@@ -1,6 +1,13 @@
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '@supabase/ssr';
 import { v4 as uuidv4 } from 'uuid';
-import { Database } from '@/types/supabase';
+
+// Create a helper function to get the configured client
+function getSupabaseClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
 
 /**
  * Uploads an image to Supabase Storage
@@ -11,7 +18,7 @@ import { Database } from '@/types/supabase';
 export async function uploadImageToSupabase(file: File): Promise<string> {
   try {
     // In production mode, upload to Supabase Storage
-    const supabase = createClientComponentClient<Database>();
+    const supabase = getSupabaseClient();
     
     // Generate a unique file name
     const fileExt = file.name.split('.').pop();

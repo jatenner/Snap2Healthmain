@@ -4,9 +4,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { cookies } from 'next/headers';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { Database } from '@/types/supabase';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@/lib/supabase/server';
 
 // Define more comprehensive interfaces for nutrient data
 export interface Nutrient {
@@ -383,7 +381,7 @@ export async function saveMealToHistory(mealData: MealData): Promise<{
 
     // Attempt to save to Supabase using RPC functions
     console.log('Saving meal to Supabase...');
-    const supabase = createClientComponentClient();
+    const supabase = createClient();
     
     // Get the authenticated user's ID
     const { data: { user } } = await supabase.auth.getUser();
@@ -579,57 +577,6 @@ function ensureJsonbFormat(data: any): any {
   // Return primitives as is
   return data;
 } 
-
-// Enhanced normalize function for meal data
-export function normalizeMealData(mealData: MealData): MealData {
-  const normalized: MealData = { ...mealData };
-  
-  // Ensure caption/name consistency
-  if (normalized.mealName && !normalized.caption) {
-    normalized.caption = normalized.mealName;
-  }
-  if (normalized.caption && !normalized.mealName) {
-    normalized.mealName = normalized.caption;
-  }
-
-  // Extract nutrients from analysis if needed
-  if (normalized.analysis) {
-    // Handle macronutrients
-    if (!normalized.macronutrients && normalized.analysis.macronutrients) {
-      normalized.macronutrients = ensureArray(normalized.analysis.macronutrients);
-    }
-    
-    // Handle micronutrients with better extraction
-    if (!normalized.micronutrients && normalized.analysis.micronutrients) {
-      normalized.micronutrients = ensureArray(normalized.analysis.micronutrients);
-    }
-    
-    // Handle benefits, concerns, suggestions
-    if (!normalized.benefits && normalized.analysis.benefits) {
-      normalized.benefits = ensureArray(normalized.analysis.benefits);
-    }
-    if (!normalized.concerns && normalized.analysis.concerns) {
-      normalized.concerns = ensureArray(normalized.analysis.concerns);
-    }
-    if (!normalized.suggestions && normalized.analysis.suggestions) {
-      normalized.suggestions = ensureArray(normalized.analysis.suggestions);
-    }
-    
-    // Set calories if missing
-    if (!normalized.calories && (normalized.analysis.calories || normalized.analysis.totalCalories)) {
-      normalized.calories = normalized.analysis.calories || normalized.analysis.totalCalories || 0;
-    }
-  }
-
-  // Ensure all arrays are properly structured
-  normalized.macronutrients = ensureArray(normalized.macronutrients);
-  normalized.micronutrients = ensureArray(normalized.micronutrients);
-  normalized.benefits = ensureArray(normalized.benefits);
-  normalized.concerns = ensureArray(normalized.concerns);
-  normalized.suggestions = ensureArray(normalized.suggestions);
-  
-  return normalized;
-}
 
 // Calculate personalized daily values based on user profile
 export function calculatePersonalizedDailyValues(profile: any): Record<string, number> {
