@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useAuth } from '@/app/context/auth';
+import { useAuth } from '@/components/client/ClientAuthProvider';
 import LoadingSpinner from './LoadingSpinner';
 
 export default function Header() {

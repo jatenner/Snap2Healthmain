@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useAuth } from '@/app/context/auth';
+import { usePathname, useRouter } from 'next/navigation';
+import { useAuth } from '@/components/client/ClientAuthProvider';
 import { User, History, Upload, LogOut, Menu, X, Home, LogIn, UserPlus, UserCircle } from 'lucide-react';
 
 // Define the type for navigation links
@@ -15,8 +15,9 @@ type NavLink = {
 };
 
 export default function NavBar() {
-  const { user, logout } = useAuth();
+  const { user, signOut } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [userName, setUserName] = useState('');
   const [isClient, setIsClient] = useState(false);
@@ -59,7 +60,7 @@ export default function NavBar() {
   // Handle sign out
   const handleSignOut = async () => {
     try {
-      await logout();
+      await signOut();
       closeMenu();
     } catch (error) {
       console.error('Error signing out:', error);

@@ -9,7 +9,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/app/context/auth';
+import { useAuth } from '@/components/client/ClientAuthProvider';
 import { safeMap, getArrayOrEmpty } from '../lib/utils';
 
 interface MacroNutrient {
@@ -592,14 +592,4 @@ const NutritionAnalysis: React.FC<NutritionAnalysisProps> = ({
             <span className="font-medium">Personalized Analysis:</span> Daily values are adjusted based on your 
             {profileData.age ? ` age (${profileData.age}),` : ''} 
             {profileData.gender ? ` gender (${profileData.gender}),` : ''}
-            {profileData.weight ? ` weight (${profileData.weight}lbs),` : ''}
-            {profileData.height ? ` height (${profileData.height}in),` : ''}
-            {profileData.goal ? ` and fitness goal (${profileData.goal}).` : '.'}
-          </p>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default NutritionAnalysis; 
+            {profileData.weight ? ` weight (${profileData.weight}lbs),`
