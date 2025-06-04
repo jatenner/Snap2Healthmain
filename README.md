@@ -158,4 +158,6 @@ For support, please open an issue on GitHub or contact the development team.
 
 ---
 
-Built with ❤️ for better nutrition tracking 
+Built with ❤️ for better nutrition tracking
+
+<!-- Trigger deployment - all module resolution issues fixed --> 
