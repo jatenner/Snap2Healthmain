@@ -1,37 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { createClient } from '@supabase/supabase-js';
-import { cookies } from 'next/headers';
+import { createClient as createServerClient } from '@/lib/supabase/server';
 import { getLocalMealById, shouldUseLocalStorage } from '../../../../src/utils/localStorageMeals';
 import { safeJsonParse } from '../../analyze-meal/json-fix';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const mealId = params.id;
-  
-  if (!mealId) {
-    return NextResponse.json(
-      { error: 'Meal ID is required' },
-      { status: 400 }
-    );
-  }
-  
+  console.log(`[api/meals/id] Fetching meal with ID: ${mealId}`);
+
   try {
-    // Check if we're in auth bypass mode
-    // if (shouldUseLocalStorage()) {
-    //   // For auth bypass mode, we don't actually fetch from localStorage here (that's client-side)
-    //   // Instead we just return a 404 so the client will check localStorage
-    //   return NextResponse.json(
-    //     { error: 'Meal not found' },
-    //     { status: 404 }
-    //   );
-    // }
-    
-    // Create authenticated Supabase client
-    const cookieStore = cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    // If we should use local storage or if it's a dev meal
+    if (shouldUseLocalStorage() || mealId.startsWith('dev-')) {
+      console.log(`[api/meals/id] Using local storage for meal: ${mealId}`);
+      const localMeal = getLocalMealById(mealId);
+      
+      if (localMeal) {
+        return NextResponse.json(localMeal);
+      } else {
+        console.log(`[api/meals/id] Meal not found in local storage: ${mealId}`);
+        return NextResponse.json({ error: 'Meal not found' }, { status: 404 });
+      }
+    }
+
+    const supabase = createServerClient();
     
     // Get the user session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();

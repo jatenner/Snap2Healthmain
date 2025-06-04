@@ -8,6 +8,7 @@
 
 // Import necessary dependencies
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '@supabase/ssr';
 
 // Extend Window interface to include our custom properties
 declare global {
@@ -1112,4 +1113,12 @@ export function calculateDVPercent(nutrientName: string, amount: number, unit: s
   
   // Round to nearest integer for display purposes
   return Math.round(percent);
+}
+
+// Create a helper function to get the configured client
+function getSupabaseClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 } 

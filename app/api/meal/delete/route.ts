@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
+
+export const dynamic = 'force-dynamic';
 
 export async function DELETE(req: NextRequest) {
   const bypassAuth = process.env.NEXT_PUBLIC_BYPASS_AUTH === 'true';
   
   try {
+    const supabase = createClient();
+    
     // Get meal ID from URL
     const { searchParams } = new URL(req.url);
     const mealId = searchParams.get('id');
@@ -22,7 +26,6 @@ export async function DELETE(req: NextRequest) {
     
     // For regular IDs, authenticate and delete from database
     const cookieStore = cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
     
     // Check authentication
     const { data: { session }, error: authError } = await supabase.auth.getSession();

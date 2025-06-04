@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createClient } from '@/lib/supabase/server';
 import { getUserIdFromSession } from '../../lib/auth';
 
 // Explicitly mark this route as dynamic to prevent build errors
@@ -9,6 +8,8 @@ export const revalidate = 0;
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = createClient();
+    
     // Get user ID from session
     const { userId, error: authError } = await getUserIdFromSession(request);
     
@@ -36,9 +37,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    
-    // Initialize Supabase client
-    const supabase = createRouteHandlerClient({ cookies });
     
     // Prepare the meal record
     const mealRecord = {

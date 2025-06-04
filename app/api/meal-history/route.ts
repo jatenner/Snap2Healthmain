@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
-import { createClient } from '@supabase/supabase-js';
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 
 // Explicitly mark this route as dynamic to prevent build errors
@@ -12,9 +11,7 @@ export async function GET(request: NextRequest) {
   const bypassAuth = process.env.NEXT_PUBLIC_BYPASS_AUTH === 'true';
   
   try {
-    // Create Supabase client
-    const cookieStore = cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    const supabase = createClient();
     
     // Get user from auth state
     const { data: { session }, error: authError } = await supabase.auth.getSession();
@@ -167,13 +164,8 @@ export async function GET(request: NextRequest) {
 
 // Utility to get Supabase client (could be refactored to a shared lib)
 function getSupabaseClient(userId?: string) {
-  if (userId && userId === 'test-user-bypass' && process.env.NEXT_PUBLIC_AUTH_BYPASS === 'true') {
-    // Use anon key for bypass user, assuming RLS allows for this test user
-    return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
-  }
-  // For regular users or when not bypassing, use server client with auth cookies
-  const cookieStore = cookies();
-  return createServerComponentClient({ cookies: () => cookieStore });
+  // Always use the server client for API routes
+  return createClient();
 }
 
 export async function POST(req: NextRequest) {

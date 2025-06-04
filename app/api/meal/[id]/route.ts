@@ -1,6 +1,7 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
+
+export const dynamic = 'force-dynamic';
 
 // API route to get meal details by ID
 export async function GET(
@@ -14,9 +15,7 @@ export async function GET(
   }
   
   try {
-    // Initialize Supabase client
-    const cookieStore = cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    const supabase = createClient();
     
     // Get the current session for auth check
     const { data: { session } } = await supabase.auth.getSession();

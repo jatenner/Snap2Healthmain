@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
 
 // Force this route to be dynamic
@@ -11,6 +11,8 @@ export async function POST(req: NextRequest) {
   console.log('[upload-image] Received upload request');
   
   try {
+    const supabase = createClient();
+    
     // Parse the form data
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
@@ -33,17 +35,10 @@ export async function POST(req: NextRequest) {
     
     // Upload to Supabase Storage if available
     try {
-      const supabase = createRouteHandlerClient({ cookies });
-      
-      // Convert file to array buffer
-      const arrayBuffer = await file.arrayBuffer();
-      const fileBuffer = Buffer.from(arrayBuffer);
-      
-      // Upload to Supabase Storage
       const { data, error } = await supabase
         .storage
         .from('uploads')
-        .upload(`public/${fileName}`, fileBuffer, {
+        .upload(`public/${fileName}`, file, {
           cacheControl: '3600',
           contentType: file.type,
           upsert: false

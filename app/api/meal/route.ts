@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   const bypassAuth = process.env.NEXT_PUBLIC_BYPASS_AUTH === 'true';
@@ -12,6 +14,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const supabase = createClient();
+    
     // Check if this is a development ID (starts with "dev-")
     if (bypassAuth && mealId.startsWith('dev-')) {
       console.log(`Fetching simulated meal data for development ID: ${mealId}`);
@@ -113,7 +117,6 @@ export async function GET(request: NextRequest) {
     
     // For regular IDs, query the database
     const cookieStore = cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
     
     // Check authentication
     const { data: { session }, error: authError } = await supabase.auth.getSession();
