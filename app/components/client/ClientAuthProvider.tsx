@@ -3,18 +3,20 @@
 import React, { useState, useEffect, useContext, createContext } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { useRouter, usePathname } from 'next/navigation';
-import { createClient, shouldUseMockAuth } from '../../lib/supabase/client';
+import { createClient, shouldUseMockAuth } from '@/lib/supabase/client';
 
 // Define user type
-interface User {
+interface AuthUser {
   id: string;
   email?: string;
+  user_metadata?: any;
 }
 
 // Define auth context type
 interface AuthContextType {
-  user: User | null;
+  user: AuthUser | null;
   isLoading: boolean;
+  loading: boolean;
   isAuthenticated: boolean;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -24,6 +26,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   user: null,
   isLoading: false,
+  loading: false,
   isAuthenticated: false,
   signOut: async () => {},
   refreshUser: async () => {}
@@ -47,7 +50,7 @@ export function useAuth() {
 }
 
 export function ClientAuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const router = useRouter();
@@ -97,7 +100,8 @@ export function ClientAuthProvider({ children }: { children: React.ReactNode }) 
         if (session?.user) {
           setUser({
             id: session.user.id,
-            email: session.user.email
+            email: session.user.email,
+            user_metadata: session.user.user_metadata
           });
           setIsAuthenticated(true);
         } else {
@@ -113,7 +117,8 @@ export function ClientAuthProvider({ children }: { children: React.ReactNode }) 
           if (session?.user) {
             setUser({
               id: session.user.id,
-              email: session.user.email
+              email: session.user.email,
+              user_metadata: session.user.user_metadata
             });
             setIsAuthenticated(true);
           } else {
@@ -186,7 +191,8 @@ export function ClientAuthProvider({ children }: { children: React.ReactNode }) 
       if (user) {
         setUser({
           id: user.id,
-          email: user.email
+          email: user.email,
+          user_metadata: user.user_metadata
         });
         setIsAuthenticated(true);
       }
@@ -196,11 +202,12 @@ export function ClientAuthProvider({ children }: { children: React.ReactNode }) 
   };
 
   const contextValue: AuthContextType = {
-        user,
-        isLoading,
-        isAuthenticated,
-        signOut,
-        refreshUser
+    user,
+    isLoading,
+    loading: isLoading,
+    isAuthenticated,
+    signOut,
+    refreshUser
   };
 
   return (
