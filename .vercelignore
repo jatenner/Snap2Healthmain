@@ -9,4 +9,9 @@ coverage
 .cache
 .parcel-cache
 .vscode
-.idea 
+.idea
+src
+prisma
+*.md
+*.txt
+*.sh 
