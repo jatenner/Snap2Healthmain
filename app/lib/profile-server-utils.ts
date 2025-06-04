@@ -1,4 +1,4 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { UserProfile } from './profile-utils';
 
@@ -9,7 +9,23 @@ import { UserProfile } from './profile-utils';
 export async function getFullUserProfile(userId: string): Promise<UserProfile | null> {
   try {
     const cookieStore = cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value;
+          },
+          set(name: string, value: string, options: any) {
+            cookieStore.set({ name, value, ...options });
+          },
+          remove(name: string, options: any) {
+            cookieStore.set({ name, value: '', ...options });
+          },
+        },
+      }
+    );
     
     // First try to get user data from auth
     const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -79,11 +95,11 @@ export async function getFullUserProfile(userId: string): Promise<UserProfile | 
       name: userData.user.email,
       email: userData.user.email,
       goal: 'General Wellness',
-      age: null,
-      gender: null,
-      weight: null,
-      height: null,
-      activityLevel: null
+      age: undefined,
+      gender: undefined,
+      weight: undefined,
+      height: undefined,
+      activityLevel: undefined
     };
     
   } catch (error) {
