@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ChevronsLeft, Star, Share2, Download, HelpCircle, Info, User, Activity, UserCheck, History, Printer, CheckCircle, Upload, Camera, AlertCircle, Check, ArrowLeft } from 'lucide-react';
 import LoadingSpinner from './LoadingSpinner';
 import MealImage from './MealImage';
-import { useAuth } from '../context/auth';
+import { useAuth } from '@/components/client/ClientAuthProvider';
 import { supabase } from '../lib/supabase/client';
 import EnhancedNutrientDisplay from './EnhancedNutrientDisplay';
 import AIHealthReview from './AIHealthReview';
@@ -22,6 +22,9 @@ import {
 import { useDropzone } from 'react-dropzone';
 import { useProfile } from '../lib/profile-context';
 import { v4 as uuidv4 } from 'uuid';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { Button } from './ui/button';
+import { Card, CardContent } from './ui/card';
 
 // Add TypeScript declarations for our custom window properties
 declare global {

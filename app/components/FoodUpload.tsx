@@ -3,9 +3,12 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import Image from 'next/image';
-import { Camera } from 'lucide-react';
+import { Camera, Upload, X, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import LoadingSpinner from './LoadingSpinner';
-import { useAuth } from '@/app/context/auth';
+import { createClient } from '@/lib/supabase/client';
+import { useAuth } from '@/components/client/ClientAuthProvider';
 import { useRouter } from 'next/navigation';
 
 // Browser-compatible function to generate UUID-like random IDs

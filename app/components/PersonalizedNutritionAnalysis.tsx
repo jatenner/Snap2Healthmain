@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/components/client/ClientAuthProvider';
 import { safeForEach, safeMap, safeFilter, getArrayOrEmpty } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
-import ReactMarkdown from 'react-markdown';
 
 // Enhanced interfaces to support all nutrient data
 interface Nutrient {
