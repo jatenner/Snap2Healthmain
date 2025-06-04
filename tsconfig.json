@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "lib": ["dom", "dom.iterable", "es6"],
+    "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -22,7 +22,9 @@
       "@/*": ["./app/*"],
       "@/components/*": ["./app/components/*"],
       "@/lib/*": ["./app/lib/*"],
-      "@/api/*": ["./app/api/*"]
+      "@/api/*": ["./app/api/*"],
+      "@/utils/*": ["./app/lib/*"],
+      "@/types/*": ["./app/types/*"]
     },
     "forceConsistentCasingInFileNames": true,
     "allowSyntheticDefaultImports": true
