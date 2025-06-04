@@ -30,33 +30,34 @@ const nextConfig = {
   },
 
   // Enhanced Webpack configuration for better Vercel compatibility
-  webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
-    const appDir = path.resolve(__dirname, './app');
+  webpack: (config, { buildId, dev, isServer, defaultLoaders, nextRuntime, webpack }) => {
+    // Environment check logging
+    console.log(`[next.config.js] Webpack build: dev=${dev}, isServer=${isServer}, nextRuntime=${nextRuntime}`);
     
-    // Enhanced path aliases with absolute paths
+    // Enhanced path aliases for better module resolution
     config.resolve.alias = {
       ...config.resolve.alias,
-      '@': appDir,
-      '@/components': path.join(appDir, 'components'),
-      '@/lib': path.join(appDir, 'lib'),
-      '@/api': path.join(appDir, 'api'),
-      '@/app': appDir,
+      '@': path.resolve(__dirname, './app'),
+      '@/components': path.resolve(__dirname, './app/components'),
+      '@/lib': path.resolve(__dirname, './app/lib'),
+      '@/api': path.resolve(__dirname, './app/api'),
+      '@/types': path.resolve(__dirname, './app/types'),
     };
 
     // Ensure proper module resolution order
     config.resolve.modules = [
-      appDir,
-      path.resolve(__dirname, 'node_modules'),
-      'node_modules'
+      path.resolve(__dirname, './app'),
+      'node_modules',
+      ...config.resolve.modules
     ];
 
-    // Enhanced resolve options for better compatibility
-    config.resolve.extensions = ['.ts', '.tsx', '.js', '.jsx', '.json', ...config.resolve.extensions];
-    
-    // Ensure case-sensitive resolution
-    if (!dev) {
-      config.resolve.symlinks = false;
-    }
+    // Fallback configuration for better compatibility
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      path: false,
+      crypto: false,
+    };
 
     return config;
   },

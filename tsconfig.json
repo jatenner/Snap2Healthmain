@@ -23,11 +23,10 @@
       "@/components/*": ["./app/components/*"],
       "@/lib/*": ["./app/lib/*"],
       "@/api/*": ["./app/api/*"],
-      "@/utils/*": ["./app/lib/*"],
       "@/types/*": ["./app/types/*"]
     },
     "forceConsistentCasingInFileNames": true,
-    "allowSyntheticDefaultImports": true
+    "noUncheckedIndexedAccess": true
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": ["node_modules"]

@@ -1,11 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { 
-  normalizeMealId, 
-  getMealWithErrorHandling, 
-  getLocalMealData 
-} from '@/utils/meal-id-fix';
+import React, { useEffect, useState } from 'react';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 interface MealDataFixerProps {
   mealId: string;
