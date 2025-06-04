@@ -4,7 +4,7 @@
 export const dynamic = 'force-dynamic';
 
 import React, { useState } from 'react';
-import { supabase } from '../../lib/supabase/client';
+import { createClient } from '@/lib/supabase/client';
 
 // Helper function to normalize meal data structure
 function normalizeDataStructure(data: any): any {
@@ -109,6 +109,7 @@ export default function FixDataPage() {
     
     try {
       // Use the supabase client directly
+      const supabase = createClient();
       
       // Step 1: Fix meal_analyses table
       console.log('Fixing meal_analyses table...');

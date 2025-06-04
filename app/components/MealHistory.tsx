@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase/client';
+import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '../context/auth';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -83,6 +83,7 @@ export default function MealHistory({
       if (userId) {
         try {
           // Try to get meals from the database
+          const supabase = createClient();
           const { data: dbMeals, error } = await supabase
             .from('meals')
             .select('*')

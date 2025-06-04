@@ -3,7 +3,7 @@
 import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '../components/client/ClientAuthProvider';
+import { useAuth } from '@/components/client/ClientAuthProvider';
 import { useProfile } from '../lib/profile-context';
 import Image from 'next/image';
 import { Button } from '../components/ui/button';
@@ -11,6 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Upload, Camera, Image as ImageIcon, Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import FoodUpload from '@/components/FoodUpload';
 
 export default function UploadPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);

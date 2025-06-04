@@ -3,13 +3,13 @@
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useAuth } from '../components/client/ClientAuthProvider';
-import { createSafeSupabaseClient } from '../lib/supabase/client';
-import { Button } from '../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { useAuth } from '@/components/client/ClientAuthProvider';
+import { createClient } from '@/lib/supabase/client';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
   Calendar, 
   Clock, 
@@ -109,7 +109,7 @@ const getRelativeDate = (date: string) => {
 };
 
 // Create optimized Supabase client with safe fallback
-const supabase = createSafeSupabaseClient();
+const supabase = createClient();
 
 // Lazy loading image component
 const LazyMealImage = ({ src, alt, mealName }: { src: string; alt: string; mealName: string }) => {
