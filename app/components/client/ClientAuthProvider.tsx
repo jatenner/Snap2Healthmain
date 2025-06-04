@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, createContext, useContext } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '@supabase/ssr';
 import { useRouter, usePathname } from 'next/navigation';
 import { isSupabaseConfigured, createSafeSupabaseClient, shouldUseMockAuth } from '../../lib/supabase/client';
 
@@ -78,7 +78,10 @@ export function ClientAuthProvider({ children }: { children: React.ReactNode }) 
 
       // For real Supabase environments
       try {
-        const supabase = createClientComponentClient();
+        const supabase = createBrowserClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        );
         
         // Get initial session
         const { data: { session }, error } = await supabase.auth.getSession();
@@ -147,7 +150,10 @@ export function ClientAuthProvider({ children }: { children: React.ReactNode }) 
     }
 
     try {
-      const supabase = createClientComponentClient();
+      const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.error('[ClientAuthProvider] Sign out error:', error);
@@ -166,7 +172,10 @@ export function ClientAuthProvider({ children }: { children: React.ReactNode }) 
     }
 
     try {
-      const supabase = createClientComponentClient();
+      const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
       const { data: { user }, error } = await supabase.auth.getUser();
       
       if (error) {

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../context/auth';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '@supabase/ssr';
 import { getEffectiveProfile, isProfileComplete, UserProfile, ExtendedUserProfile, getMissingProfileFields } from '../../../src/utils/profile-manager';
 
 interface ProfileAwareComponentProps {
@@ -27,7 +27,10 @@ export default function ProfileAwareComponent({ children }: ProfileAwareComponen
   const [missingFields, setMissingFields] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
-  const supabase = createClientComponentClient();
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
   // Fetch profile data
   useEffect(() => {

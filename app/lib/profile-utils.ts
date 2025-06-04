@@ -7,7 +7,6 @@
  */
 
 // Import necessary dependencies
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { createBrowserClient } from '@supabase/ssr';
 
 // Extend Window interface to include our custom properties
@@ -170,7 +169,10 @@ export const getEffectiveProfile = async (
   // If no Supabase client instance is provided and we are on the client-side, create one.
   if (!supabase && typeof window !== 'undefined') {
     console.log('[getEffectiveProfile] Supabase client not explicitly passed, creating new one for client-side operation.');
-    supabase = createClientComponentClient();
+    supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
   }
 
   // Attempt to load from localStorage if no initial profile and on client side (as a quick cache)

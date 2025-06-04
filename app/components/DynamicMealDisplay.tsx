@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '@supabase/ssr';
 import Image from 'next/image';
 import { Skeleton } from './ui/skeleton';
 import { getEffectiveProfile, validateNutrientData, calculatePersonalizedDailyTargets, categorizePDV, getEffectiveProfileSync } from '../lib/profile-utils';

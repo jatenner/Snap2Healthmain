@@ -4,7 +4,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ChevronsLeft, Star, Share2, Download, HelpCircle, Info, User, Activity, UserCheck, History, Printer, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { useRouter } from 'next/navigation';
+import { createBrowserClient } from '@supabase/ssr';
 import LoadingSpinner from '../LoadingSpinner';
 import MealImage from '../MealImage';
 import { useAuth } from '../../context/auth';
@@ -101,7 +102,11 @@ export default function MealAnalysis({ analysisId }: { analysisId?: string }) {
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const { user } = useAuth();
-  const supabase = createClientComponentClient();
+  const router = useRouter();
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
   
   // Load meal analysis data
   useEffect(() => {

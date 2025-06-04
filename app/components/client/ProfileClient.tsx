@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Save, ArrowLeft, AlertCircle, CheckCircle, User } from 'lucide-react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '@supabase/ssr';
 
 // Simple loading spinner component
 function LoadingSpinner({ size = 'medium' }: { size?: 'small' | 'medium' | 'large' }) {
@@ -23,7 +23,10 @@ function LoadingSpinner({ size = 'medium' }: { size?: 'small' | 'medium' | 'larg
 function useAuth() {
   const [user, setUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const supabase = createClientComponentClient();
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
   
   useEffect(() => {
     async function getUser() {
@@ -61,6 +64,11 @@ function useAuth() {
   return { user, isLoading };
 }
 
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
 export default function ProfileClient() {
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
@@ -81,9 +89,6 @@ export default function ProfileClient() {
     activity_level: 'Moderate',
     customGoal: ''
   });
-  
-  // Supabase client
-  const supabase = createClientComponentClient();
   
   // Fetch existing profile data
   useEffect(() => {
