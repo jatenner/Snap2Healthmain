@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useAuth } from '@/components/client/ClientAuthProvider';
+import { useAuth } from './client/ClientAuthProvider';
 import LoadingSpinner from './LoadingSpinner';
 
 export default function Header() {
@@ -51,7 +51,7 @@ export default function Header() {
           {/* Auth/Profile Button */}
           <div>
             {isLoading ? (
-              <LoadingSpinner size="small" color="blue" text="" />
+              <LoadingSpinner />
             ) : user ? (
               <div className="flex items-center space-x-3">
                 <Link 

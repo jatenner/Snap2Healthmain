@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { ChevronsLeft, Star, Share2, Download, HelpCircle, Info, User, Activity, UserCheck, History, Printer, CheckCircle, Upload, Camera, AlertCircle, Check, ArrowLeft } from 'lucide-react';
 import LoadingSpinner from './LoadingSpinner';
 import MealImage from './MealImage';
-import { useAuth } from '@/components/client/ClientAuthProvider';
+import { useAuth } from './client/ClientAuthProvider';
 import { supabase } from '../lib/supabase/client';
 import EnhancedNutrientDisplay from './EnhancedNutrientDisplay';
 import AIHealthReview from './AIHealthReview';

@@ -9,7 +9,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/components/client/ClientAuthProvider';
+import { useAuth } from './client/ClientAuthProvider';
 import { safeMap, getArrayOrEmpty } from '../lib/utils';
 
 interface MacroNutrient {

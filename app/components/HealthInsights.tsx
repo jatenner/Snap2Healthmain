@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState } from 'react';
@@ -52,6 +53,7 @@ const HealthInsights: React.FC<HealthInsightsProps> = ({
       // Check each category's keywords
       for (const [category, keywords] of Object.entries(keywordMap)) {
         if (keywords.some(keyword => lowercaseInsight.includes(keyword))) {
+          // @ts-ignore
           categories[category].push(insight);
           categorized = true;
           break;
@@ -98,7 +100,7 @@ const HealthInsights: React.FC<HealthInsightsProps> = ({
       // Check each category's keywords
       for (const [category, keywords] of Object.entries(keywordMap)) {
         if (keywords.some(keyword => lowercaseRecommendation.includes(keyword))) {
-          categories[category].push(recommendation);
+          categories[category]?.push(recommendation);
           categorized = true;
           break;
         }

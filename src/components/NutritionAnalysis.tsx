@@ -316,7 +316,7 @@ const categorizeNutrients = (nutrients: any, userProfile?: any) => {
         ...nutrient,
         percentDailyValue: correctedDV > 0 ? correctedDV : nutrient.percentDailyValue
       };
-      categories[category].push(nutrientWithCorrectDV);
+      categories[category]?.push(nutrientWithCorrectDV);
     }
   });
   

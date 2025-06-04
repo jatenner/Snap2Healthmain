@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 interface MealDataFixerProps {
   mealId: string;
@@ -12,6 +11,36 @@ interface MealDataFixerProps {
     refetch: () => void;
   }) => React.ReactNode;
 }
+
+// Helper function to normalize meal ID
+const normalizeMealId = (mealId: string): string | null => {
+  if (!mealId) return null;
+  return mealId.trim();
+};
+
+// Helper function to get meal data from localStorage
+const getLocalMealData = (mealId: string): any | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const data = localStorage.getItem(`meal_${mealId}`);
+    return data ? JSON.parse(data) : null;
+  } catch (e) {
+    console.warn('Error reading from localStorage:', e);
+    return null;
+  }
+};
+
+// Helper function to fetch meal data with error handling
+const getMealWithErrorHandling = async (mealId: string): Promise<any | null> => {
+  try {
+    const response = await fetch(`/api/analyze-meal?id=${mealId}`);
+    if (!response.ok) return null;
+    return await response.json();
+  } catch (e) {
+    console.error('Error fetching meal data:', e);
+    return null;
+  }
+};
 
 /**
  * Client component that reliably fetches and displays meal data

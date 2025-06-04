@@ -15,7 +15,7 @@ function LoadingScreen() {
   return (
     <div className="flex h-screen w-full items-center justify-center bg-gray-900">
       <div className="text-center">
-        <LoadingSpinner size="large" color="blue" />
+        <LoadingSpinner />
         <p className="mt-4 text-white">Loading application...</p>
       </div>
     </div>

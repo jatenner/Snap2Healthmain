@@ -6,8 +6,8 @@ export const dynamic = 'force-dynamic';
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useAuth } from '@/components/client/ClientAuthProvider';
-import { createClient } from '@/lib/supabase/client';
+import { useAuth } from '../components/client/ClientAuthProvider';
+import { createClient } from '../lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 

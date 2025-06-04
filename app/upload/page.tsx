@@ -3,7 +3,7 @@
 import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/components/client/ClientAuthProvider';
+import { useAuth } from '../components/client/ClientAuthProvider';
 import { useProfile } from '../lib/profile-context';
 import Image from 'next/image';
 import { Button } from '../components/ui/button';

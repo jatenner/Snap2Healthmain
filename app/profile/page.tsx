@@ -4,7 +4,7 @@
 export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/components/client/ClientAuthProvider';
+import { useAuth } from '../components/client/ClientAuthProvider';
 import { useProfile } from '../lib/profile-context';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';

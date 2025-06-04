@@ -37,7 +37,7 @@ export async function POST() {
       );
     }
     
-    const currentKey = match[1];
+    const currentKey = match[1]!; // Non-null assertion since we know match exists
     
     // Check if it's a project-based key (starts with sk-proj-)
     if (!currentKey.startsWith('sk-proj-')) {

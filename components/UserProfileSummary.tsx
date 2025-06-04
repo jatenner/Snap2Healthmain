@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useAuth } from '@/components/client/ClientAuthProvider';
+import { useAuth } from '../app/components/client/ClientAuthProvider';
 
 interface UserProfileSummaryProps {
   compact?: boolean;

@@ -20,7 +20,7 @@ interface ProfileAwareComponentProps {
  * Ensures consistency and prevents hydration errors
  */
 export default function ProfileAwareComponent({ children }: ProfileAwareComponentProps) {
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [profileData, setProfileData] = useState<UserProfile | null>(null);
   const [effectiveProfile, setEffectiveProfile] = useState<ExtendedUserProfile | null>(null);
   const [isComplete, setIsComplete] = useState(false);

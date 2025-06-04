@@ -4,7 +4,7 @@ const path = require('path');
 const nextConfig = {
   // Experimental features
   experimental: {
-    largePageDataBytes: 1000 * 1000, // 1MB instead of default 128KB
+    appDir: true,
   },
 
   // Image configuration
@@ -20,26 +20,18 @@ const nextConfig = {
     unoptimized: false,
   },
 
-  // Temporarily disable TypeScript checks for build to succeed
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-
   // Enhanced Webpack configuration for bulletproof Vercel compatibility
-  webpack: (config, { buildId, dev, isServer, defaultLoaders, nextRuntime, webpack }) => {
+  webpack: (config, { buildId, dev, isServer, nextRuntime, webpack }) => {
     // Environment check logging
-    console.log(`[next.config.js] Webpack build: dev=${dev}, isServer=${isServer}, nextRuntime=${nextRuntime}`);
+    console.log(`[next.config.js] Webpack build: dev=${dev}, isServer=${isServer}`);
     
     // BULLETPROOF ALIAS CONFIGURATION FOR VERCEL
     const appPath = path.resolve(__dirname, './app');
     
+    // Clear and rebuild alias configuration
     config.resolve.alias = {
       ...config.resolve.alias,
-      // Primary alias mapping
+      // Primary alias mapping with explicit trailing slash handling
       '@': appPath,
       '@/': appPath + '/',
       // Specific subdirectory aliases for explicit resolution
@@ -48,8 +40,9 @@ const nextConfig = {
       '@/api': path.resolve(appPath, 'api'),
       '@/types': path.resolve(appPath, 'types'),
       '@/context': path.resolve(appPath, 'context'),
-      '@/hooks': path.resolve(appPath, 'hooks'),
-      '@/utils': path.resolve(appPath, 'utils'),
+      // Explicit supabase client mapping for Vercel
+      '@/lib/supabase/client': path.resolve(appPath, 'lib/supabase/client.ts'),
+      '@/lib/supabase/server': path.resolve(appPath, 'lib/supabase/server.ts'),
     };
 
     // EXTENSION RESOLUTION WITH FALLBACKS
@@ -74,38 +67,11 @@ const nextConfig = {
       ...(config.resolve.modules || [])
     ];
 
-    // COMPREHENSIVE FALLBACK CONFIGURATION
-    config.resolve.fallback = {
-      ...config.resolve.fallback,
-      fs: false,
-      path: false,
-      crypto: false,
-      stream: false,
-      buffer: false,
-      util: false,
-      url: false,
-      querystring: false,
-    };
-
-    // LINUX/CASE-SENSITIVE FILESYSTEM COMPATIBILITY
-    config.resolve.enforceExtension = false;
-    config.resolve.cacheWithContext = false;
-
     // VERCEL-SPECIFIC OPTIMIZATIONS
     if (!dev && !isServer) {
       // Production client-side optimizations
       config.resolve.mainFields = ['browser', 'module', 'main'];
     }
-
-    // ADDITIONAL WEBPACK PLUGINS FOR STABILITY
-    config.plugins = config.plugins || [];
-    
-    // Ensure consistent module resolution across environments
-    config.plugins.push(
-      new webpack.DefinePlugin({
-        'process.env.VERCEL_ENV': JSON.stringify(process.env.VERCEL_ENV || 'development'),
-      })
-    );
 
     return config;
   },

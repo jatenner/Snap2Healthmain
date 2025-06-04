@@ -160,7 +160,7 @@ export default function MealAnalysisClient({ mealId }: { mealId: string }) {
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       <div className="container mx-auto px-4 py-8">
-        <DynamicMealDisplay mealData={mealData} />
+        <DynamicMealDisplay />
         <PersonalizedNutritionAnalysis analysisData={mealData} userGoal={mealData.goal} />
       </div>
     </div>

@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { createClient } from '@/lib/supabase/client';
-import { useAuth } from '@/components/client/ClientAuthProvider';
+import { createClient } from '../lib/supabase/client';
+import { useAuth } from './client/ClientAuthProvider';
 import Image from 'next/image';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';

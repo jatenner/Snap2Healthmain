@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useAuth } from '@/components/client/ClientAuthProvider';
+import { useAuth } from '../app/components/client/ClientAuthProvider';
 import { User, History, Upload, LogOut, Menu, X, Home, LogIn, UserPlus, UserCircle } from 'lucide-react';
 
 // Define the type for navigation links

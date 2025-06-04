@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, ReactNode } from 'react';
-import { getEnv } from '@/utils/unified-env';
+import React, { useState, useEffect, ReactNode } from 'react';
+// import { getEnv } from '@/utils/unified-env'; // File doesn't exist - commenting out
 
 interface EnvLoaderProps {
   children: ReactNode;

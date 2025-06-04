@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     });
     
     // Extract the generated description
-    const description = response.choices[0].message.content?.trim();
+    const description = response.choices?.[0]?.message?.content?.trim();
     
     if (!description) {
       return NextResponse.json({ 

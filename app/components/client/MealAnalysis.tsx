@@ -390,7 +390,7 @@ export default function MealAnalysis({ analysisId }: { analysisId?: string }) {
                   <span className="text-gray-400 text-xs">kcal</span>
                 </div>
                 
-                {personalizedMealData.analysis.macronutrients.map((macro, idx) => (
+                {personalizedMealData.analysis.macronutrients.map((macro: NutrientData, idx: number) => (
                   <div key={idx} className="bg-gray-700/30 rounded-lg p-4 border border-gray-600/50 flex flex-col items-center justify-center">
                     <span className="text-gray-400 text-sm mb-1">{macro.name}</span>
                     <span className="text-2xl font-bold text-white">{macro.amount}</span>
@@ -409,7 +409,7 @@ export default function MealAnalysis({ analysisId }: { analysisId?: string }) {
               
               <div className="p-6">
                 <div className="space-y-4">
-                  {personalizedMealData.analysis.macronutrients.map((macro, idx) => (
+                  {personalizedMealData.analysis.macronutrients.map((macro: NutrientData, idx: number) => (
                     <div key={idx} className="bg-gray-700/30 rounded-lg p-4 border border-gray-600/50">
                       <div className="flex justify-between items-center mb-2">
                         <span className="text-white font-medium">{macro.name}</span>
@@ -447,7 +447,7 @@ export default function MealAnalysis({ analysisId }: { analysisId?: string }) {
                 
                 <div className="p-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {personalizedMealData.analysis.micronutrients.map((micro, idx) => (
+                    {personalizedMealData.analysis.micronutrients.map((micro: NutrientData, idx: number) => (
                       <div key={idx} className="bg-gray-700/30 rounded-lg p-4 border border-gray-600/50">
                         <div className="flex justify-between items-center mb-2">
                           <span className="text-white font-medium">{micro.name}</span>
@@ -485,7 +485,7 @@ export default function MealAnalysis({ analysisId }: { analysisId?: string }) {
                     
                     <div className="p-6">
                       <ul className="space-y-2">
-                        {personalizedMealData.benefits.map((benefit, idx) => (
+                        {personalizedMealData.benefits.map((benefit: string, idx: number) => (
                           <li key={idx} className="flex items-start">
                             <CheckCircle className="text-green-500 mr-2 mt-1 flex-shrink-0" size={16} />
                             <span className="text-gray-300">{benefit}</span>
@@ -505,7 +505,7 @@ export default function MealAnalysis({ analysisId }: { analysisId?: string }) {
                     
                     <div className="p-6">
                       <ul className="space-y-2">
-                        {personalizedMealData.concerns.map((concern, idx) => (
+                        {personalizedMealData.concerns.map((concern: string, idx: number) => (
                           <li key={idx} className="flex items-start">
                             <Info className="text-amber-500 mr-2 mt-1 flex-shrink-0" size={16} />
                             <span className="text-gray-300">{concern}</span>
@@ -528,7 +528,7 @@ export default function MealAnalysis({ analysisId }: { analysisId?: string }) {
                 
                 <div className="p-6">
                   <ul className="space-y-3">
-                    {personalizedMealData.suggestions.map((suggestion, idx) => (
+                    {personalizedMealData.suggestions.map((suggestion: string, idx: number) => (
                       <li key={idx} className="flex items-start bg-gray-700/30 p-3 rounded-lg border border-gray-600/50">
                         <Star className="text-yellow-500 mr-2 mt-1 flex-shrink-0" size={16} />
                         <span className="text-gray-300">{suggestion}</span>
