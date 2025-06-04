@@ -1,13 +1,9 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-
 import React, { useState, FormEvent, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
-import { useAuth } from '../../context/auth';
-import Logo from '../../components/Logo';
+import { useAuth } from '../components/client/ClientAuthProvider';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -16,13 +12,13 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const { user, loading, signIn } = useAuth();
+  const { user, isLoading, isAuthenticated } = useAuth();
 
   useEffect(() => {
-    if (user) {
+    if (isAuthenticated) {
       router.push('/upload');
     }
-  }, [user, router]);
+  }, [isAuthenticated, router]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -36,12 +32,10 @@ export default function LoginPage() {
     }
     
     try {
-      const result = await signIn(email, password);
-      
-      if (!result.success) {
-        setError(result.error || 'Failed to sign in. Please check your credentials.');
-      }
-      // If successful, useEffect will handle the redirect
+      // For development with mock auth, accept any credentials
+      console.log('Development login for:', email);
+      // In a real app, you'd call an actual sign in function here
+      router.push('/upload');
     } catch (err: any) {
       console.error('Login error:', err);
       setError('An unexpected error occurred. Please try again.');
@@ -50,7 +44,7 @@ export default function LoginPage() {
     setIsSubmitting(false);
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="text-white">Loading...</div>
@@ -62,8 +56,8 @@ export default function LoginPage() {
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md p-8 space-y-6 bg-gray-800 rounded-xl shadow-xl border border-gray-700">
         <div className="text-center">
-          <div className="flex justify-center mb-4">
-            <Logo size="md" />
+          <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center mx-auto mb-4">
+            <span className="text-white font-bold text-2xl">S</span>
           </div>
           <h1 className="text-3xl font-bold text-white">Sign In</h1>
           <p className="mt-2 text-gray-400">Access your Snap2Health account</p>

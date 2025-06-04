@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/app/context/auth';
+import { useAuth } from './client/ClientAuthProvider';
 import { safeForEach, safeMap, safeFilter, getArrayOrEmpty } from '../lib/utils';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '../lib/supabase/client';
 import ReactMarkdown from 'react-markdown';
 
 // Enhanced interfaces to support all nutrient data
@@ -63,6 +63,18 @@ interface MealAnalysisData {
   insights_summary?: string;
   mealName?: string;
   goal?: string;
+  imageUrl?: string;
+  metabolicInsights?: string;
+  personalizedHealthInsights?: string;
+  metabolic_insights?: string;
+  meal_name?: string;
+  image_url?: string;
+  created_at?: string;
+  expert_recommendations?: string[];
+  meal_story?: string;
+  nutritional_narrative?: string;
+  time_of_day_optimization?: string;
+  [key: string]: any;
 }
 
 interface UserProfile {
@@ -113,83 +125,73 @@ const fattyAcidNames = [
 const getNutrientDescription = (name: string): string => {
   const descriptions: Record<string, string> = {
     // Macronutrients
-    'protein': 'Essential for muscle repair, immune function, and enzyme production. Helps maintain lean body mass and supports tissue growth.',
-    'carbohydrates': 'Primary energy source for the body, especially during high-intensity activities. Provides fuel for the brain and nervous system.',
-    'fat': 'Important for hormone production, brain health, nutrient absorption, and long-term energy storage. Essential fatty acids support heart and brain health.',
-    'fiber': 'Promotes digestive health, helps maintain stable blood sugar levels, and increases satiety to aid weight management. May help reduce cholesterol levels.',
-    'sugar': 'Provides quick energy but should be limited for optimal health. Excess consumption is linked to various health issues including obesity and diabetes.',
-    'sodium': 'Essential for fluid balance and nerve function, but excess can affect blood pressure and cardiovascular health. Aim to keep below 2300mg daily.',
-    'saturated fat': 'Should be limited in the diet as excessive intake is associated with increased cholesterol levels and heart disease risk. Aim to keep below 10% of daily calories.',
-    'trans fat': 'Artificial fats that should be avoided as they increase LDL cholesterol and decrease HDL cholesterol. Even small amounts can negatively impact heart health.',
-    'unsaturated fat': 'Healthy fats found in plant foods and fish that support heart health and reduce inflammation. Include sources like olive oil, avocados, and nuts.',
-    'omega-3': 'Essential fatty acids that reduce inflammation, support brain health, and may lower heart disease risk. Found in fatty fish, flaxseeds, and walnuts.',
-    'omega-6': 'Essential fatty acids that play a role in brain function and normal growth and development. Balance with omega-3s for optimal health.',
-    'cholesterol': 'Used to make hormones, vitamin D, and substances that help digest foods. The body produces all it needs, so dietary intake should be moderate.',
-    'calories': 'Unit of energy from food. Balance calorie intake with physical activity to maintain healthy weight. Needs vary based on age, gender, activity level, and goals.',
+    'protein': 'Essential for muscle protein synthesis, neurotransmitter production, and cellular repair. Leucine-rich proteins trigger mTOR pathway activation, crucial for muscle growth and longevity pathways.',
+    'carbohydrates': 'Primary fuel for brain function and high-intensity exercise. Glucose is the preferred substrate for neurons, with glycogen stores critical for sustained cognitive and physical performance.',
+    'fat': 'Essential for hormone production, fat-soluble vitamin absorption, and cellular membrane integrity. Omega-3 fatty acids modulate inflammation and support neuroplasticity.',
+    'fiber': 'Critical for microbiome health and metabolic regulation. Soluble fiber feeds beneficial bacteria, producing short-chain fatty acids that reduce inflammation and improve insulin sensitivity.',
+    'sugar': 'Rapidly absorbed glucose that can cause insulin spikes. While providing quick energy, excess consumption can lead to glycation, oxidative stress, and metabolic dysfunction.',
+    'sodium': 'Essential electrolyte for nerve conduction and fluid balance. However, excess intake can disrupt the renin-angiotensin system and increase cardiovascular stress.',
+    'saturated fat': 'Can raise LDL cholesterol in some individuals. However, quality matters - medium-chain triglycerides from coconut oil may have different metabolic effects than palmitic acid.',
+    'trans fat': 'Industrial trans fats severely disrupt cellular membrane function and increase systemic inflammation. Even small amounts can negatively impact cardiovascular health.',
+    'unsaturated fat': 'Monounsaturated and polyunsaturated fats support cardiovascular health and reduce inflammation. Olive oil polyphenols activate longevity pathways.',
+    'omega-3': 'EPA and DHA are crucial for brain health, reducing neuroinflammation, and supporting cognitive function. They also modulate the inflammatory response and may extend healthspan.',
+    'omega-6': 'While essential, excessive omega-6 intake can promote inflammation when not balanced with omega-3s. The ideal ratio is closer to 4:1 or 2:1 omega-6 to omega-3.',
+    'cholesterol': 'Precursor to steroid hormones including testosterone, estrogen, and cortisol. Dietary cholesterol has minimal impact on blood cholesterol for most people.',
+    'calories': 'Units of energy that fuel cellular processes. Caloric restriction can activate sirtuins and other longevity pathways, while excess calories accelerate aging.',
     
-    // Vitamins
-    'vitamin a': 'Critical for vision, immune function, cell growth, and maintaining healthy organs. Found in colorful fruits and vegetables like carrots and sweet potatoes.',
-    'vitamin c': 'Powerful antioxidant that supports immune health, collagen production, and helps with iron absorption. Found in citrus fruits, bell peppers, and berries.',
-    'vitamin d': 'Essential for calcium absorption, bone health, immune function, and mood regulation. Often called the "sunshine vitamin" as it\'s produced when skin is exposed to sunlight.',
-    'vitamin e': 'Powerful antioxidant that protects cells from damage, supports immune function, and promotes skin health. Found in nuts, seeds, and vegetable oils.',
-    'vitamin k': 'Necessary for blood clotting, bone health, and may help prevent arterial calcification. Found in leafy greens and fermented foods.',
-    'vitamin b1': 'Also known as thiamine. Essential for energy metabolism and nerve, muscle, and heart function. Found in whole grains, meat, and legumes.',
-    'vitamin b2': 'Also known as riboflavin. Helps convert food into energy and supports cellular function, growth, and development. Found in dairy, eggs, and leafy greens.',
-    'vitamin b3': 'Also known as niacin. Helps convert nutrients into energy, repairs DNA, and supports nervous system health. Found in meat, fish, and fortified cereals.',
-    'vitamin b5': 'Also known as pantothenic acid. Important for making blood cells and converting food into energy. Found in meat, broccoli, and avocados.',
-    'vitamin b6': 'Important for brain development, immune function, and helps create neurotransmitters like serotonin and dopamine. Found in poultry, fish, and bananas.',
-    'vitamin b7': 'Also known as biotin. Supports hair, skin, and nail health, and helps metabolize carbohydrates and fats. Found in eggs, nuts, and seeds.',
-    'vitamin b9': 'Also known as folate or folic acid. Critical for DNA synthesis, cell division, and preventing neural tube defects. Found in leafy greens and legumes.',
-    'vitamin b12': 'Essential for nerve function, brain health, red blood cell formation, and DNA synthesis. Found primarily in animal products.',
-    'folate': 'Important for cell division, DNA synthesis, and preventing neural tube defects during pregnancy. Found in leafy greens, legumes, and fortified foods.',
-    'riboflavin': 'Helps convert food into energy and is important for growth, development, and maintaining healthy skin and eyes. Found in dairy, eggs, and enriched grains.',
-    'niacin': 'Helps convert nutrients into energy, repairs DNA, and acts as an antioxidant. May help lower cholesterol levels. Found in meat, fish, and peanuts.',
-    'thiamine': 'Essential for energy metabolism, nerve function, and muscle contraction. Prevents beriberi disease. Found in whole grains, meat, and legumes.',
-    'pantothenic acid': 'Vital for making blood cells and converting food into energy. Found in meat, broccoli, avocados, and whole grains.',
-    'biotin': 'Supports metabolism of fats, carbohydrates, and proteins. Important for hair, skin, and nail health. Found in eggs, nuts, and seeds.',
+    // Vitamins - Scientific descriptions
+    'vitamin a': 'Critical for rhodopsin regeneration in the retina and immune function. Retinol supports T-cell differentiation and epithelial barrier function.',
+    'vitamin c': 'Powerful antioxidant and cofactor for collagen synthesis. Essential for neutrophil function and may reduce exercise-induced oxidative stress.',
+    'vitamin d': 'Steroid hormone that regulates over 1000 genes. Critical for calcium homeostasis, immune modulation, and potentially longevity. Most people are deficient.',
+    'vitamin e': 'Fat-soluble antioxidant that protects cellular membranes from lipid peroxidation. Alpha-tocopherol is the most bioactive form.',
+    'vitamin k': 'Essential cofactor for gamma-carboxylation of proteins involved in blood clotting and bone mineralization. K2 (MK-7) may support cardiovascular health.',
+    'vitamin b1': 'Thiamine is crucial for glucose metabolism and nerve function. Deficiency can impair cognitive performance and energy production.',
+    'vitamin b2': 'Riboflavin is essential for the electron transport chain and antioxidant enzyme function. Critical for mitochondrial energy production.',
+    'vitamin b3': 'Niacin is a precursor to NAD+, crucial for cellular energy production and DNA repair. May support longevity through sirtuin activation.',
+    'vitamin b5': 'Pantothenic acid is essential for CoA synthesis, critical for fatty acid metabolism and neurotransmitter production.',
+    'vitamin b6': 'Pyridoxine is crucial for amino acid metabolism and neurotransmitter synthesis including serotonin and dopamine.',
+    'vitamin b7': 'Biotin is essential for fatty acid synthesis and gluconeogenesis. Critical for gene regulation and cellular metabolism.',
+    'vitamin b9': 'Folate is crucial for DNA methylation and one-carbon metabolism. Essential for neuroplasticity and cognitive function.',
+    'vitamin b12': 'Cobalamin is essential for myelin synthesis and DNA methylation. Deficiency can cause irreversible neurological damage.',
     
-    // Minerals
-    'calcium': 'Critical for bone and teeth health, muscle function, nerve signaling, and blood clotting. Found in dairy products, fortified plant milks, and leafy greens.',
-    'iron': 'Essential for oxygen transport in the blood, energy production, and immune function. Prevents anemia. Found in red meat, legumes, and fortified cereals.',
-    'potassium': 'Regulates fluid balance, muscle contractions, and nerve signals. May help lower blood pressure. Found in bananas, potatoes, and legumes.',
-    'magnesium': 'Involved in over 300 enzyme reactions, including energy creation, protein formation, and muscle movements. Found in nuts, seeds, and whole grains.',
-    'zinc': 'Important for immune function, wound healing, DNA synthesis, and growth and development. Found in meat, shellfish, and legumes.',
-    'phosphorus': 'Essential for bone health, energy production, cellular function, and properly functioning kidneys. Found in dairy, meat, and whole grains.',
-    'selenium': 'Acts as an antioxidant, especially when paired with vitamin E. Supports thyroid and immune function. Found in Brazil nuts, seafood, and meats.',
-    'iodine': 'Necessary for thyroid function and metabolism. Deficiency can lead to goiter and developmental issues. Found in iodized salt and seafood.',
-    'copper': 'Important for iron metabolism, connective tissue formation, and neurotransmitter synthesis. Found in shellfish, nuts, and seeds.',
-    'manganese': 'Involved in metabolism, bone development, wound healing, and antioxidant defenses. Found in whole grains, nuts, and leafy greens.',
-    'chromium': 'Enhances insulin action and influences carbohydrate, fat, and protein metabolism. Found in meat, whole grains, and broccoli.',
-    'molybdenum': 'Cofactor for enzymes that help metabolize toxins and drugs in the body. Found in legumes, grains, and nuts.'
+    // Minerals - Scientific descriptions
+    'calcium': 'Essential for muscle contraction, nerve signaling, and bone mineralization. Also crucial for cellular signaling and enzyme function.',
+    'iron': 'Central component of hemoglobin and cytochromes. Essential for oxygen transport and mitochondrial energy production.',
+    'potassium': 'Critical electrolyte for maintaining membrane potential and muscle function. May help counteract sodium\'s effects on blood pressure.',
+    'magnesium': 'Cofactor for over 300 enzymes including those involved in ATP synthesis. Essential for muscle relaxation and nervous system function.',
+    'zinc': 'Essential for immune function, protein synthesis, and wound healing. Cofactor for antioxidant enzymes and DNA repair mechanisms.',
+    'phosphorus': 'Critical component of ATP, phospholipids, and bone mineral. Essential for cellular energy metabolism and membrane structure.',
+    'selenium': 'Essential component of glutathione peroxidase, a key antioxidant enzyme. May support thyroid function and reduce cancer risk.',
+    'iodine': 'Essential for thyroid hormone synthesis. Critical for metabolic rate regulation and brain development.',
+    'copper': 'Essential for collagen cross-linking, iron metabolism, and antioxidant enzyme function. Important for cardiovascular health.',
+    'manganese': 'Cofactor for superoxide dismutase and other antioxidant enzymes. Important for bone development and metabolism.',
+    'chromium': 'May enhance insulin sensitivity and glucose metabolism, though evidence is mixed. Potentially important for metabolic health.',
+    'molybdenum': 'Cofactor for enzymes involved in amino acid metabolism and toxin processing. Essential but needed in very small amounts.'
   };
   
-  // Return description if available, otherwise check for partial matches
   const exactMatch = descriptions[name.toLowerCase()];
   if (exactMatch) return exactMatch;
   
-  // Try to find partial matches for important nutrients
+  // Check for partial matches with scientific context
   const lowercaseName = name.toLowerCase();
   
-  // Check for B vitamins with different formats
   if (lowercaseName.includes('vitamin b') || lowercaseName.match(/b\d+/) || lowercaseName.includes('b vitamin')) {
-    return 'B vitamins are essential for energy production, brain function, and cell metabolism. They help convert food into energy and are important for nervous system health.';
+    return 'B vitamins are essential cofactors for energy metabolism and neurotransmitter synthesis. They support mitochondrial function and are crucial for optimal brain performance.';
   }
   
-  // Check for other vitamin partial matches
   if (lowercaseName.includes('vitamin')) {
-    return 'Vitamins are essential micronutrients that support various bodily functions including immune health, energy production, and cell repair.';
+    return 'Vitamins are essential micronutrients that function as cofactors in enzymatic reactions, supporting cellular metabolism and optimal physiological function.';
   }
   
   // Check for mineral partial matches
   const minerals = ['iron', 'calcium', 'zinc', 'magnesium', 'potassium', 'sodium', 'copper', 'manganese', 'selenium'];
   for (const mineral of minerals) {
     if (lowercaseName.includes(mineral)) {
-      return descriptions[mineral] || 'Essential mineral that supports various bodily functions and overall health.';
+      return descriptions[mineral] || 'Essential mineral that supports enzymatic function, cellular metabolism, and optimal physiological performance.';
     }
   }
   
-  // Default description
-  return 'Important nutrient for overall health and wellbeing. Part of a balanced diet that supports bodily functions.';
+  return 'Important nutrient that supports cellular function and metabolic processes. Part of an optimal nutrition strategy for health and performance.';
 };
 
 // Helper function to categorize micronutrients into groups
@@ -287,8 +289,7 @@ const getNutrientBadge = (nutrient: Nutrient): { label: string; color: string } 
 // Render a nutrient bar with description and badge
 const renderNutrientBar = (nutrient: Nutrient, index: number) => {
   // Calculate personalized daily value for this nutrient
-  // Using personalizedValues state instead of direct profile reference
-  const personalizedDV = personalizedValues[nutrient.name.toLowerCase()] || null;
+  const personalizedDV = null; // Simplified for now, can be enhanced with user profile
   
   // Use personalized value if available, otherwise use the standard one
   const displayValue = personalizedDV || nutrient.percentDailyValue || 0;
@@ -463,13 +464,13 @@ const getPersonalDailyValue = (nutrient: Nutrient, userProfile: UserProfile | nu
   if (gender) {
     if (gender.toLowerCase() === 'female') {
       if (name === 'iron') {
-        if (age >= 19 && age <= 50) {
+        if (age !== undefined && age >= 19 && age <= 50) {
           return Math.round((nutrient.amount / 18) * 100); // Women 19-50 need 18mg iron
         } else {
           return Math.round((nutrient.amount / 8) * 100); // Women 51+ need 8mg iron
         }
       } else if (name === 'calcium') {
-        if (age >= 51) {
+        if (age !== undefined && age >= 51) {
           return Math.round((nutrient.amount / 1200) * 100); // Women 51+ need 1200mg calcium
         }
       }
@@ -477,7 +478,7 @@ const getPersonalDailyValue = (nutrient: Nutrient, userProfile: UserProfile | nu
   }
   
   // Age-specific adjustments
-  if (age) {
+  if (age !== undefined) {
     if (age >= 70 && name === 'vitamin d') {
       return Math.round((nutrient.amount / 25) * 100); // Seniors need 25mcg vitamin D
     }
@@ -712,7 +713,7 @@ function generatePersonalizedInsights(mealData: any, userProfile?: any): string 
     }
     
     // Generate insights array
-    const insights = [];
+    const insights: string[] = [];
     const goal = userProfile?.goal || userProfile?.healthGoals || mealData.goal || 'General Health';
     
     // Add personalized greeting if we have user data
@@ -788,528 +789,589 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
   analysisData, 
   userGoal 
 }) => {
-  const { user, profile: userProfile } = useAuth();
-  const [activeTab, setActiveTab] = useState<'macronutrients' | 'micronutrients' | 'insights'>('macronutrients');
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [insights, setInsights] = useState<string | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [personalizedValues, setPersonalizedValues] = useState<Record<string, number>>({});
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<'nutrients' | 'ai-insights'>('nutrients');
+  const [personalizedInsights, setPersonalizedInsights] = useState<string>('');
+  const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [forceRegenerate, setForceRegenerate] = useState(false);
 
-  // Fetch user profile data
+  // Auto-generate insights on mount if we don't have them
   useEffect(() => {
-    const fetchUserProfile = async () => {
-      try {
-        // Try to get from window global first
-        if (typeof window !== 'undefined' && window.currentUserProfile) {
-          setProfile(window.currentUserProfile);
-          
-          // Calculate personalized daily values
-          const personalDVs = calculatePersonalizedDailyValues(window.currentUserProfile);
-          setPersonalizedValues(personalDVs);
-          return;
-        }
-
-        const supabase = createClientComponentClient();
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (!session?.user) {
-          console.log('No authenticated user for profile fetch');
-          return;
-        }
-        
-        // Fetch the user's profile
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-        
-        if (error) {
-          console.error('Error fetching user profile:', error);
-        } else if (data) {
-          setProfile(data);
-          
-          // Calculate personalized daily values
-          const personalDVs = calculatePersonalizedDailyValues(data);
-          setPersonalizedValues(personalDVs);
-        }
-      } catch (error) {
-        console.error('Exception fetching user profile:', error);
-      }
-    };
+    const existingInsights = getExistingInsights();
     
-    fetchUserProfile();
-  }, []);
-  
-  // Effect to get insights when analysis data is available
-  useEffect(() => {
-    if (analysisData) {
-      // Check for personalized insights in various places in the data structure
-      const insightsText = 
-        analysisData.personalized_insights || 
-        analysisData.insights || 
-        (analysisData.analysis && analysisData.analysis.personalized_insights) || 
-        (analysisData.analysis && analysisData.analysis.insights) ||
-        null;
-      
-      if (insightsText) {
-        setInsights(insightsText);
-      } else {
-        // No insights available, try to generate them from the analysisData
-        try {
-          // TODO: Implement a client-side insights generator if needed
-          console.log("No pre-generated insights found in the analysis data");
-        } catch (error) {
-          console.error("Error generating insights:", error);
-        }
-      }
+    if (existingInsights) {
+      // We have good insights already - use them immediately
+      console.log('[PersonalizedNutritionAnalysis] Using existing insights from meal analysis');
+      setPersonalizedInsights(existingInsights);
+      setIsGeneratingInsights(false);
+    } else {
+      // Only auto-generate if we have no insights at all
+      console.log('[PersonalizedNutritionAnalysis] No insights found - will need to generate');
+      // Don't auto-generate on load anymore to avoid delays
+      // User can click "Regenerate" if they want insights
+      setPersonalizedInsights('AI insights generation is available. Click "Regenerate Enhanced Analysis" below to generate personalized insights for this meal.');
+      setIsGeneratingInsights(false);
     }
   }, [analysisData]);
 
-  // Skip rendering if no data
+  const generatePersonalizedInsights = async () => {
+    // Always check for existing insights first
+    const existingInsights = getExistingInsights();
+    
+    if (existingInsights && !forceRegenerate) {
+      console.log('[generatePersonalizedInsights] Using existing insights instead of regenerating');
+      setPersonalizedInsights(existingInsights);
+      return;
+    }
+
+    setIsGeneratingInsights(true);
+    setError(null);
+    setForceRegenerate(false);
+
+    try {
+      // Get user profile from multiple sources
+      const currentUserProfile = user || (typeof window !== 'undefined' ? window.currentUserProfile : null) || {};
+      
+      const payload = {
+        mealData: {
+          ...analysisData,
+          id: analysisData.id || analysisData.mealId || 'temp-enhanced',
+          enhancedPrompt: true,
+          forceComprehensive: true
+        },
+        userProfile: currentUserProfile,
+        userGoal: userGoal || (currentUserProfile as any)?.goal || 'general health',
+        requestType: 'comprehensive_analysis',
+        includeRealLifeScenarios: true
+      };
+
+      console.log('[generatePersonalizedInsights] Sending payload:', payload);
+
+      const response = await fetch('/api/generate-personalized-insights', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.insights) {
+        setPersonalizedInsights(data.insights);
+        
+        // If we have a valid meal ID, try to save the insights to the database
+        const mealId = analysisData.id || analysisData.mealId;
+        if (mealId && mealId !== 'temp-enhanced' && !mealId.includes('temp')) {
+          try {
+            const supabase = createClient();
+            if (supabase) {
+              const { error: updateError } = await supabase
+                .from('meals')
+                .update({ 
+                  insights: data.insights,
+                  personalized_insights: data.insights 
+                })
+                .eq('id', mealId);
+
+              if (updateError) {
+                console.error('[generatePersonalizedInsights] Error updating meal with insights:', updateError);
+              } else {
+                console.log('[generatePersonalizedInsights] Successfully saved insights to database');
+              }
+            }
+          } catch (saveError) {
+            console.error('[generatePersonalizedInsights] Error saving insights to database:', saveError);
+          }
+        }
+      } else {
+        setError(data.error || 'Failed to generate insights');
+      }
+    } catch (error) {
+      console.error('[generatePersonalizedInsights] Error:', error);
+      setError('Failed to generate personalized insights. Please try again.');
+    } finally {
+      setIsGeneratingInsights(false);
+    }
+  };
+
+  // Helper functions to extract data
+  const getMacronutrients = (): Nutrient[] => {
+    const macros = analysisData?.macronutrients || analysisData?.analysis?.macronutrients || [];
+    return macros.map(nutrient => ({
+      ...nutrient,
+      description: nutrient.description || getNutrientDescription(nutrient.name)
+    }));
+  };
+  
+  const getMicronutrients = (): Nutrient[] => {
+    const micros = analysisData?.micronutrients || analysisData?.analysis?.micronutrients || [];
+    return micros.map(nutrient => ({
+      ...nutrient,
+      description: nutrient.description || getNutrientDescription(nutrient.name)
+    }));
+  };
+
+  const getCalories = (): number => {
+    return analysisData?.calories || analysisData?.analysis?.calories || 0;
+  };
+
+  const getMealName = (): string => {
+    return analysisData?.mealName || analysisData?.meal_name || 'Analyzed Meal';
+  };
+
+  const getImageUrl = (): string => {
+    return analysisData?.imageUrl || analysisData?.image_url || '';
+  };
+
+  const getExistingInsights = (): string => {
+    // Check multiple possible locations for insights in priority order
+    const sources = [
+      analysisData?.insights,
+      analysisData?.personalized_insights,
+      analysisData?.analysis?.insights,
+      analysisData?.analysis?.personalized_insights,
+      (analysisData?.analysis as any)?.personalized_health_insights,
+      analysisData?.personalizedHealthInsights,
+      analysisData?.scientificInsights,
+      (analysisData?.analysis as any)?.scientificInsights
+    ];
+
+    for (const source of sources) {
+      if (source && typeof source === 'string' && source.length > 200) {
+        console.log('[getExistingInsights] Found insights of length:', source.length);
+        return source;
+      }
+    }
+
+    console.log('[getExistingInsights] No quality insights found in data');
+    return '';
+  };
+
+  // Helper function to get nutrient status color
+  const getNutrientStatusColor = (nutrient: Nutrient): string => {
+    const dv = nutrient.percentDailyValue || 0;
+    
+    // For nutrients we want to limit (sodium, sugar, saturated fat)
+    const limitNutrients = ['sodium', 'sugar', 'saturated fat', 'cholesterol'];
+    const isLimitNutrient = limitNutrients.some(limit => 
+      nutrient.name.toLowerCase().includes(limit)
+    );
+    
+    if (isLimitNutrient) {
+      if (dv >= 50) return 'bg-red-500';
+      if (dv >= 25) return 'bg-yellow-500';
+      return 'bg-green-500';
+    }
+    
+    // For beneficial nutrients
+    if (dv >= 50) return 'bg-green-500';
+    if (dv >= 25) return 'bg-green-400';
+    if (dv >= 10) return 'bg-blue-500';
+    return 'bg-gray-500';
+  };
+
+  const getNutrientStatusText = (nutrient: Nutrient): string => {
+    const dv = nutrient.percentDailyValue || 0;
+    
+    const limitNutrients = ['sodium', 'sugar', 'saturated fat', 'cholesterol'];
+    const isLimitNutrient = limitNutrients.some(limit => 
+      nutrient.name.toLowerCase().includes(limit)
+    );
+    
+    if (isLimitNutrient) {
+      if (dv >= 50) return 'High';
+      if (dv >= 25) return 'Moderate';
+      return 'Low';
+    }
+    
+    if (dv >= 50) return 'Excellent';
+    if (dv >= 25) return 'Good';
+    if (dv >= 10) return 'Fair';
+    return 'Low';
+  };
+
   if (!analysisData) {
     return (
-      <div className="text-center p-8">
+      <div className="bg-gray-800 rounded-2xl p-8 text-center">
         <div className="animate-pulse">
-          <div className="h-6 bg-gray-200 rounded w-3/4 mx-auto mb-2"></div>
-          <div className="h-4 bg-gray-200 rounded w-2/3 mx-auto mb-2"></div>
-          <div className="h-4 bg-gray-200 rounded w-1/2 mx-auto"></div>
-        </div>
+          <div className="h-6 bg-gray-700 rounded w-3/4 mx-auto mb-4"></div>
+          <div className="h-4 bg-gray-700 rounded w-1/2 mx-auto"></div>
+          </div>
       </div>
     );
   }
 
-  // Helper function to extract macronutrients and micronutrients
-  const getMacronutrients = () => {
-    const macros = analysisData.macronutrients || 
-           analysisData.analysis?.macronutrients || 
-           analysisData.nutrients?.macronutrients ||
-           [];
-    
-    // Ensure it's an array
-    return Array.isArray(macros) ? macros : [];
-  };
-  
-  const getMicronutrients = () => {
-    const micros = analysisData.micronutrients || 
-           analysisData.analysis?.micronutrients || 
-           analysisData.nutrients?.micronutrients ||
-           [];
-    
-    // Ensure it's an array
-    return Array.isArray(micros) ? micros : [];
-  };
-
-  // Helper function to get benefits
-  const getBenefits = () => {
-    const benefits = analysisData.benefits || 
-                    analysisData.analysis?.benefits || 
-                    [];
-    
-    // Ensure it's an array
-    return Array.isArray(benefits) ? benefits : [];
-  };
-
-  // Helper function to get concerns
-  const getConcerns = () => {
-    const concerns = analysisData.concerns || 
-                    analysisData.analysis?.concerns || 
-                    [];
-    
-    // Ensure it's an array
-    return Array.isArray(concerns) ? concerns : [];
-  };
-
-  // Helper function to get suggestions
-  const getSuggestions = () => {
-    const suggestions = analysisData.suggestions || 
-                        analysisData.analysis?.suggestions || 
-                        [];
-    
-    // Ensure it's an array
-    return Array.isArray(suggestions) ? suggestions : [];
-  };
-
-  // Fix the calorie calculation to ensure proper typing
-  const calories = analysisData.calories || 
-                  (analysisData.analysis && (analysisData.analysis.calories || analysisData.analysis.totalCalories)) || 
-                  0;
-
-  // Helper function to extract phytonutrients
-  const getPhytonutrients = () => {
-    return analysisData.phytonutrients || 
-           analysisData.analysis?.phytonutrients || 
-           [];
-  };
-
-  // Helper function to get glycemic impact
-  const getGlycemicImpact = () => {
-    return analysisData.glycemicImpact || 
-           analysisData.analysis?.glycemicImpact || 
-           '';
-  };
-
-  // Helper function to get inflammatory potential
-  const getInflammatoryPotential = () => {
-    return analysisData.inflammatoryPotential || 
-           analysisData.analysis?.inflammatoryPotential || 
-           '';
-  };
-
-  // Helper function to get nutrient density
-  const getNutrientDensity = () => {
-    return analysisData.nutrientDensity || 
-           analysisData.analysis?.nutrientDensity || 
-           '';
-  };
-
-  // Helper function to get scientific insights
-  const getScientificInsights = () => {
-    return analysisData.scientificInsights || 
-           analysisData.analysis?.scientificInsights || 
-           [];
-  };
-
-  // Helper function to get goal alignment
-  const getGoalAlignment = () => {
-    return analysisData.goalAlignment || 
-           analysisData.analysis?.goalAlignment || 
-           '';
-  };
-
-  // Organize the categorized micronutrients
-  const categorizedMicronutrients = categorizeNutrients(getMicronutrients());
-
-  useEffect(() => {
-    // Simplified initialization without profile fetching
-    // Just set defaults for now
-    setPersonalizedValues({
-      calories: 2000,
-      protein: 50,
-      carbs: 275,
-      fat: 78,
-      fiber: 28
-    });
-  }, []);
-
   return (
-    <div className="space-y-6">
-      {/* Calories */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-4">Calories & Nutrients</h2>
-        
-        <div className="mb-6">
-          <div className="flex justify-between items-center mb-2">
-            <h3 className="text-xl font-semibold text-gray-700">Calories</h3>
-            <span className="text-2xl font-bold text-blue-600">
-              {calories} <span className="text-sm font-normal">kcal</span>
-            </span>
-          </div>
-          
-          {userProfile && personalizedValues.calories && (
-            <p className="text-sm text-gray-500 mt-1">
-              {Math.round((calories / personalizedValues.calories) * 100)}% of your daily calorie goal 
-              ({Math.round(personalizedValues.calories)} kcal)
+    <div className="space-y-6 max-w-7xl mx-auto">
+      {/* Meal Header */}
+      {getImageUrl() && (
+        <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-6 shadow-xl">
+          <div className="grid lg:grid-cols-2 gap-8 items-center">
+            <div className="aspect-square relative rounded-xl overflow-hidden shadow-2xl">
+              <img
+                src={getImageUrl()}
+                alt={getMealName()}
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <div className="space-y-4">
+              <h2 className="text-4xl font-bold text-white leading-tight">{getMealName()}</h2>
+              <div className="text-5xl font-bold text-blue-400 mb-4">
+                {getCalories()} <span className="text-xl font-normal text-gray-400">calories</span>
+              </div>
+              {analysisData.created_at && (
+                <p className="text-gray-400 text-lg">
+                  Analyzed on {new Date(analysisData.created_at).toLocaleDateString()}
             </p>
           )}
         </div>
+          </div>
+        </div>
+      )}
         
+      {/* Main Analysis Card */}
+      <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl overflow-hidden shadow-xl">
         {/* Tab Navigation */}
-        <div className="border-b border-gray-200 mb-4">
-          <nav className="flex -mb-px">
+        <div className="border-b border-gray-700">
+          <nav className="flex">
             <button 
-              onClick={() => setActiveTab('macronutrients')}
-              className={`mr-4 py-4 text-sm font-medium ${
-                activeTab === 'macronutrients' 
-                  ? 'border-b-2 border-blue-500 text-blue-600' 
-                  : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              onClick={() => setActiveTab('nutrients')}
+              className={`flex-1 py-6 px-8 text-center font-semibold transition-all ${
+                activeTab === 'nutrients' 
+                  ? 'bg-blue-600 text-white border-b-4 border-blue-400' 
+                  : 'text-gray-400 hover:text-white hover:bg-gray-700'
               }`}
             >
-              Macronutrients
+              <span className="flex items-center justify-center text-lg">
+                <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                Nutritional Analysis
+              </span>
             </button>
+            
             <button 
-              onClick={() => setActiveTab('micronutrients')}
-              className={`mr-4 py-4 text-sm font-medium ${
-                activeTab === 'micronutrients' 
-                  ? 'border-b-2 border-blue-500 text-blue-600' 
-                  : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              onClick={() => setActiveTab('ai-insights')}
+              className={`flex-1 py-6 px-8 text-center font-semibold transition-all ${
+                activeTab === 'ai-insights' 
+                  ? 'bg-blue-600 text-white border-b-4 border-blue-400' 
+                  : 'text-gray-400 hover:text-white hover:bg-gray-700'
               }`}
             >
-              Micronutrients
-            </button>
-            <button 
-              onClick={() => setActiveTab('insights')}
-              className={`py-4 text-sm font-medium ${
-                activeTab === 'insights' 
-                  ? 'border-b-2 border-blue-500 text-blue-600' 
-                  : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Insights
+              <span className="flex items-center justify-center text-lg">
+                <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+                AI Health Insights
+              </span>
             </button>
           </nav>
         </div>
         
         {/* Tab Content */}
-        <div className="mt-6">
-          {/* Macronutrients Tab */}
-          {activeTab === 'macronutrients' && (
-            <div className="space-y-4">
-              {getMacronutrients().map((nutrient, index) => {
-                const percentValue = nutrient.percentDailyValue || 0;
-                return (
-                  <div key={index} className="space-y-1">
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium text-gray-700">{nutrient.name}</span>
-                      <span className="text-gray-900">
-                        {nutrient.amount} {nutrient.unit}
-                        {percentValue > 0 && (
-                          <span className="text-sm text-gray-500 ml-1">
-                            ({percentValue}% DV)
+        <div className="p-8">
+          {activeTab === 'nutrients' && (
+            <div className="space-y-12">
+              {/* Macronutrients */}
+              <div>
+                <h3 className="text-3xl font-bold text-white mb-8 flex items-center">
+                  <span className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center mr-4">
+                    <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
                           </span>
-                        )}
-                      </span>
+                  Macronutrients
+                </h3>
+                
+                {getMacronutrients().length > 0 ? (
+                  <div className="grid lg:grid-cols-2 gap-6">
+                    {getMacronutrients().map((nutrient, index) => (
+                      <div key={index} className="bg-gradient-to-br from-gray-700 to-gray-800 rounded-xl p-6 shadow-lg">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <h4 className="text-2xl font-semibold text-white mb-2">{nutrient.name}</h4>
+                            <p className="text-3xl font-bold text-blue-400">
+                              {nutrient.amount} {nutrient.unit}
+                            </p>
+                          </div>
+                          
+                          {nutrient.percentDailyValue && nutrient.percentDailyValue > 0 && (
+                            <div className="text-right">
+                              <div className="text-xl font-bold text-white">
+                                {Math.round(nutrient.percentDailyValue)}%
+                              </div>
+                              <div className="text-sm text-gray-400">Daily Value</div>
+                            </div>
+                          )}
                     </div>
                     
-                    <div className="w-full bg-gray-200 rounded-full h-2.5">
+                        {nutrient.percentDailyValue && nutrient.percentDailyValue > 0 && (
+                          <div className="w-full bg-gray-600 rounded-full h-4 mb-4">
                       <div 
-                        className={`h-2.5 rounded-full ${
-                          nutrient.name.toLowerCase().includes('protein') ? 'bg-blue-600' :
+                              className={`h-4 rounded-full transition-all duration-700 ${
+                                nutrient.name.toLowerCase().includes('protein') ? 'bg-blue-500' :
                           nutrient.name.toLowerCase().includes('carb') ? 'bg-green-500' :
                           nutrient.name.toLowerCase().includes('fat') ? 'bg-amber-500' : 'bg-purple-500'
                         }`}
-                        style={{ width: `${Math.min(100, percentValue)}%` }}
+                              style={{ width: `${Math.min(100, nutrient.percentDailyValue)}%` }}
                       ></div>
                     </div>
+                        )}
                     
-                    <p className="text-xs text-gray-500 mt-1">
-                      {nutrient.description || `${nutrient.name} is an essential macronutrient for your body.`}
-                    </p>
+                        <p className="text-gray-300 text-sm leading-relaxed">{nutrient.description}</p>
                   </div>
-                );
-              })}
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-gray-400">
+                    <svg className="w-16 h-16 mx-auto mb-6 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    <p className="text-lg">No macronutrient data available for this meal.</p>
             </div>
           )}
-          
-          {/* Micronutrients Tab */}
-          {activeTab === 'micronutrients' && (
-            <div className="space-y-6">
-              {Object.keys(categorizedMicronutrients).length > 0 ? (
-                <>
-                  {Object.entries(categorizedMicronutrients).map(([category, nutrients]) => (
-                    <div key={category} className="mb-6">
-                      <h4 className="font-medium text-lg mb-3">{category}</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {nutrients.map((nutrient: any, index: number) => {
-                          // Skip if no name
-                          if (!nutrient || !nutrient.name) return null;
-                          
-                          // Get badge for visual status indication
-                          const badge = getNutrientBadge(nutrient);
-                          const percentValue = nutrient.percentDailyValue || 0;
-                          
-                          return (
-                            <div key={index} className="border rounded-lg p-3 shadow-sm">
-                              <div className="flex justify-between items-center mb-1">
-                                <h5 className="font-medium">{nutrient.name}</h5>
-                                {badge && (
-                                  <span className={`${badge.color} text-white text-xs px-2 py-0.5 rounded-full`}>
-                                    {badge.label}
+              </div>
+
+              {/* Micronutrients */}
+              <div>
+                <h3 className="text-3xl font-bold text-white mb-8 flex items-center">
+                  <span className="w-10 h-10 bg-green-600 rounded-xl flex items-center justify-center mr-4">
+                    <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
+                    </svg>
+                  </span>
+                  Micronutrients
+                </h3>
+                
+                {getMicronutrients().length > 0 ? (
+                  <div className="grid lg:grid-cols-3 md:grid-cols-2 gap-4">
+                    {getMicronutrients().map((nutrient, index) => (
+                      <div key={index} className="bg-gradient-to-br from-gray-700 to-gray-800 rounded-xl p-5 shadow-lg">
+                        <div className="flex justify-between items-start mb-3">
+                          <h5 className="font-semibold text-white text-lg leading-tight">{nutrient.name}</h5>
+                          {nutrient.percentDailyValue && nutrient.percentDailyValue > 0 && (
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold text-white ${getNutrientStatusColor(nutrient)}`}>
+                              {getNutrientStatusText(nutrient)}
                                   </span>
                                 )}
                               </div>
                               
-                              <div className="flex items-center space-x-2">
-                                <span className="font-bold">{nutrient.amount} {nutrient.unit}</span>
-                                {percentValue > 0 && (
-                                  <span className="text-gray-600 text-xs">{percentValue}% DV</span>
+                        <div className="flex justify-between items-center mb-4">
+                          <span className="text-xl font-bold text-blue-400">
+                            {nutrient.amount} {nutrient.unit}
+                          </span>
+                          {nutrient.percentDailyValue && nutrient.percentDailyValue > 0 && (
+                            <span className="text-gray-300 font-medium">
+                              {Math.round(nutrient.percentDailyValue)}% DV
+                            </span>
                                 )}
                               </div>
                               
-                              <div className="mt-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                                <div 
-                                  className={`h-full ${
-                                    percentValue >= 50 ? 'bg-green-500' : 
-                                    percentValue >= 25 ? 'bg-green-400' : 
-                                    'bg-green-300'
-                                  }`}
-                                  style={{ width: `${Math.min(percentValue, 100)}%` }}
+                        {nutrient.percentDailyValue && nutrient.percentDailyValue > 0 && (
+                          <div className="w-full bg-gray-600 rounded-full h-2 mb-4">
+                            <div 
+                              className={`h-2 rounded-full transition-all duration-700 ${getNutrientStatusColor(nutrient)}`}
+                              style={{ width: `${Math.min(nutrient.percentDailyValue, 100)}%` }}
                                 ></div>
                               </div>
-                              
-                              {(nutrient.description || nutrient.name) && (
-                                <p className="text-gray-600 mt-1 text-xs">
-                                  {nutrient.description || getMicronutrientBenefit(nutrient.name)}
-                                </p>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                  
-                  {/* Phytonutrients section if available */}
-                  {getPhytonutrients() && getPhytonutrients().length > 0 && (
-                    <div className="mt-8">
-                      <h4 className="font-medium text-lg mb-3">Phytonutrients</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {getPhytonutrients().map((phyto: any, index: number) => (
-                          <div key={index} className="border rounded-lg p-3 shadow-sm bg-green-50">
-                            <h5 className="font-medium">{phyto.name}</h5>
-                            <p className="text-gray-700 text-sm mt-1">{phyto.significance}</p>
-                            {phyto.food_source && (
-                              <p className="text-gray-600 text-xs mt-1">Source: {phyto.food_source}</p>
-                            )}
+                        )}
+                        
+                        <p className="text-gray-400 text-xs leading-relaxed">{nutrient.description}</p>
                           </div>
                         ))}
                       </div>
+                ) : (
+                  <div className="text-center py-12 text-gray-400">
+                    <svg className="w-16 h-16 mx-auto mb-6 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                    </svg>
+                    <p className="text-lg">No micronutrient data available for this meal.</p>
                     </div>
                   )}
-                </>
-              ) : (
-                <div className="text-center py-6 text-gray-500">
-                  No micronutrient data available for this meal.
+              </div>
                 </div>
               )}
+
+          {activeTab === 'ai-insights' && (
+            <div className="space-y-8">
+              <h3 className="text-3xl font-bold text-white mb-8 flex items-center">
+                <span className="w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center mr-4">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                </span>
+                Scientific Analysis & Personalized Insights
+              </h3>
+
+              {/* Personalized Insights */}
+              <div className="space-y-6">
+                <div className="bg-gradient-to-br from-purple-900/30 to-indigo-900/30 backdrop-blur-sm border border-purple-500/20 rounded-xl p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-purple-500/20 rounded-lg">
+                        <span className="text-2xl">🧠</span>
             </div>
-          )}
-          
-          {/* Enhanced Insights Tab */}
-          {activeTab === 'insights' && (
-            <div className="space-y-6">
-              {/* Markdown Insights */}
-              <div className="prose max-w-none">
-                {isLoading ? (
-                  <div className="animate-pulse space-y-4 py-4">
-                    <div className="h-6 bg-gray-200 rounded w-3/4"></div>
-                    <div className="h-4 bg-gray-200 rounded w-5/6"></div>
-                    <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-                    <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                    <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                      <h3 className="text-xl font-semibold text-purple-300">Scientific Analysis & Personalized Insights</h3>
+                    </div>
+                    {personalizedInsights && (
+                      <button
+                        onClick={() => {
+                          setForceRegenerate(true);
+                          generatePersonalizedInsights(); // Regenerate with enhanced prompt
+                        }}
+                        disabled={isGeneratingInsights}
+                        className="px-4 py-2 bg-purple-600/50 hover:bg-purple-600/70 disabled:opacity-50 disabled:cursor-not-allowed text-purple-200 text-sm rounded-lg border border-purple-500/30 transition-all duration-200 hover:border-purple-400/50"
+                      >
+                        {isGeneratingInsights ? 'Generating...' : 'Regenerate Enhanced Analysis'}
+                      </button>
+                    )}
                   </div>
-                ) : insights ? (
-                  <ReactMarkdown>{insights}</ReactMarkdown>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <p>Detailed insights not available for this meal.</p>
-                    <p className="mt-2 text-sm">
-                      Complete your profile to receive personalized nutritional insights.
-                    </p>
-                    
-                    {/* Basic insights from other data */}
-                    {(getBenefits().length > 0 || getSuggestions().length > 0) && (
-                      <div className="mt-6 text-left bg-blue-50 p-4 rounded-lg border border-blue-100">
-                        <h3 className="font-semibold text-blue-800 mb-2">Basic Analysis</h3>
-                        
-                        {/* Show benefits if available */}
-                        {getBenefits().length > 0 && (
-                          <div className="mb-3">
-                            <h4 className="font-medium text-blue-700">Benefits:</h4>
-                            <ul className="list-disc pl-5 text-gray-700">
-                              {getBenefits().map((benefit, i) => (
-                                <li key={i} className="text-sm">{benefit}</li>
-                              ))}
-                            </ul>
+                  
+                  {isGeneratingInsights ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                        <span className="text-purple-300">Generating deep scientific analysis...</span>
+                      </div>
+                    </div>
+                  ) : personalizedInsights ? (
+                    <div className="prose prose-invert prose-purple max-w-none">
+                      {personalizedInsights ? (
+            <div className="space-y-6">
+                          {personalizedInsights.split('\n\n').map((paragraph, index) => {
+                            // Check if this is a section header (starts with ##)
+                            if (paragraph.trim().startsWith('## ')) {
+                              const headerText = paragraph.replace(/^## /, '').trim();
+                              return (
+                                <div key={index} className="border-l-4 border-purple-500 pl-4 mb-4">
+                                  <h3 className="text-lg font-semibold text-purple-300 mb-2">
+                                    {headerText}
+                                  </h3>
+                  </div>
+                              );
+                            }
+                            // Check if this is a subsection header (starts with **)
+                            else if (paragraph.trim().includes('**') && paragraph.trim().length < 200) {
+                              const cleanText = paragraph.replace(/\*\*/g, '');
+                              return (
+                                <div key={index} className="mt-6 mb-3">
+                                  <h4 className="text-md font-medium text-purple-200 opacity-90">
+                                    {cleanText}
+                                  </h4>
+                                </div>
+                              );
+                            }
+                            // Regular paragraph content
+                            else if (paragraph.trim()) {
+                              return (
+                                <div key={index} className="text-gray-300 leading-relaxed mb-4">
+                                  {paragraph.split('\n').map((line, lineIndex) => {
+                                    // Handle bold text within paragraphs
+                                    if (line.includes('**')) {
+                                      const parts = line.split(/(\*\*.*?\*\*)/g);
+                                      return (
+                                        <p key={lineIndex} className="mb-2">
+                                          {parts.map((part, partIndex) => {
+                                            if (part.startsWith('**') && part.endsWith('**')) {
+                                              return (
+                                                <span key={partIndex} className="font-semibold text-purple-200">
+                                                  {part.replace(/\*\*/g, '')}
+                                                </span>
+                                              );
+                                            }
+                                            return <span key={partIndex}>{part}</span>;
+                                          })}
+                                        </p>
+                                      );
+                                    } else if (line.trim()) {
+                                      return <p key={lineIndex} className="mb-2">{line}</p>;
+                                    }
+                                    return null;
+                                  })}
+                                </div>
+                              );
+                            }
+                            return null;
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8">
+                          <div className="animate-pulse">
+                            <div className="bg-purple-900/30 h-4 rounded mb-4"></div>
+                            <div className="bg-purple-900/30 h-4 rounded mb-4 w-3/4 mx-auto"></div>
+                            <div className="bg-purple-900/30 h-4 rounded mb-4 w-1/2 mx-auto"></div>
+                          </div>
+                          <p className="text-purple-300 mt-4">
+                            {isGeneratingInsights ? 'Generating personalized insights...' : 'Click to generate insights'}
+                          </p>
                           </div>
                         )}
-                        
-                        {/* Show suggestions if available */}
-                        {getSuggestions().length > 0 && (
-                          <div>
-                            <h4 className="font-medium text-blue-700">Suggestions:</h4>
-                            <ul className="list-disc pl-5 text-gray-700">
-                              {getSuggestions().map((suggestion, i) => (
-                                <li key={i} className="text-sm">{suggestion}</li>
-                              ))}
-                            </ul>
                           </div>
-                        )}
+                  ) : (
+                    <div className="text-center py-8">
+                      <div className="text-gray-400 mb-4">Click below to generate AI-powered insights about how this meal will affect your daily life</div>
+                      <button
+                        onClick={generatePersonalizedInsights}
+                        className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-all duration-200 hover:scale-105"
+                      >
+                        Generate Scientific Analysis
+                      </button>
                       </div>
                     )}
                   </div>
-                )}
               </div>
               
-              {/* Glycemic Impact */}
-              {getGlycemicImpact() && (
-                <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
-                  <h3 className="font-medium text-blue-800">Glycemic Impact</h3>
-                  <p className="text-sm text-blue-700 mt-1">{getGlycemicImpact()}</p>
+              {/* Expert Recommendations */}
+              {analysisData.expert_recommendations && analysisData.expert_recommendations.length > 0 && (
+                <div className="bg-gradient-to-br from-green-900/50 to-teal-900/50 border border-green-700/50 rounded-xl p-8">
+                  <h4 className="text-2xl font-semibold text-white mb-6 flex items-center">
+                    <svg className="w-6 h-6 mr-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Expert Recommendations
+                  </h4>
+                  <div className="space-y-4">
+                    {analysisData.expert_recommendations.map((recommendation, index) => (
+                      <div key={index} className="flex items-start">
+                        <div className="w-3 h-3 bg-green-400 rounded-full mt-2 mr-4 flex-shrink-0"></div>
+                        <p className="text-green-100 text-lg leading-relaxed">{recommendation}</p>
                 </div>
-              )}
-              
-              {/* Inflammatory Potential */}
-              {getInflammatoryPotential() && (
-                <div className="bg-amber-50 rounded-lg p-4 border border-amber-100">
-                  <h3 className="font-medium text-amber-800">Inflammatory Potential</h3>
-                  <p className="text-sm text-amber-700 mt-1">{getInflammatoryPotential()}</p>
-                </div>
-              )}
-              
-              {/* Nutrient Density */}
-              {getNutrientDensity() && (
-                <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-100">
-                  <h3 className="font-medium text-indigo-800">Nutrient Density</h3>
-                  <p className="text-sm text-indigo-700 mt-1">{getNutrientDensity()}</p>
-                </div>
-              )}
-              
-              {/* Scientific Insights */}
-              {getScientificInsights().length > 0 && (
-                <div className="bg-purple-50 rounded-lg p-4 border border-purple-100">
-                  <h3 className="font-medium text-purple-800">Scientific Insights</h3>
-                  <ul className="mt-2 space-y-2">
-                    {getScientificInsights().map((insight, index) => (
-                      <li key={index} className="text-sm text-purple-700">• {insight}</li>
                     ))}
-                  </ul>
+                  </div>
                 </div>
               )}
               
-              {/* Goal Alignment */}
-              {getGoalAlignment() && (
-                <div className="bg-emerald-50 rounded-lg p-4 border border-emerald-100">
-                  <h3 className="font-medium text-emerald-800">Goal Alignment</h3>
-                  <p className="text-sm text-emerald-700 mt-1">{getGoalAlignment()}</p>
+              {/* Additional Analysis Sections */}
+              {analysisData.meal_story && (
+                <div className="bg-gradient-to-br from-indigo-900/50 to-purple-900/50 border border-indigo-700/50 rounded-xl p-8">
+                  <h4 className="text-2xl font-semibold text-white mb-6">Metabolic Journey</h4>
+                  <p className="text-indigo-100 leading-relaxed text-lg">{analysisData.meal_story}</p>
+                </div>
+              )}
+              
+              {analysisData.nutritional_narrative && (
+                <div className="bg-gradient-to-br from-orange-900/50 to-red-900/50 border border-orange-700/50 rounded-xl p-8">
+                  <h4 className="text-2xl font-semibold text-white mb-6">Nutritional Science</h4>
+                  <p className="text-orange-100 leading-relaxed text-lg">{analysisData.nutritional_narrative}</p>
+                </div>
+              )}
+              
+              {analysisData.time_of_day_optimization && (
+                <div className="bg-gradient-to-br from-cyan-900/50 to-blue-900/50 border border-cyan-700/50 rounded-xl p-8">
+                  <h4 className="text-2xl font-semibold text-white mb-6">Circadian Optimization</h4>
+                  <p className="text-cyan-100 leading-relaxed text-lg">{analysisData.time_of_day_optimization}</p>
                 </div>
               )}
             </div>
           )}
         </div>
       </div>
-      
-      {/* Health Benefits */}
-      {getBenefits().length > 0 && (
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Health Benefits</h2>
-          
-          <ul className="space-y-2">
-            {getBenefits().map((benefit, index) => (
-              <li key={index} className="flex items-start">
-                <span className="text-green-500 mr-2">✓</span>
-                <span>{benefit}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      
-      {/* Suggestions */}
-      {getSuggestions().length > 0 && (
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Suggestions for Improvement</h2>
-          
-          <ul className="space-y-2">
-            {getSuggestions().map((suggestion, index) => (
-              <li key={index} className="flex items-start">
-                <span className="text-blue-500 mr-2">→</span>
-                <span>{suggestion}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
     </div>
   );
 };

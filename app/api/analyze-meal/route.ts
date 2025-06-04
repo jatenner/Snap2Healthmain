@@ -5,9 +5,57 @@ import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import { getFullUserProfile } from '../../lib/profile-server-utils';
 import { analyzeMealWithOpenAI } from '../../lib/openai-utils';
+import OpenAI from 'openai';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Reduced to 60 seconds for Vercel hobby plan compatibility
+
+// Initialize OpenAI client for direct insights generation
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+// Fast AI insights generation function (replaces HTTP call)
+async function generateQuickInsights(mealData: any, userProfile: any, goal: string): Promise<string> {
+  try {
+    const prompt = `Generate practical, conversational analysis for this meal. Be direct and actionable.
+
+**MEAL:** ${mealData.mealName || 'Analyzed Meal'}
+**CALORIES:** ${mealData.calories || 'Unknown'}
+**PROTEIN:** ${mealData.protein || 0}g **CARBS:** ${mealData.carbs || 0}g **FAT:** ${mealData.fat || 0}g
+**USER:** ${userProfile?.age || 30}yo ${userProfile?.gender || 'person'}, ${userProfile?.goal || goal || 'general health'}
+
+Cover these key points in 4-6 short sections:
+1. **Immediate Response (0-30min):** Blood sugar, insulin, initial energy
+2. **Energy Timeline (30min-4hrs):** When you'll feel peak energy, any crashes to expect
+3. **Performance Windows:** Best times for work, exercise, social activities
+4. **Digestive & Practical:** How full you'll feel, bathroom timing, next meal timing
+5. **Optimization Tips:** Quick actionable advice
+
+Keep it conversational, practical, and under 1000 words. Think Joe Rogan explaining nutrition.`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system", 
+          content: "You're a nutrition expert who explains complex science in simple, conversational terms. Be direct, practical, and engaging. No flowery language - just actionable insights."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      max_tokens: 1200, // Reduced for faster generation
+      temperature: 0.7,
+    });
+
+    return completion.choices[0]?.message?.content || '';
+  } catch (error) {
+    console.error('[generateQuickInsights] Error:', error);
+    return ''; // Return empty string instead of throwing
+  }
+}
 
 // Validate environment variables
 function validateEnvironment() {
@@ -166,7 +214,7 @@ export async function POST(request: NextRequest) {
           height: 72,
           height_unit: 'in',
           activityLevel: 'moderate',
-          goal: 'General Health',
+          goal: 'Athletic Performance',
           name: 'Dev User - Mock Profile (Fallback)'
         };
         console.log('[analyze-meal] Development mode - Using default mock profile (fallback):', JSON.stringify(userProfile).substring(0,200));
@@ -379,6 +427,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // After successful meal analysis, generate AI insights directly
+    let personalizedInsights = '';
+    console.log('[analyze-meal] 🚀 Generating AI insights directly (no HTTP call)...');
+    
+    const insightsStartTime = Date.now();
+    try {
+      personalizedInsights = await generateQuickInsights(analysisResult, userProfile, goal);
+      const insightsEndTime = Date.now();
+      console.log(`[analyze-meal] ✅ AI insights generated in ${insightsEndTime - insightsStartTime}ms, length: ${personalizedInsights.length}`);
+      
+      // Quality check - ensure we have substantial insights
+      if (personalizedInsights.length < 300) {
+        console.warn('[analyze-meal] Generated insights too short, clearing to trigger frontend regeneration');
+        personalizedInsights = '';
+      }
+    } catch (insightsError) {
+      console.error('[analyze-meal] Direct insights generation failed:', insightsError);
+      personalizedInsights = ''; // Clear failed insights
+    }
+
     // Prepare the final response object structure that will be built upon
     const finalApiResponse = {
       success: true,
@@ -410,6 +478,9 @@ export async function POST(request: NextRequest) {
           protein: ar.protein || 0,
           fat: ar.fat || 0,
           carbs: ar.carbs || 0,
+          // Add the generated insights
+          personalized_insights: personalizedInsights,
+          insights: personalizedInsights, // Also save to generic insights column
           // Populate individual database columns from OpenAI analysis
           macronutrients: ar.macronutrients || [],
           micronutrients: ar.micronutrients || [],
@@ -466,6 +537,7 @@ export async function POST(request: NextRequest) {
             expert_recommendations: ar.expertRecommendations || [],
             metabolic_insights: ar.metabolicInsights || '',
             personalized_health_insights: ar.personalizedHealthInsights || '',
+            personalized_insights: personalizedInsights, // Add insights to analysis object
             goal: ar.goal || goal, // Ensure goal is in analysis, prioritize from OpenAI, fallback to form/profile goal
           }
         };
@@ -513,7 +585,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Final response with all details
-    console.log('[analyze-meal] Final API response (mealId:', finalApiResponse.mealId + '):', JSON.stringify(finalApiResponse).substring(0, 300) + '...');
+    console.log('[analyze-meal] 🎉 Final API response with integrated insights (mealId:', finalApiResponse.mealId + ')');
     return NextResponse.json(finalApiResponse, { status: 200 });
 
   } catch (error: any) {

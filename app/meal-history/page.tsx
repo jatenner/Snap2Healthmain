@@ -6,8 +6,8 @@ export const dynamic = 'force-dynamic';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useAuth } from '../context/auth';
-import { createClient } from '@supabase/supabase-js';
+import { useAuth } from '../components/client/ClientAuthProvider';
+import { createSafeSupabaseClient } from '../lib/supabase/client';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { 
@@ -108,11 +108,8 @@ const getRelativeDate = (date: string) => {
   return null;
 };
 
-// Create optimized Supabase client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// Create optimized Supabase client with safe fallback
+const supabase = createSafeSupabaseClient();
 
 // Lazy loading image component
 const LazyMealImage = ({ src, alt, mealName }: { src: string; alt: string; mealName: string }) => {
@@ -176,6 +173,13 @@ export default function MealHistoryPage() {
         setLoadingMore(true);
       }
       
+      // Check if Supabase client is available
+      if (!supabase) {
+        setError('Database connection not available in development mode');
+        setMeals([]); // Set empty meals for development
+        return;
+      }
+      
       // Optimized query - only fetch essential fields
       const { data, error } = await supabase
         .from('meals')
@@ -236,6 +240,11 @@ export default function MealHistoryPage() {
 
   const deleteMeal = async (mealId: string) => {
     if (!confirm('Are you sure you want to delete this meal analysis?')) {
+      return;
+    }
+
+    if (!supabase) {
+      alert('Database operations not available in development mode');
       return;
     }
 
@@ -492,13 +501,13 @@ export default function MealHistoryPage() {
                                   {/* Actions */}
                                   <div className="flex gap-2">
                                     <Link href={`/analysis/${meal.id}`} className="flex-1">
-                                      <Button variant="secondary" size="sm" className="w-full bg-slate-700/50 hover:bg-slate-600/50 text-slate-100 border-slate-600/50">
+                                      <Button variant="outline" size="sm" className="w-full bg-slate-700/50 hover:bg-slate-600/50 text-slate-100 border-slate-600/50">
                                         <Eye className="h-3 w-3 mr-1" />
                                         View Analysis
                                       </Button>
                                     </Link>
                                     <Button 
-                                      variant="destructive" 
+                                      variant="default" 
                                       size="sm"
                                       onClick={() => deleteMeal(meal.id)}
                                       disabled={deletingId === meal.id}

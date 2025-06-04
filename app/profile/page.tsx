@@ -4,7 +4,7 @@
 export const dynamic = 'force-dynamic';
 
 import React, { useState } from 'react';
-import { useAuth } from '../context/auth';
+import { useAuth } from '../components/client/ClientAuthProvider';
 import { useProfile } from '../lib/profile-context';
 import { useRouter } from 'next/navigation';
 import { Button } from '../components/ui/button';
@@ -15,7 +15,7 @@ import Link from 'next/link';
 import { ArrowLeft, Camera, Save, User, CheckCircle, AlertCircle, Target, Activity, Scale, Ruler } from 'lucide-react';
 
 export default function ProfilePage() {
-  const { user, loading } = useAuth();
+  const { user, isLoading } = useAuth();
   const { profile, loading: profileLoading, updateProfile } = useProfile();
   const router = useRouter();
   const [profileLoaded, setProfileLoaded] = React.useState(false);
@@ -38,13 +38,13 @@ export default function ProfilePage() {
 
   React.useEffect(() => {
     // Only redirect if we're not loading and user is definitely not authenticated
-    if (!loading && !user) {
+    if (!isLoading && !user) {
       console.log("[ProfilePage] Not authenticated, redirecting to login");
       router.push('/login?redirectTo=/profile');
-    } else if (!loading) {
+    } else if (!isLoading) {
       setProfileLoaded(true);
     }
-  }, [loading, user, router]);
+  }, [isLoading, user, router]);
 
   React.useEffect(() => {
     if (profile) {
@@ -63,7 +63,7 @@ export default function ProfilePage() {
   }, [profile]);
 
   // Show loading screen while authentication is being determined
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center">

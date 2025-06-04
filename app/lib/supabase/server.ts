@@ -1,26 +1,29 @@
-import { createClient } from '@supabase/supabase-js';
-import { checkSupabaseConfig } from '../env-checker';
+import { createServerClient } from '@supabase/ssr';
+import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 
 /**
  * Get a server-side Supabase client
  * This is used for server components and API routes
  */
-export function getSupabaseClient() {
-  // Get and validate configuration
-  const config = checkSupabaseConfig();
+export function createClient(request?: NextRequest) {
+  const cookieStore = cookies();
   
-  if (!config.available || !config.url || !config.anonKey) {
-    console.error('[Supabase Server] Missing or invalid Supabase configuration');
-    throw new Error('Invalid Supabase configuration');
-  }
-  
-  // Create and return the client
-  const supabase = createClient(config.url, config.anonKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  });
-  
-  return supabase;
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+        set(name: string, value: string, options: any) {
+          cookieStore.set({ name, value, ...options });
+        },
+        remove(name: string, options: any) {
+          cookieStore.set({ name, value: '', ...options });
+        },
+      },
+    }
+  );
 } 

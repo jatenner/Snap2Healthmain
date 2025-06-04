@@ -3,6 +3,7 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useRouter, usePathname } from 'next/navigation';
+import { isSupabaseConfigured, createSafeSupabaseClient, shouldUseMockAuth } from '../../lib/supabase/client';
 
 // Define user type
 interface User {
@@ -19,18 +20,24 @@ interface AuthContextType {
   refreshUser: () => Promise<void>;
 }
 
-// Create auth context
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+// Create auth context with default values
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  isLoading: false,
+  isAuthenticated: false,
+  signOut: async () => {},
+  refreshUser: async () => {}
+});
 
 // Custom hook to use auth context
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    // Instead of throwing an error, return safe defaults
-    console.warn('useAuth called outside of ClientAuthProvider - returning safe defaults');
+    // Return safe defaults instead of throwing error
+    console.warn('useAuth called outside of AuthProvider - returning safe defaults');
     return {
       user: null,
-      isLoading: true,
+      isLoading: false,
       isAuthenticated: false,
       signOut: async () => {},
       refreshUser: async () => {}
@@ -43,61 +50,62 @@ export function ClientAuthProvider({ children }: { children: React.ReactNode }) 
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authInitialized, setAuthInitialized] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
-  const supabase = createClientComponentClient();
+  
+  // Check if we should use mock auth based on environment
+  const useMockAuth = shouldUseMockAuth();
 
-  // Make supabase client globally available for debugging
-  if (typeof window !== 'undefined') {
-    (window as any).supabase = supabase;
-  }
+  // Debug logging
+  console.log('[ClientAuthProvider] Environment check:', {
+    useMockAuth,
+    isClientSide: typeof window !== 'undefined',
+    NODE_ENV: process.env.NODE_ENV
+  });
 
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
+    const initializeAuth = async () => {
         setIsLoading(true);
         
-        // First check for stored authentication in localStorage before fetching
-        try {
-          const storedUserId = localStorage.getItem('auth_user_id');
-          const storedTimestamp = localStorage.getItem('auth_login_timestamp');
-          
-          if (storedUserId && storedTimestamp) {
-            const timestamp = parseInt(storedTimestamp);
-            // If timestamp is less than 24 hours old, consider it valid
-            if (Date.now() - timestamp < 24 * 60 * 60 * 1000) {
-              console.log('[ClientAuthProvider] Found valid stored auth', storedUserId);
-              // Set initial state from localStorage to prevent flicker
-              setUser({ id: storedUserId });
+      // For mock/placeholder environments, use development auth
+      if (useMockAuth) {
+        console.log('[ClientAuthProvider] Using mock authentication for development');
+        setUser({ id: 'dev-user-mock', email: 'dev@example.com' });
               setIsAuthenticated(true);
-            }
-          }
-        } catch (e) {
-          console.error('[ClientAuthProvider] Error checking localStorage:', e);
-        }
+        setIsLoading(false);
+        return;
+      }
+
+      // For real Supabase environments
+      try {
+        const supabase = createClientComponentClient();
         
-        // First try to refresh the session to ensure it's valid
-        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-        if (!refreshError && refreshData.session) {
-          console.log('[ClientAuthProvider] Session refreshed successfully');
+        // Get initial session
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('[ClientAuthProvider] Session error:', error);
+          setUser(null);
+          setIsAuthenticated(false);
+          setIsLoading(false);
+          return;
+        }
+
+        if (session?.user) {
           setUser({
-            id: refreshData.session.user.id,
-            email: refreshData.session.user.email
+            id: session.user.id,
+            email: session.user.email
           });
           setIsAuthenticated(true);
-          
-          // Cache auth info
-          try {
-            localStorage.setItem('auth_login_timestamp', Date.now().toString());
-            localStorage.setItem('auth_user_id', refreshData.session.user.id);
-            localStorage.setItem('auth_user_email', refreshData.session.user.email || '');
-          } catch (e) {
-            console.error('[ClientAuthProvider] Error saving auth data to localStorage:', e);
-          }
         } else {
-          // If refresh failed, get session as fallback
-          const { data: { session } } = await supabase.auth.getSession();
+          setUser(null);
+          setIsAuthenticated(false);
+        }
+
+        // Listen for auth changes
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+          async (event, session) => {
+            console.log('[ClientAuthProvider] Auth state changed:', event);
           
           if (session?.user) {
             setUser({
@@ -105,161 +113,89 @@ export function ClientAuthProvider({ children }: { children: React.ReactNode }) 
               email: session.user.email
             });
             setIsAuthenticated(true);
-            
-            // Cache auth info
-            try {
-              localStorage.setItem('auth_login_timestamp', Date.now().toString());
-              localStorage.setItem('auth_user_id', session.user.id);
-              localStorage.setItem('auth_user_email', session.user.email || '');
-            } catch (e) {
-              console.error('[ClientAuthProvider] Error saving auth data to localStorage:', e);
-            }
           } else {
             setUser(null);
             setIsAuthenticated(false);
-            
-            // Clean localStorage if no session
-            try {
-              localStorage.removeItem('auth_login_timestamp');
-              localStorage.removeItem('auth_user_id');
-              localStorage.removeItem('auth_user_email');
-            } catch (e) {
-              console.error('[ClientAuthProvider] Error clearing localStorage:', e);
             }
+            setIsLoading(false);
           }
-        }
-      } catch (error) {
-        console.error('[ClientAuthProvider] Auth error:', error);
-        setUser(null);
-        setIsAuthenticated(false);
-      } finally {
+        );
+
         setIsLoading(false);
-        setAuthInitialized(true);
-      }
-    };
 
-    checkAuth();
-    
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log(`[ClientAuthProvider] Auth state changed: ${event}`);
-      
-      if (session?.user) {
-        setUser({
-          id: session.user.id,
-          email: session.user.email
-        });
-        setIsAuthenticated(true);
-        
-        // Cache auth info
-        try {
-          localStorage.setItem('auth_login_timestamp', Date.now().toString());
-          localStorage.setItem('auth_user_id', session.user.id);
-          localStorage.setItem('auth_user_email', session.user.email || '');
-        } catch (e) {
-          console.error('[ClientAuthProvider] Error saving auth data to localStorage:', e);
-        }
-      } else {
+        // Cleanup subscription on unmount
+        return () => {
+          subscription.unsubscribe();
+        };
+      } catch (error) {
+        console.error('[ClientAuthProvider] Initialization error:', error);
         setUser(null);
         setIsAuthenticated(false);
-        
-        // Clean localStorage if no session
-        try {
-          localStorage.removeItem('auth_login_timestamp');
-          localStorage.removeItem('auth_user_id');
-          localStorage.removeItem('auth_user_email');
-        } catch (e) {
-          console.error('[ClientAuthProvider] Error clearing localStorage:', e);
-        }
+        setIsLoading(false);
       }
-      
-      setIsLoading(false);
-    });
-
-    return () => {
-      subscription.unsubscribe();
     };
-  }, [supabase]);
 
-  // Function to sign out
+    initializeAuth();
+  }, [useMockAuth]);
+
   const signOut = async () => {
-    try {
-      await supabase.auth.signOut();
+    if (useMockAuth) {
       setUser(null);
       setIsAuthenticated(false);
-      
-      // Clean localStorage
-      try {
-        localStorage.removeItem('auth_login_timestamp');
-        localStorage.removeItem('auth_user_id');
-        localStorage.removeItem('auth_user_email');
-      } catch (e) {
-        console.error('[ClientAuthProvider] Error clearing localStorage:', e);
+      router.push('/');
+      return;
+    }
+
+    try {
+      const supabase = createClientComponentClient();
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('[ClientAuthProvider] Sign out error:', error);
       }
-      
+      setUser(null);
+      setIsAuthenticated(false);
       router.push('/');
     } catch (error) {
-      console.error('[ClientAuthProvider] Error signing out:', error);
+      console.error('[ClientAuthProvider] Sign out error:', error);
     }
   };
 
-  // Function to manually refresh the auth state
   const refreshUser = async () => {
+    if (useMockAuth) {
+      return; // Nothing to refresh for mock auth
+    }
+
     try {
-      setIsLoading(true);
+      const supabase = createClientComponentClient();
+      const { data: { user }, error } = await supabase.auth.getUser();
       
-      // First try to refresh
-      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-      if (!refreshError && refreshData.session) {
-        setUser({
-          id: refreshData.session.user.id,
-          email: refreshData.session.user.email
-        });
-        setIsAuthenticated(true);
+      if (error) {
+        console.error('[ClientAuthProvider] Refresh user error:', error);
         return;
       }
       
-      // Fallback to getSession
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session?.user) {
+      if (user) {
         setUser({
-          id: session.user.id,
-          email: session.user.email
+          id: user.id,
+          email: user.email
         });
         setIsAuthenticated(true);
-      } else {
-        setUser(null);
-        setIsAuthenticated(false);
       }
     } catch (error) {
-      console.error('[ClientAuthProvider] Error refreshing user:', error);
-    } finally {
-      setIsLoading(false);
+      console.error('[ClientAuthProvider] Refresh user error:', error);
     }
   };
 
-  // Show loading indicator while initializing auth
-  if (!authInitialized) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900">
-        <div className="bg-gray-800 p-6 rounded-lg text-white">
-          <div className="animate-pulse">Initializing authentication...</div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <AuthContext.Provider
-      value={{
+  const contextValue: AuthContextType = {
         user,
         isLoading,
         isAuthenticated,
         signOut,
         refreshUser
-      }}
-    >
+  };
+
+  return (
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

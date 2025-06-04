@@ -402,7 +402,7 @@ export default function UploadForm() {
           {isSubmitting ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Analyzing...
+              Analyzing meal & generating AI insights...
             </>
           ) : (
             <>

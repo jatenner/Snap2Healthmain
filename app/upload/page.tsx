@@ -1,134 +1,298 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
+import { useDropzone } from 'react-dropzone';
 import { useRouter } from 'next/navigation';
-import MealUploader from '../../src/components/MealUploader';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import Script from 'next/script';
-import { Loader2, CheckCircle } from 'lucide-react';
+import { useAuth } from '../components/client/ClientAuthProvider';
+import { useProfile } from '../lib/profile-context';
+import Image from 'next/image';
 import { Button } from '../components/ui/button';
-import DebugInfo from './debug-info';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Upload, Camera, Image as ImageIcon, Loader2 } from 'lucide-react';
 
 export default function UploadPage() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [analysisId, setAnalysisId] = useState<string | null>(null);
-  const [showSuccess, setShowSuccess] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [mealSpecificGoal, setMealSpecificGoal] = useState('');
+  const [isUsingCamera, setIsUsingCamera] = useState(false);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [error, setError] = useState('');
+  
   const router = useRouter();
+  const { user } = useAuth();
+  const { profile } = useProfile();
 
-  // Check for last analysis ID on mount
-  useEffect(() => {
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    const file = acceptedFiles[0];
+    if (file) {
+      setSelectedFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
+      setError('');
+    }
+  }, []);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      'image/*': ['.png', '.jpg', '.jpeg', '.webp']
+    },
+    maxSize: 10 * 1024 * 1024, // 10MB
+    multiple: false,
+  });
+
+  const startCamera = async () => {
     try {
-      const lastId = localStorage.getItem('lastAnalysisId') || localStorage.getItem('last_meal_id');
-      if (lastId) {
-        setAnalysisId(lastId);
-      }
-    } catch (e) {
-      console.error('Error checking localStorage:', e);
-    }
-  }, []);
-
-  // Listen for analysis completion events
-  useEffect(() => {
-    const handleAnalysisComplete = (event: CustomEvent) => {
-      const newMealId = event.detail?.mealId;
-      if (newMealId) {
-        console.log('[upload] Analysis complete event received with mealId:', newMealId);
-        setAnalysisId(newMealId);
-        setShowSuccess(true);
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' } 
+      });
+      setStream(mediaStream);
+      setIsUsingCamera(true);
+      setError('');
+    } catch (err) {
+      setError('Camera access denied or not available');
+      console.error('Camera error:', err);
       }
     };
 
-    window.addEventListener('analysisComplete', handleAnalysisComplete as EventListener);
-    
-    return () => {
-      window.removeEventListener('analysisComplete', handleAnalysisComplete as EventListener);
-    };
-  }, []);
+  const capturePhoto = () => {
+    if (!stream) return;
 
-  const handleUploadStart = () => {
-    setIsLoading(true);
-    setAnalysisId(null);
-    setError(null);
-    setShowSuccess(false);
+    const video = document.querySelector('video');
+    if (!video) return;
+    
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    context.drawImage(video, 0, 0);
+    
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const file = new File([blob], 'camera-photo.jpg', { type: 'image/jpeg' });
+      setSelectedFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
+      stopCamera();
+    }, 'image/jpeg', 0.8);
   };
 
-  const handleError = (err: Error) => {
-    console.error('Upload error:', err);
-    setError(err.message);
-    setIsLoading(false);
+  const stopCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+    }
+    setIsUsingCamera(false);
   };
 
-  const handleAnalysisComplete = (result: any) => {
-    setIsLoading(false);
+  const handleAnalyze = async () => {
+    if (!selectedFile) {
+      setError('Please select an image first');
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setError('');
+
+    try {
+      const analyzeFormData = new FormData();
+      analyzeFormData.append('file', selectedFile);
+      if (mealSpecificGoal) {
+        analyzeFormData.append('goal', mealSpecificGoal);
+      } else if (profile?.goal) {
+        analyzeFormData.append('goal', profile.goal);
+      }
+
+      const analyzeResponse = await fetch('/api/analyze-meal', {
+        method: 'POST',
+        body: analyzeFormData,
+      });
+
+      if (!analyzeResponse.ok) {
+        throw new Error(`Analysis failed: ${analyzeResponse.status}`);
+      }
+
+      const result = await analyzeResponse.json();
     
-    if (result && result.mealId) {
-      setAnalysisId(result.mealId);
-      setShowSuccess(true);
+      if (result.success && result.mealId) {
+        router.push(`/analysis/${result.mealId}`);
+      } else {
+        throw new Error(result.error || 'Analysis failed');
+    }
+    } catch (err: any) {
+      console.error('Analysis error:', err);
+      setError(err.message || 'Failed to analyze meal');
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
-  const goToAnalysis = () => {
-    if (analysisId) {
-      router.push(`/analysis/${analysisId}`);
-    }
+  const resetUpload = () => {
+    setSelectedFile(null);
+    setPreviewUrl('');
+    setMealSpecificGoal('');
+    setError('');
   };
 
   return (
-    <div className="container mx-auto py-8">
-      <Card className="max-w-md mx-auto">
+    <div className="min-h-screen bg-gray-900 text-white">
+      <div className="container mx-auto py-8 px-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl md:text-4xl font-bold text-white mb-4">
+              Analyze Your Meal
+            </h1>
+            <p className="text-lg text-gray-300 mb-6">
+              Take a photo or upload an image of your meal for AI analysis
+            </p>
+            
+            {/* Goal Input Section - Always Visible */}
+            <Card className="bg-gray-800 border-gray-700 max-w-md mx-auto mb-6">
+              <CardContent className="p-4">
+                <div className="space-y-2">
+                  <Label htmlFor="primary-goal" className="text-gray-200 text-sm font-medium">
+                    Analysis Goal
+                  </Label>
+                  <Input
+                    id="primary-goal"
+                    value={mealSpecificGoal}
+                    onChange={(e) => setMealSpecificGoal(e.target.value)}
+                    placeholder={profile?.goal || "e.g., Weight loss, Muscle gain, General health"}
+                    className="bg-gray-700 border-gray-600 text-white"
+                  />
+                  <p className="text-xs text-gray-400">
+                    This goal will be used to provide personalized nutrition insights
+                    {profile?.goal && ` (Default: ${profile.goal})`}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Upload Section */}
+            <Card className="bg-gray-800 border-gray-700">
         <CardHeader>
-          <CardTitle className="text-center">Analyze Your Meal</CardTitle>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <Upload className="w-5 h-5" />
+                  Upload or Capture
+                </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Show success notification */}
-          {showSuccess && analysisId && (
-            <div className="mb-4 p-3 bg-green-50 rounded-md border border-green-200">
-              <div className="flex items-center text-green-700 mb-2">
-                <CheckCircle className="h-5 w-5 mr-2" />
-                <span className="font-medium">Analysis complete!</span>
+                {!isUsingCamera ? (
+                  <div
+                    {...getRootProps()}
+                    className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+                      isDragActive
+                        ? 'border-blue-400 bg-blue-50/10'
+                        : 'border-gray-600 hover:border-gray-500'
+                    }`}
+                  >
+                    <input {...getInputProps()} />
+                    <ImageIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    {isDragActive ? (
+                      <p className="text-blue-400">Drop your meal photo here...</p>
+                    ) : (
+                      <div className="text-gray-300">
+                        <p className="mb-2">Drag & drop a meal photo here</p>
+                        <p className="text-sm text-gray-400">or click to browse</p>
+                      </div>
+                    )}
               </div>
-              <Button 
-                onClick={goToAnalysis}
-                className="w-full bg-green-600 hover:bg-green-700 text-white"
-              >
-                View Analysis
+                ) : (
+                  <div className="space-y-4">
+                    <video
+                      autoPlay
+                      muted
+                      className="w-full h-64 bg-black rounded-lg"
+                      ref={(video) => {
+                        if (video && stream) {
+                          video.srcObject = stream;
+                        }
+                      }}
+                    />
+                    <div className="flex gap-2">
+                      <Button onClick={capturePhoto} className="flex-1">
+                        <Camera className="w-4 h-4 mr-2" />
+                        Capture Photo
+                      </Button>
+                      <Button onClick={stopCamera} variant="outline">
+                        Cancel
               </Button>
             </div>
-          )}
-
-          {/* Show error message */}
-          {error && (
-            <div className="mb-4 p-3 bg-red-50 rounded-md border border-red-200">
-              <p className="text-red-700 text-sm">{error}</p>
             </div>
           )}
 
-          {/* Main uploader component */}
-          <MealUploader />
+                <div className="flex gap-2">
+                  {!isUsingCamera && (
+                    <Button onClick={startCamera} variant="outline" className="flex-1">
+                      <Camera className="w-4 h-4 mr-2" />
+                      Use Camera
+                    </Button>
+                  )}
+                </div>
 
-          {/* Optional loading state */}
-          {isLoading && (
-            <div className="flex items-center justify-center p-4">
-              <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
-              <span className="ml-2 text-gray-600">Processing your meal...</span>
+                {error && (
+                  <div className="bg-red-900/20 border border-red-800 rounded-lg p-3">
+                    <p className="text-red-200 text-sm">{error}</p>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Helper scripts */}
-      <Script id="redirect-helper" strategy="afterInteractive">
-        {`
-          window.redirectToAnalysis = function(mealId) {
-            console.log('Redirecting to analysis for meal:', mealId);
-            window.location.href = '/analysis/' + mealId;
-          };
-        `}
-      </Script>
-
-      {/* Debug info to verify correct deployment */}
-      <DebugInfo />
+            {/* Preview and Analysis Section */}
+            <Card className="bg-gray-800 border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-white">Preview & Analyze</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {previewUrl ? (
+                  <div className="space-y-4">
+                    <div className="relative rounded-lg overflow-hidden">
+                      <Image
+                        src={previewUrl}
+                        alt="Meal preview"
+                        width={400}
+                        height={300}
+                        className="w-full h-64 object-cover"
+                      />
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleAnalyze}
+                        disabled={isAnalyzing}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700"
+                      >
+                        {isAnalyzing ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Analyzing...
+                          </>
+                        ) : (
+                          'Analyze Meal'
+                        )}
+                      </Button>
+                      <Button onClick={resetUpload} variant="outline">
+                        Reset
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-64 text-gray-400">
+                    <ImageIcon className="w-16 h-16 mb-4" />
+                    <p>No image selected</p>
+                    <p className="text-sm">Upload or capture a photo to get started</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
     </div>
   );
 } 

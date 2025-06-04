@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from './supabase/client';
-import { useAuth } from '../context/auth';
+import { useAuth } from '../components/client/ClientAuthProvider';
 import { saveProfileData, loadProfileData, initializeProfilePersistence } from './profile-persistence';
 
 // Profile interface
@@ -146,9 +146,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const createMinimalProfile = async () => {
     if (!user?.id) return;
     
+    // Adjust to use available user properties
+    const defaultName = user.email ? user.email.split('@')[0] : 'User';
     const minimalProfile: UserProfile = {
       id: user.id,
-      full_name: user.user_metadata?.username || user.email?.split('@')[0] || 'User',
+      full_name: defaultName, // Use derived defaultName
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };

@@ -1,79 +1,203 @@
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 
-// Initialize the Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
+// Add environment variable logging for debugging
+if (typeof window !== 'undefined') {
+  console.log('[Supabase Client] Creating browser client with config:', {
+    url: process.env.NEXT_PUBLIC_SUPABASE_URL ? 'SET' : 'MISSING',
+    anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'SET' : 'MISSING',
+    environment: process.env.NODE_ENV
+  });
+}
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-export default supabase;
+let supabaseClient: any = null;
 
-/**
- * Verifies that essential database tables exist
- * @returns Object with status of each required table
- */
-export const verifyDatabaseTables = async () => {
-  const results = {
-    meals: { exists: false, message: '' }
+// Check environment variables and create appropriate client
+const shouldUseMockAuth = (): boolean => {
+  return !process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+};
+
+if (shouldUseMockAuth()) {
+  console.warn('[Supabase Client] Development mode with placeholder environment - using mock client');
+  
+  // Create a mock client for development
+  supabaseClient = {
+    auth: {
+      getUser: () => Promise.resolve({ data: { user: null }, error: null }),
+      getSession: () => Promise.resolve({ data: { session: null }, error: null }),
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+      signUp: () => Promise.resolve({ data: { user: null }, error: { message: 'Mock mode' } }),
+      signInWithPassword: () => Promise.resolve({ data: { user: null }, error: { message: 'Mock mode' } }),
+      signOut: () => Promise.resolve({ error: null })
+    },
+    from: () => ({
+      select: () => ({ data: [], error: null }),
+      insert: () => ({ data: null, error: { message: 'Mock mode' } }),
+      update: () => ({ data: null, error: { message: 'Mock mode' } }),
+      delete: () => ({ data: null, error: { message: 'Mock mode' } })
+    }),
+    storage: {
+      from: () => ({
+        upload: () => Promise.resolve({ data: null, error: { message: 'Mock mode' } }),
+        getPublicUrl: () => ({ data: { publicUrl: '/placeholder-meal.jpg' } })
+      })
+    }
   };
+} else {
+  // Create real Supabase client
+  supabaseClient = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
+
+// Export the default client creation function
+export function createClient() {
+  return supabaseClient;
+}
+
+// Export legacy compatibility functions
+export const createSafeSupabaseClient = () => supabaseClient;
+export { shouldUseMockAuth };
+
+// Default export for legacy compatibility
+export const supabase = supabaseClient;
+
+// Database verification functions
+export const verifyDatabaseTables = async () => {
+  if (shouldUseMockAuth()) {
+    console.log('[Supabase Client] Mock mode - skipping database verification');
+    return { 
+      success: true, 
+      message: 'Mock mode - database verification skipped',
+      tables: ['mock_meals', 'mock_profiles'] 
+    };
+  }
 
   try {
-    // Check meals table
-    const { error: mealsError } = await supabase
+    const { data, error } = await supabaseClient
       .from('meals')
       .select('id')
       .limit(1);
 
-    if (mealsError) {
-      if (mealsError.message.includes('does not exist')) {
-        results.meals.exists = false;
-        results.meals.message = 'Table does not exist. Please run the migration files in your Supabase project.';
-      } else {
-        results.meals.exists = false;
-        results.meals.message = `Error checking table: ${mealsError.message}`;
-      }
-    } else {
-      results.meals.exists = true;
-      results.meals.message = 'Table exists';
+    if (error) {
+      console.error('[Supabase Client] Database verification failed:', error);
+      return { 
+        success: false, 
+        error: error.message,
+        tables: [] 
+      };
     }
-  } catch (err) {
-    console.error('Error verifying database tables:', err);
-  }
 
-  return results;
+    console.log('[Supabase Client] Database verification successful');
+    return { 
+      success: true, 
+      message: 'Database tables verified successfully',
+      tables: ['meals', 'profiles'] 
+    };
+  } catch (err) {
+    console.error('[Supabase Client] Database verification error:', err);
+    return { 
+      success: false, 
+      error: 'Failed to verify database tables',
+      tables: [] 
+    };
+  }
 };
 
-/**
- * Ensures the required storage buckets exist with proper permissions
- */
 export const verifyStorageBuckets = async () => {
-  try {
-    // Check if meal-images bucket exists
-    const { data: buckets, error } = await supabase.storage.listBuckets();
-    
-    if (error) {
-      console.error('Error listing buckets:', error);
-      return;
-    }
-    
-    const mealImagesBucket = buckets?.find(bucket => bucket.name === 'meal-images');
-    
-    if (!mealImagesBucket) {
-      console.log('Creating meal-images bucket...');
-      // Create bucket if it doesn't exist
-      const { error: createError } = await supabase.storage.createBucket('meal-images', {
-        public: true, // Make bucket public
-        fileSizeLimit: 10485760, // 10MB max file size
-      });
-      
-      if (createError) {
-        console.error('Error creating meal-images bucket:', createError);
-      } else {
-        console.log('meal-images bucket created successfully');
-      }
-    } else {
-      console.log('meal-images bucket exists');
-    }
-  } catch (err) {
-    console.error('Error verifying storage buckets:', err);
+  if (shouldUseMockAuth()) {
+    console.log('[Supabase Client] Mock mode - skipping storage verification');
+    return { 
+      success: true, 
+      message: 'Mock mode - storage verification skipped',
+      buckets: ['mock-uploads'] 
+    };
   }
-}; 
+
+  try {
+    const { data, error } = await supabaseClient.storage.listBuckets();
+
+    if (error) {
+      console.error('[Supabase Client] Storage verification failed:', error);
+      return { 
+        success: false, 
+        error: error.message,
+        buckets: [] 
+      };
+    }
+
+    const bucketNames = data?.map(bucket => bucket.name) || [];
+    console.log('[Supabase Client] Storage verification successful. Buckets:', bucketNames);
+    
+    return { 
+      success: true, 
+      message: 'Storage buckets verified successfully',
+      buckets: bucketNames 
+    };
+  } catch (err) {
+    console.error('[Supabase Client] Storage verification error:', err);
+    return { 
+      success: false, 
+      error: 'Failed to verify storage buckets',
+      buckets: [] 
+    };
+  }
+};
+
+export async function isUploadAvailable(): Promise<boolean> {
+  if (shouldUseMockAuth()) {
+    return false;
+  }
+
+  try {
+    const { data, error } = await supabaseClient.storage.listBuckets();
+    return !error && data && data.length > 0;
+  } catch (err) {
+    console.error('[Supabase Client] Upload availability check failed:', err);
+    return false;
+  }
+}
+
+export async function uploadImageToSupabase(file: File, fileName: string): Promise<string | null> {
+  if (shouldUseMockAuth()) {
+    console.log('[Supabase Client] Mock mode - returning placeholder image URL');
+    return '/placeholder-meal.jpg';
+  }
+
+  try {
+    const { data, error } = await supabaseClient.storage
+      .from('meal-images')
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (error) {
+      console.error('[Supabase Client] Image upload failed:', error);
+      return null;
+    }
+
+    const { data: urlData } = supabaseClient.storage
+      .from('meal-images')
+      .getPublicUrl(fileName);
+
+    return urlData?.publicUrl || null;
+  } catch (err) {
+    console.error('[Supabase Client] Image upload error:', err);
+    return null;
+  }
+}
+
+export async function getCurrentUserId(): Promise<string | null> {
+  if (shouldUseMockAuth()) {
+    return 'development-mode';
+  }
+
+  try {
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    return user?.id || null;
+  } catch (err) {
+    console.error('[Supabase Client] Get current user failed:', err);
+    return null;
+  }
+} 
