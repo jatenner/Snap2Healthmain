@@ -80,8 +80,11 @@ temp/
 *.tsbuildinfo
 .vercel
 
-# Source directories that shouldn't be deployed
+# Legacy directories that aren't used in app/ router
 src/
+lib/
+components/
+pages/
 
 # Test files
 test/
@@ -105,7 +108,6 @@ docs/
 # Build tools
 webpack.config.js
 rollup.config.js
-tsconfig.json
 
 # Prisma
 prisma
