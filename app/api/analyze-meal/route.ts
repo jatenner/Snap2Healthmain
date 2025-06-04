@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '../../lib/supabase/server';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import { getFullUserProfile } from '../../lib/profile-server-utils';
 import { analyzeMealWithOpenAI } from '../../lib/openai-utils';
@@ -97,57 +97,12 @@ export async function POST(request: NextRequest) {
 
   try {
     // Create authenticated Supabase client
-    const cookieStore = cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    const supabase = createClient();
 
     // Create admin client for database and storage operations
-    const supabaseAdmin = createClient(
+    const supabaseAdmin = createSupabaseClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        },
-        global: {
-          fetch: async (url, options: RequestInit = {}) => {
-            const { signal: existingSignal, ...restOptions } = options;
-            let timeoutSignal: AbortSignal | undefined;
-            let combinedSignal: AbortSignal | undefined = (existingSignal === null) ? undefined : existingSignal;
-
-            if (!combinedSignal || !combinedSignal.aborted) {
-              const controller = new AbortController();
-              timeoutSignal = controller.signal;
-              setTimeout(() => controller.abort(), 15000); // Reduced from 30s to 15s for faster timeouts
-
-              if (existingSignal) {
-                // Combine signals if an external signal already exists
-                const abortHandler = () => {
-                  controller.abort();
-                  existingSignal.removeEventListener('abort', abortHandler);
-                };
-                existingSignal.addEventListener('abort', abortHandler);
-                
-                // If existing signal is already aborted, abort immediately
-                if (existingSignal.aborted) {
-                    controller.abort();
-                }
-              }
-              combinedSignal = timeoutSignal;
-            }
-            
-            try {
-              return await fetch(url, { ...restOptions, signal: combinedSignal });
-            } catch (error) {
-              // Simplified error handling for speed
-              if (error instanceof Error && error.name === 'AbortError') {
-                console.warn(`[supabaseAdmin fetch] Request timed out: ${url}`);
-              }
-              throw error;
-            }
-          }
-        }
-      }
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
     // Verify authentication (skip in development mode)

@@ -7,22 +7,22 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/auth';
 import ProfileForm from '../../../components/ProfileForm';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '../../lib/supabase/client';
 import type { Database } from '../../../lib/database.types';
 
 export default function ProfileEditPage() {
-  const { user, isLoading } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const supabase = createClientComponentClient<Database>();
+  const supabase = createClient();
 
   useEffect(() => {
     // If not loading and no user, redirect to login
-    if (!isLoading && !user) {
+    if (!loading && !user) {
       router.push('/signin?redirectTo=%2Fprofile%2Fedit');
     }
-  }, [user, isLoading, router]);
+  }, [user, loading, router]);
   
   // Handle profile form submission
   const handleProfileSubmit = async (profileData: any) => {
@@ -76,7 +76,7 @@ export default function ProfileEditPage() {
   };
   
   // Show loading state
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="flex justify-center items-center min-h-[50vh]">
         <div className="animate-pulse text-center">
