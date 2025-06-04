@@ -99,7 +99,7 @@ CREATE POLICY "Users can insert their own meals"
           return;
         }
         
-        const mealImagesBucket = buckets.find(bucket => bucket.name === 'meal-images');
+        const mealImagesBucket = buckets?.find((bucket: any) => bucket.name === 'meal-images');
         if (mealImagesBucket) {
           setBucketStatus({ exists: true, message: 'Bucket exists' });
         } else {

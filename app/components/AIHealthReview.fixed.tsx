@@ -6,7 +6,6 @@ import { UserProfile } from '@/lib/profile-utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { getEffectiveProfile, getDefaultProfile } from '@/lib/profile-utils';
-import { ArrowPathIcon } from '@heroicons/react/24/outline';
 
 interface AIHealthReviewProps {
   mealId: string;
@@ -325,7 +324,7 @@ export default function AIHealthReview({ mealId, userProfile }: AIHealthReviewPr
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Personalized Health Insights</h2>
-        {loading && <ArrowPathIcon className="h-4 w-4 animate-spin" />}
+        {loading && <div className="h-4 w-4 border-2 border-gray-800 rounded-full animate-spin"></div>}
       </div>
       
       {loading ? (

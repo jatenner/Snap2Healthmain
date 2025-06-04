@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+const path = require('path');
+
 const nextConfig = {
   // Experimental features
   experimental: {
@@ -18,13 +20,33 @@ const nextConfig = {
     unoptimized: false,
   },
 
-  // Skip type checking and linting during builds for faster deployment
+  // Temporarily disable TypeScript checks for build to succeed
   typescript: {
     ignoreBuildErrors: true,
   },
   
   eslint: {
     ignoreDuringBuilds: true,
+  },
+
+  // Webpack configuration for better module resolution
+  webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
+    // Add path aliases
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@': path.resolve(__dirname, './app'),
+      '@/components': path.resolve(__dirname, './app/components'),
+      '@/lib': path.resolve(__dirname, './app/lib'),
+      '@/api': path.resolve(__dirname, './app/api'),
+    };
+
+    // Ensure case-sensitive module resolution
+    config.resolve.modules = [
+      path.resolve(__dirname, 'app'),
+      'node_modules'
+    ];
+
+    return config;
   },
 
   // Simple headers

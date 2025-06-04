@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useAuth } from '../../context/auth';
+import { useAuth } from './ClientAuthProvider';
 import { Button } from '../ui/button';
 
 export default function AuthStatusButton() {
-  const { user, loading, logout } = useAuth();
+  const { user, isLoading, signOut } = useAuth();
 
-  if (loading) {
+  if (isLoading) {
     return (
       <button
         className="bg-gray-700 text-gray-300 px-3 py-1.5 rounded-md text-sm font-medium"
@@ -49,7 +49,7 @@ export default function AuthStatusButton() {
               Meal History
             </Link>
             <button
-              onClick={logout}
+              onClick={signOut}
               className="block w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-700 hover:text-red-300"
             >
               Sign Out

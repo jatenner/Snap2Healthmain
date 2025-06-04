@@ -421,13 +421,13 @@ export async function POST(request: NextRequest) {
 
       try {
         // Ensure analysisResult has all expected fields, with defaults if necessary
-        const ar = analysisResult || {}; // Use 'ar' for brevity
+        const ar: any = analysisResult || {}; // Use 'ar' for brevity, cast to any for flexible property access
 
         const mealToInsert = {
           user_id: userId,
           meal_name: ar.mealName || 'Untitled Meal',
           image_url: publicUrl,
-          goal: ar.goal || goal,
+          goal: goal, // Use the goal from the request parameter, not from analysis result
           // Populate top-level nutritional fields
           calories: ar.calories || 0,
           protein: ar.protein || 0,
@@ -493,7 +493,7 @@ export async function POST(request: NextRequest) {
             metabolic_insights: ar.metabolicInsights || '',
             personalized_health_insights: ar.personalizedHealthInsights || '',
             personalized_insights: personalizedInsights, // Add insights to analysis object
-            goal: ar.goal || goal, // Ensure goal is in analysis, prioritize from OpenAI, fallback to form/profile goal
+            goal: goal, // Ensure goal is in analysis, prioritize from OpenAI, fallback to form/profile goal
           }
         };
         

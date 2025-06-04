@@ -410,10 +410,10 @@ export async function GET(req: NextRequest) {
         try {
           const directResult = await executeDirectQuery(supabaseUrl, supabaseKey, sql);
           return NextResponse.json(directResult);
-        } catch (directError) {
+        } catch (directError: any) {
           console.error("Direct execution failed:", directError);
           return NextResponse.json(
-            { error: `Failed to create execute_sql function: ${directError.message}` },
+            { error: `SQL execution failed: ${directError?.message || 'Unknown error'}` },
             { status: 500 }
           );
         }
@@ -457,10 +457,10 @@ export async function GET(req: NextRequest) {
               console.log("Attempting emergency direct query execution...");
               const directResult = await executeDirectQuery(supabaseUrl, supabaseKey, sql);
               return NextResponse.json(directResult);
-            } catch (directError) {
+            } catch (directError: any) {
               console.error("Direct execution failed:", directError);
               return NextResponse.json(
-                { error: `SQL execution failed: ${directError.message}` },
+                { error: `SQL execution failed: ${directError?.message || 'Unknown error'}` },
                 { status: 500 }
               );
             }
@@ -482,7 +482,7 @@ export async function GET(req: NextRequest) {
         console.log("Attempting emergency query execution for schema changes");
         const result = await executeDirectQuery(supabaseUrl, supabaseKey, sql);
         return NextResponse.json(result);
-      } catch (directError) {
+      } catch (directError: any) {
         console.error("Emergency SQL execution failed:", directError);
         return NextResponse.json(
           { error: error.message || "SQL execution failed" },
