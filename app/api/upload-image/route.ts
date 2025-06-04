@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from '../../lib/supabase/server';
 import { cookies } from 'next/headers';
 
 // Force this route to be dynamic

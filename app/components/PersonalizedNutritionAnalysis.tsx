@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './client/ClientAuthProvider';
 import { safeForEach, safeMap, safeFilter, getArrayOrEmpty } from '../lib/utils';
-import { createClient } from '@/lib/supabase/client';
+import { createClient } from '../lib/supabase/client';
 import ReactMarkdown from 'react-markdown';
 
 // Enhanced interfaces to support all nutrient data
