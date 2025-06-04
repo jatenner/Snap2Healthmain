@@ -29,22 +29,34 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
 
-  // Webpack configuration for better module resolution
+  // Enhanced Webpack configuration for better Vercel compatibility
   webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
-    // Add path aliases
+    const appDir = path.resolve(__dirname, './app');
+    
+    // Enhanced path aliases with absolute paths
     config.resolve.alias = {
       ...config.resolve.alias,
-      '@': path.resolve(__dirname, './app'),
-      '@/components': path.resolve(__dirname, './app/components'),
-      '@/lib': path.resolve(__dirname, './app/lib'),
-      '@/api': path.resolve(__dirname, './app/api'),
+      '@': appDir,
+      '@/components': path.join(appDir, 'components'),
+      '@/lib': path.join(appDir, 'lib'),
+      '@/api': path.join(appDir, 'api'),
+      '@/app': appDir,
     };
 
-    // Ensure case-sensitive module resolution
+    // Ensure proper module resolution order
     config.resolve.modules = [
-      path.resolve(__dirname, 'app'),
+      appDir,
+      path.resolve(__dirname, 'node_modules'),
       'node_modules'
     ];
+
+    // Enhanced resolve options for better compatibility
+    config.resolve.extensions = ['.ts', '.tsx', '.js', '.jsx', '.json', ...config.resolve.extensions];
+    
+    // Ensure case-sensitive resolution
+    if (!dev) {
+      config.resolve.symlinks = false;
+    }
 
     return config;
   },
