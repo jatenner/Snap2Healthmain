@@ -4,8 +4,8 @@
 export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase/client';
-import { useAuth } from '../../context/auth';
+import { createClient } from '../../lib/supabase/client';
+import { useAuth } from '../../components/client/ClientAuthProvider';
 
 export default function SetupPage() {
   const [tableStatus, setTableStatus] = useState<any>(null);
@@ -55,7 +55,7 @@ CREATE POLICY "Users can insert their own meals"
     setIsLoading(true);
     try {
       // Check meals table 
-      const { error: mealsError } = await supabase
+      const { error: mealsError } = await createClient()
         .from('meals')
         .select('id')
         .limit(1);
@@ -92,7 +92,7 @@ CREATE POLICY "Users can insert their own meals"
   useEffect(() => {
     const checkBucket = async () => {
       try {
-        const { data: buckets, error } = await supabase.storage.listBuckets();
+        const { data: buckets, error } = await createClient().storage.listBuckets();
         
         if (error) {
           setBucketStatus({ exists: false, message: `Error checking bucket: ${error.message}` });
