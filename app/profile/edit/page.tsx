@@ -5,13 +5,14 @@ export const dynamic = 'force-dynamic';
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/components/client/ClientAuthProvider';
+import { useAuth } from '../../components/client/ClientAuthProvider';
 import ProfileForm from '../../../components/ProfileForm';
-import { createClient } from '@/lib/supabase/client';
+import { createClient } from '../../lib/supabase/client';
 import type { Database } from '../../../lib/database.types';
 
 export default function ProfileEditPage() {
-  const { user, loading } = useAuth();
+  const { user, isLoading } = useAuth();
+  const loading = isLoading;
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
