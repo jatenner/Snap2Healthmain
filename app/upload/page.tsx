@@ -12,7 +12,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Upload, Camera, Image as ImageIcon, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import FoodUpload from '@/components/FoodUpload';
+import FoodUpload from '../components/FoodUpload';
 
 export default function UploadPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);

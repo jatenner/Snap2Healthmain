@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { UserProfile } from '@/lib/profile-utils';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
-import { getEffectiveProfile, getDefaultProfile } from '@/lib/profile-utils';
+import { UserProfile } from '../lib/profile-utils';
+import { Skeleton } from './ui/skeleton';
+import { Button } from './ui/button';
+import { getEffectiveProfile, getDefaultProfile } from '../lib/profile-utils';
 
 interface AIHealthReviewProps {
   mealId: string;
