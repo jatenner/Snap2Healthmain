@@ -115,4 +115,25 @@ prisma
 # Markdown and text files
 *.md
 *.txt
-*.sh 
+*.sh
+
+# Cache directories
+.next/
+.cache/
+node_modules/.cache/
+
+# Build artifacts  
+*.log
+.DS_Store
+.env.local
+.env.*.local
+
+# Development files
+/docs/
+/scripts/test-*.sh
+/scripts/validate-*.js
+
+# Temporary files
+*.tmp
+*.temp
+/tmp/ 

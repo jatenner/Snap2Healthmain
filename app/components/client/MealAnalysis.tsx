@@ -8,9 +8,9 @@ import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import LoadingSpinner from '../LoadingSpinner';
 import MealImage from '../MealImage';
-import { useAuth } from '../../context/auth';
+import { useAuth } from '@/context/auth';
 import ProfileAwareComponent from './ProfileAwareComponent';
-import { ExtendedUserProfile } from '../../lib/utils/profile-manager';
+import { ExtendedUserProfile } from '@/lib/utils/profile-manager';
 
 // Interface for meal data
 interface NutrientData {
