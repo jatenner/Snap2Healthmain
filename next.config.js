@@ -6,18 +6,44 @@ const nextConfig = {
   webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
     const appPath = path.resolve(__dirname, 'app');
     
-    // Add explicit alias mappings
+    // Add comprehensive alias mappings for Vercel Webpack compatibility
     config.resolve.alias = {
       ...config.resolve.alias,
+      // Root app alias
       '@': appPath,
+      
+      // Specific directory aliases
       '@/components': path.resolve(appPath, 'components'),
       '@/lib': path.resolve(appPath, 'lib'),
       '@/api': path.resolve(appPath, 'api'),
+      '@/utils': path.resolve(appPath, 'lib/utils'),
+      
+      // Supabase specific aliases
+      '@/lib/supabase': path.resolve(appPath, 'lib/supabase'),
       '@/lib/supabase/client': path.resolve(appPath, 'lib/supabase/client.ts'),
+      '@/lib/supabase/server': path.resolve(appPath, 'lib/supabase/server.ts'),
+      
+      // Component specific aliases
+      '@/components/client': path.resolve(appPath, 'components/client'),
+      '@/components/ui': path.resolve(appPath, 'components/ui'),
+      
+      // Common utility aliases
+      '@/lib/utils': path.resolve(appPath, 'lib/utils'),
+      '@/lib/profile-utils': path.resolve(appPath, 'lib/profile-utils.ts'),
+      '@/lib/nutrition-utils': path.resolve(appPath, 'lib/nutrition-utils.ts'),
+      '@/lib/openai-utils': path.resolve(appPath, 'lib/openai-utils.ts'),
     };
     
     // Disable symlinks for Vercel compatibility
     config.resolve.symlinks = false;
+    
+    // Add fallback resolution for better module resolution
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      path: false,
+      os: false,
+    };
     
     return config;
   },
