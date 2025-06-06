@@ -1,0 +1,1 @@
+Force Vercel rebuild - Updated Node.js version and fixed all import paths - Timestamp: Thu Jun  5 23:44:24 EDT 2025
