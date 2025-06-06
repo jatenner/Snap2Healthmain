@@ -165,7 +165,7 @@ export default function SmartRecommendations() {
       }, {} as Record<string, number>);
     
     const commonIngredients = Object.entries(ingredients)
-      .sort((a, b) => b[1] - a[1])
+      .sort((a, b) => (b[1] as number) - (a[1] as number))
       .slice(0, 5)
       .map(([ingredient]) => ingredient);
     

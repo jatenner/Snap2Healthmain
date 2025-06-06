@@ -2,6 +2,13 @@
 
 import React, { useEffect, useState } from 'react';
 
+// Extend Window interface to include __ENV
+declare global {
+  interface Window {
+    __ENV?: Record<string, any>;
+  }
+}
+
 interface EnvLoaderProps {
   children: React.ReactNode;
 }
@@ -15,16 +22,11 @@ export default function EnvLoader({ children }: EnvLoaderProps) {
 
   useEffect(() => {
     try {
-      // Initialize env variables on the client side
-      // const env = getEnv();
       console.log('[EnvLoader] Initializing environment variables');
 
       // Set up global window.__ENV if not already set
       if (typeof window !== 'undefined') {
         window.__ENV = window.__ENV || {};
-        // Object.entries(env).forEach(([key, value]) => {
-        //   window.__ENV[key] = window.__ENV[key] || value;
-        // });
       }
       setLoaded(true);
       console.log('[EnvLoader] Environment variables successfully initialized');

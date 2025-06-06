@@ -61,7 +61,7 @@ export function extractAuthToken(headers: Headers): string | null {
   
   // Extract the token from 'Bearer <token>'
   const match = authHeader.match(/Bearer\s+(.+)/i);
-  return match ? match[1] : null;
+  return match ? (match[1] || null) : null;
 }
 
 /**
@@ -121,7 +121,7 @@ export function createSafeApiHandler(handler: Function) {
       return new Response(
         JSON.stringify({
           error: 'An unexpected error occurred',
-          message: error.message || 'Unknown error',
+          message: (error instanceof Error ? error.message : 'Unknown error'),
           success: false
         }),
         {

@@ -158,8 +158,8 @@ export default function MealDetailPage() {
   useEffect(() => {
     // Simulate API fetch
     setTimeout(() => {
-      if (SAMPLE_MEALS[mealId]) {
-        setMeal(SAMPLE_MEALS[mealId]);
+      if (SAMPLE_MEALS[mealId as keyof typeof SAMPLE_MEALS]) {
+        setMeal(SAMPLE_MEALS[mealId as keyof typeof SAMPLE_MEALS]);
         setIsLoading(false);
       } else {
         setError('Meal not found');
@@ -343,7 +343,7 @@ export default function MealDetailPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {meal.ingredients.map((ingredient, index) => (
+                    {meal.ingredients.map((ingredient: any, index: number) => (
                       <tr key={index} className="border-b border-gray-700 last:border-0">
                         <td className="py-3 text-gray-300">{ingredient.name}</td>
                         <td className="py-3 text-right text-gray-300">{ingredient.amount}</td>
@@ -365,7 +365,7 @@ export default function MealDetailPage() {
             <div className="bg-gray-800 rounded-xl p-6 shadow-xl">
               <h2 className="text-xl font-semibold mb-4 text-blue-300">Recommendations</h2>
               <ul className="space-y-3 text-gray-300">
-                {meal.recommendations.map((rec, index) => (
+                {meal.recommendations.map((rec: any, index: number) => (
                   <li key={index} className="flex items-start">
                     <svg className="h-5 w-5 text-green-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
@@ -381,7 +381,7 @@ export default function MealDetailPage() {
               <h2 className="text-xl font-semibold mb-4 text-blue-300">Vitamins & Minerals</h2>
               
               <div className="space-y-3">
-                {meal.vitamins.map((vitamin, index) => (
+                {meal.vitamins.map((vitamin: any, index: number) => (
                   <div key={index}>
                     <div className="flex justify-between mb-1">
                       <span className="text-gray-300">{vitamin.name}</span>

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 
 export default function DebugInsights() {
   const [mealId, setMealId] = useState('991a54d0-67dc-424e-8e33-3e46c8a1fe9c');
-  const [data, setData] = useState(null);
+  const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
   const fetchData = async () => {

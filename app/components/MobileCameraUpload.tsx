@@ -209,9 +209,11 @@ export default function MobileCameraUpload({
     
     try {
       const track = stream.getVideoTracks()[0];
-      await track.applyConstraints({
-        advanced: [{ torch: enable } as any]
-      });
+      if (track) {
+        await track.applyConstraints({
+          advanced: [{ torch: enable } as any]
+        });
+      }
     } catch (err) {
       console.error('Error toggling flash:', err);
     }

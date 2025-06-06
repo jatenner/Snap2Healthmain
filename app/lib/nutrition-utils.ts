@@ -157,7 +157,7 @@ export function calculatePersonalizedDV(nutrient: Nutrient, profile?: UserProfil
   
   // Find the best matching activity level
   let activityFactor = 1.55; // Default to moderate
-  Object.entries(activityFactors).forEach(([level, factor]) => {
+  Object.entries(activityFactors).forEach(([level, factor]: [string, number]) => {
     if (activityLevel.includes(level)) {
       activityFactor = factor;
     }
@@ -307,11 +307,11 @@ export function generateHealthSummary(
   // Extract basic nutritional data
   const calories = mealData.analysis.calories || 0;
   const macros = mealData.analysis.macronutrients || [];
-  const protein = macros.find(m => m.name.toLowerCase() === 'protein')?.amount || 0;
-  const carbs = macros.find(m => m.name.toLowerCase() === 'carbs' || m.name.toLowerCase() === 'carbohydrates')?.amount || 0;
-  const fat = macros.find(m => m.name.toLowerCase() === 'fat')?.amount || 0;
-  const fiber = macros.find(m => m.name.toLowerCase() === 'fiber' || m.name.toLowerCase() === 'dietary fiber')?.amount || 0;
-  const sugar = macros.find(m => m.name.toLowerCase() === 'sugar' || m.name.toLowerCase() === 'sugars')?.amount || 0;
+  const protein = macros.find((m: any) => m.name.toLowerCase() === 'protein')?.amount || 0;
+  const carbs = macros.find((m: any) => m.name.toLowerCase() === 'carbs' || m.name.toLowerCase() === 'carbohydrates')?.amount || 0;
+  const fat = macros.find((m: any) => m.name.toLowerCase() === 'fat')?.amount || 0;
+  const fiber = macros.find((m: any) => m.name.toLowerCase() === 'fiber' || m.name.toLowerCase() === 'dietary fiber')?.amount || 0;
+  const sugar = macros.find((m: any) => m.name.toLowerCase() === 'sugar' || m.name.toLowerCase() === 'sugars')?.amount || 0;
   
   // Calculate macro percentages (by calories)
   const proteinCals = protein * 4;
@@ -325,8 +325,8 @@ export function generateHealthSummary(
   
   // Extract micronutrient data
   const micros = mealData.analysis.micronutrients || [];
-  const highMicros = micros.filter(m => m.percentDailyValue && m.percentDailyValue > 30);
-  const lowMicros = micros.filter(m => m.percentDailyValue && m.percentDailyValue < 10);
+  const highMicros = micros.filter((m: any) => m.percentDailyValue && m.percentDailyValue > 30);
+  const lowMicros = micros.filter((m: any) => m.percentDailyValue && m.percentDailyValue < 10);
   
   // Estimate calorie needs if personalized data is available
   let calorieNeeds = 2000; // Default
@@ -433,17 +433,17 @@ export function generateHealthSummary(
   
   // Add micronutrient commentary
   if (highMicros.length > 0) {
-    const topHighMicros = highMicros.slice(0, 3).map(m => m.name);
+    const topHighMicros = highMicros.slice(0, 3).map((m: any) => m.name);
     summary += `From a micronutrient perspective, this meal provides excellent levels of ${topHighMicros.join(', ')}, `;
     
     // Add functional benefits based on top micronutrients
-    if (topHighMicros.some(m => m.toLowerCase().includes('vitamin c') || m.toLowerCase().includes('vitamin e'))) {
+    if (topHighMicros.some((m: any) => m.toLowerCase().includes('vitamin c') || m.toLowerCase().includes('vitamin e'))) {
       summary += `supporting antioxidant defense systems and collagen synthesis. `;
-    } else if (topHighMicros.some(m => m.toLowerCase().includes('b') && !m.toLowerCase().includes('b12'))) {
+    } else if (topHighMicros.some((m: any) => m.toLowerCase().includes('b') && !m.toLowerCase().includes('b12'))) {
       summary += `supporting mitochondrial energy production and metabolic cofactor availability. `;
-    } else if (topHighMicros.some(m => m.toLowerCase().includes('magnesium') || m.toLowerCase().includes('calcium'))) {
+    } else if (topHighMicros.some((m: any) => m.toLowerCase().includes('magnesium') || m.toLowerCase().includes('calcium'))) {
       summary += `supporting neuromuscular function and signaling pathways. `;
-    } else if (topHighMicros.some(m => m.toLowerCase().includes('zinc') || m.toLowerCase().includes('selenium'))) {
+    } else if (topHighMicros.some((m: any) => m.toLowerCase().includes('zinc') || m.toLowerCase().includes('selenium'))) {
       summary += `supporting immune function and thyroid hormone regulation. `;
     } else {
       summary += `contributing to multiple physiological pathways. `;
@@ -451,7 +451,7 @@ export function generateHealthSummary(
   }
   
   if (lowMicros.length > 0) {
-    const importantLowMicros = lowMicros.filter(m => 
+    const importantLowMicros = lowMicros.filter((m: any) => 
       m.name.toLowerCase().includes('vitamin d') || 
       m.name.toLowerCase().includes('b12') || 
       m.name.toLowerCase().includes('magnesium') || 
@@ -460,11 +460,11 @@ export function generateHealthSummary(
     );
     
     if (importantLowMicros.length > 0) {
-      summary += `Note that this meal is relatively low in ${importantLowMicros.slice(0, 2).map(m => m.name).join(', ')}, which are critical for ${
-        importantLowMicros.some(m => m.name.toLowerCase().includes('vitamin d')) ? 'immune function, calcium absorption, and gene regulation' : 
-        importantLowMicros.some(m => m.name.toLowerCase().includes('b12')) ? 'neurological function and red blood cell formation' :
-        importantLowMicros.some(m => m.name.toLowerCase().includes('magnesium')) ? 'energy production and neuromuscular function' :
-        importantLowMicros.some(m => m.name.toLowerCase().includes('zinc')) ? 'immune function and protein synthesis' :
+      summary += `Note that this meal is relatively low in ${importantLowMicros.slice(0, 2).map((m: any) => m.name).join(', ')}, which are critical for ${
+        importantLowMicros.some((m: any) => m.name.toLowerCase().includes('vitamin d')) ? 'immune function, calcium absorption, and gene regulation' : 
+        importantLowMicros.some((m: any) => m.name.toLowerCase().includes('b12')) ? 'neurological function and red blood cell formation' :
+        importantLowMicros.some((m: any) => m.name.toLowerCase().includes('magnesium')) ? 'energy production and neuromuscular function' :
+        importantLowMicros.some((m: any) => m.name.toLowerCase().includes('zinc')) ? 'immune function and protein synthesis' :
         'multiple metabolic pathways'
       }. `;
     }
@@ -491,7 +491,7 @@ export function generateHealthSummary(
     else if (goalLower.includes('longevity') || goalLower.includes('health span')) {
       summary += `For your longevity goal, this meal's macronutrient composition ${proteinPct < 25 && carbPct < 45 ? 'supports metabolic flexibility and moderate mTOR activation' : 'could be adjusted to further optimize longevity pathways by moderating protein and refined carbohydrates'}. Research suggests that strategic protein restriction (while maintaining adequate levels) and minimizing glycemic variability may enhance cellular maintenance processes. `;
       
-      if (highMicros.some(m => 
+      if (highMicros.some((m: any) => 
         m.name.toLowerCase().includes('vitamin c') || 
         m.name.toLowerCase().includes('vitamin e') || 
         m.name.toLowerCase().includes('selenium') ||
@@ -507,12 +507,12 @@ export function generateHealthSummary(
     else if (goalLower.includes('energy') || goalLower.includes('fatigue')) {
       summary += `For your energy/anti-fatigue goal, this meal's composition ${carbPct > 40 && fatPct < 35 ? 'effectively balances' : 'could better balance'} immediate glucose availability with sustained energy release. The ${carbs}g carbohydrate content provides substrate for immediate ATP production, while the ${fat}g fat content supports extended energy availability. `;
       
-      if (highMicros.some(m => m.name.toLowerCase().includes('b'))) {
+      if (highMicros.some((m: any) => m.name.toLowerCase().includes('b'))) {
         summary += `The B-vitamin content directly supports mitochondrial function and enzymatic cofactors required for cellular energy production. `;
       }
       
-      if (highMicros.some(m => m.name.toLowerCase().includes('iron') || m.name.toLowerCase().includes('magnesium'))) {
-        summary += `The ${highMicros.find(m => m.name.toLowerCase().includes('iron') || m.name.toLowerCase().includes('magnesium'))?.name} content is particularly relevant for energy production by supporting oxygen transport and ATP synthesis. `;
+      if (highMicros.some((m: any) => m.name.toLowerCase().includes('iron') || m.name.toLowerCase().includes('magnesium'))) {
+        summary += `The ${highMicros.find((m: any) => m.name.toLowerCase().includes('iron') || m.name.toLowerCase().includes('magnesium'))?.name} content is particularly relevant for energy production by supporting oxygen transport and ATP synthesis. `;
       }
     }
   }

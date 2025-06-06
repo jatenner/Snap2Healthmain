@@ -54,7 +54,7 @@ const groupMealsByDate = (meals: MealHistoryEntry[]): DayGroup[] => {
   const grouped: Record<string, MealHistoryEntry[]> = {};
   
   meals.forEach(meal => {
-    const date = new Date(meal.created_at).toISOString().split('T')[0];
+    const date = new Date(meal.created_at).toISOString().split('T')[0] || 'unknown';
     
     if (!grouped[date]) {
       grouped[date] = [];

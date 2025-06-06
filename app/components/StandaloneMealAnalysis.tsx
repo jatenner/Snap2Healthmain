@@ -322,7 +322,7 @@ export default function StandaloneMealAnalysis({
     if (acceptedFiles.length > 0) {
       const selectedFile = acceptedFiles[0];
       
-      if (selectedFile.type.startsWith('image/')) {
+      if (selectedFile && selectedFile.type.startsWith('image/')) {
         setFile(selectedFile);
         setPreviewUrl(URL.createObjectURL(selectedFile));
         setError('');
@@ -853,7 +853,7 @@ export default function StandaloneMealAnalysis({
             <div className="mb-6">
               <h3 className="text-md font-semibold text-indigo-300 mb-2">Ingredients</h3>
               <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                {mealData.ingredients.map((ingredient, i) => (
+                {mealData.ingredients.map((ingredient: any, i: number) => (
                   <li key={i} className="flex justify-between text-sm bg-indigo-900/20 p-2 rounded-md">
                     <span className="text-gray-300">{ingredient.name}</span>
                     {ingredient.calories && (
@@ -870,7 +870,7 @@ export default function StandaloneMealAnalysis({
             <div className="mb-6">
               <h3 className="text-md font-semibold text-indigo-300 mb-3">Macronutrients</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {(analysis.macronutrients || mealData.macronutrients).map((nutrient, index) => (
+                {(analysis.macronutrients || mealData.macronutrients).map((nutrient: any, index: number) => (
                   <EnhancedNutrientDisplay
                     key={index}
                     nutrient={nutrient}
@@ -888,7 +888,7 @@ export default function StandaloneMealAnalysis({
             <div>
               <h3 className="text-md font-semibold text-indigo-300 mb-3">Micronutrients</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {(analysis.micronutrients || mealData.micronutrients).map((nutrient, index) => (
+                {(analysis.micronutrients || mealData.micronutrients).map((nutrient: any, index: number) => (
                   <EnhancedNutrientDisplay
                     key={index}
                     nutrient={nutrient}

@@ -147,7 +147,7 @@ export const verifyStorageBuckets = async () => {
       };
     }
 
-    const bucketNames = data?.map(bucket => bucket.name) || [];
+    const bucketNames = data?.map((bucket: any) => bucket.name) || [];
     console.log('[Supabase Client] Storage verification successful. Buckets:', bucketNames);
     
     return { 

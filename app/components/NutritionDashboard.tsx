@@ -112,7 +112,7 @@ export default function NutritionDashboard() {
       // Process meals into daily nutrition data
       const dailyData: Record<string, NutritionData> = {};
       
-      meals?.forEach(meal => {
+      meals?.forEach((meal: any) => {
         const date = format(new Date(meal.created_at), 'yyyy-MM-dd');
         
         if (!dailyData[date]) {

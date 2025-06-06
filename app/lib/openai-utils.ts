@@ -138,7 +138,7 @@ function getOpenAIClient(): OpenAI {
     
     console.log('[openai-utils] OpenAI client initialized successfully');
     console.log('[openai-utils] Using API Key: ' + apiKey.substring(0, 5) + '...');
-    console.log('[openai-utils] Using Org ID: ' + (fixedOrgId ? fixedOrgId.substring(0, 5) + '...' : 'Not provided'));
+    console.log('[openai-utils] Using Org ID:', fixedOrgId ? 'Provided' : 'Not provided');
     console.log(`[openai-utils] Default model: ${modelName}`);
     
     // Store model info in localStorage for debugging (client-side only)
@@ -257,7 +257,7 @@ function generateUserPrompt(userProfile: UserProfile): string {
   const profileData = {
     age: userProfile?.age || null,
     gender: userProfile?.gender || null,
-    goal: userProfile?.goal || userProfile?.healthGoal || null,
+    goal: userProfile?.goal || null,
     activityLevel: userProfile?.activityLevel || null,
     height: userProfile?.height || null,
     weight: userProfile?.weight || null,
@@ -275,8 +275,8 @@ function generateUserPrompt(userProfile: UserProfile): string {
     personalizedContext += `Demographics: ${profileData.age}-year-old ${profileData.gender}\n`;
   }
   
-  if (profileData.goal || profileData.healthGoal || profileData.fitnessGoal) {
-    const goals = [profileData.goal, profileData.healthGoal, profileData.fitnessGoal].filter(Boolean);
+  if (profileData.goal || profileData.fitnessGoal) {
+    const goals = [profileData.goal, profileData.fitnessGoal].filter(Boolean);
     personalizedContext += `Primary Goals: ${goals.join(', ')}\n`;
   }
   
@@ -533,7 +533,7 @@ export async function analyzeImageWithGPT(
 User Profile: ${JSON.stringify({
     age: userProfile?.age || null,
     gender: userProfile?.gender || null,
-    goal: userProfile?.goal || userProfile?.healthGoal || null,
+    goal: userProfile?.goal || null,
   })}
 
 Return JSON with these fields:

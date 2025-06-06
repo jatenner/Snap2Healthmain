@@ -2,19 +2,19 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useAuth } from '../context/auth';
+import { useAuth } from './client/ClientAuthProvider';
 import Logo from './Logo';
 import { Home, Upload, History, User, LogOut, UserCircle, CheckCircle, Settings } from 'lucide-react';
 
 export default function SimpleNavBar() {
-  const { user, logout } = useAuth();
+  const { user, signOut } = useAuth();
   const pathname = usePathname();
 
   const isActive = (path: string) => pathname === path;
 
   const handleSignOut = async () => {
     try {
-      await logout();
+      await signOut();
     } catch (error) {
       console.error('Error signing out:', error);
     }
