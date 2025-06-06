@@ -4,5 +4,7 @@
   "buildCommand": "npm run build",
   "env": {
     "NODE_ENV": "production"
-  }
+  },
+  "installCommand": "npm install",
+  "outputDirectory": ".next"
 }
