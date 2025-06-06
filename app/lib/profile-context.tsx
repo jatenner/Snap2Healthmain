@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from './supabase/client';
-import { useAuth } from '../components/client/ClientAuthProvider';
+import { useAuth } from '@/components/client/ClientAuthProvider';
 import { saveProfileData, loadProfileData, initializeProfilePersistence } from './profile-persistence';
 
 // Profile interface

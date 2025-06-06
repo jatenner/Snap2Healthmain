@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../context/auth';
 import { createBrowserClient } from '@supabase/ssr';
-import { getEffectiveProfile, isProfileComplete, UserProfile, ExtendedUserProfile, getMissingProfileFields } from '../../lib/utils/profile-manager';
+import { getEffectiveProfile, isProfileComplete, UserProfile, ExtendedUserProfile, getMissingProfileFields } from '@/lib/utils/profile-manager';
 
 interface ProfileAwareComponentProps {
   children: (props: {

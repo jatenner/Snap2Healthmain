@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '../../lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
 
 // Make the route dynamic to prevent caching
 export const dynamic = 'force-dynamic';

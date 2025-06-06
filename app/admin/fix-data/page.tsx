@@ -4,7 +4,7 @@
 export const dynamic = 'force-dynamic';
 
 import React, { useState } from 'react';
-import { createClient } from '../../lib/supabase/client';
+import { createClient } from '@/lib/supabase/client';
 
 // Helper function to normalize meal data structure
 function normalizeDataStructure(data: any): any {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getUserIdFromSession } from '../../../../lib/auth';
+import { getUserIdFromSession } from '@/lib/auth';
 
 /**
  * Execute SQL statements with admin privileges

@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { Button } from './ui/button';
 import { useAuth } from './client/ClientAuthProvider';
-import { useProfile } from '../lib/profile-context';
+import { useProfile } from '@/lib/profile-context';
 
 export default function HomeWelcome() {
   const { user, isLoading } = useAuth();

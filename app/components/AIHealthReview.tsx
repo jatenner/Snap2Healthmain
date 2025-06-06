@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/auth';
-import { useProfile } from '../lib/profile-context';
+import { useProfile } from '@/lib/profile-context';
 import { Skeleton } from './ui/skeleton';
-import { UserProfile } from '../lib/profile-utils';
+import { UserProfile } from '@/lib/profile-utils';
 
 interface AIHealthReviewProps {
   mealId?: string;

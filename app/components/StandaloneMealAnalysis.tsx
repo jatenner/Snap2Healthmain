@@ -7,7 +7,7 @@ import { ChevronsLeft, Star, Share2, Download, HelpCircle, Info, User, Activity,
 import LoadingSpinner from './LoadingSpinner';
 import MealImage from './MealImage';
 import { useAuth } from './client/ClientAuthProvider';
-import { supabase } from '../lib/supabase/client';
+import { supabase } from '@/lib/supabase/client';
 import EnhancedNutrientDisplay from './EnhancedNutrientDisplay';
 import AIHealthReview from './AIHealthReview';
 import EnhancedMealAnalysisDisplay from './EnhancedMealAnalysisDisplay';
@@ -18,9 +18,9 @@ import {
   isProfileComplete, 
   NUTRIENT_DESCRIPTIONS, 
   getCompleteProfileButton 
-} from '../lib/profile-utils';
+} from '@/lib/profile-utils';
 import { useDropzone } from 'react-dropzone';
-import { useProfile } from '../lib/profile-context';
+import { useProfile } from '@/lib/profile-context';
 import { v4 as uuidv4 } from 'uuid';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Button } from './ui/button';
