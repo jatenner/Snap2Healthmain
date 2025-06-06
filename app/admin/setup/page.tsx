@@ -4,8 +4,8 @@
 export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect } from 'react';
-import { createClient } from '@/lib/supabase/client';
-import { useAuth } from '@/components/client/ClientAuthProvider';
+import { createClient } from '../../lib/supabase/client';
+import { useAuth } from '../../components/client/ClientAuthProvider';
 
 export default function SetupPage() {
   const [tableStatus, setTableStatus] = useState<any>(null);
@@ -244,4 +244,4 @@ CREATE POLICY "Users can insert their own meals"
       </div>
     </div>
   );
-} 
+} // Mock functions to test Vercel build
