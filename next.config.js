@@ -1,1 +1,1 @@
-const path = require("path"); module.exports = { webpack: (config) => { config.resolve.alias = { ...config.resolve.alias, "@": path.resolve(__dirname, "./app") }; return config; }, images: { domains: ["localhost", "cyrztlmzanhfybqsakgc.supabase.co"] } };
+const path = require('path'); const nextConfig = { webpack: (config) => { config.resolve.alias['@'] = path.resolve(__dirname, './app'); return config; }, images: { domains: ['localhost', 'cyrztlmzanhfybqsakgc.supabase.co'] } }; module.exports = nextConfig;
