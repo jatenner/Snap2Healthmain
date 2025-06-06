@@ -323,3 +323,4 @@ prisma/migrations/
 uploads/
 public/uploads/
 !public/uploads/.gitkeep
+tsconfig.tsbuildinfo
