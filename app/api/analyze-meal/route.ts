@@ -387,8 +387,8 @@ export async function POST(request: NextRequest) {
       // Run OpenAI analysis with extended timeout for better accuracy
       analysisResult = await Promise.race([
         analyzeMealWithOpenAI(
-          publicUrl, // Use the public URL instead of dataURI for better performance
-          userProfile
+        publicUrl, // Use the public URL instead of dataURI for better performance
+        userProfile
         ),
         new Promise((_, reject) => 
           setTimeout(() => reject(new Error('OpenAI analysis timeout after 120 seconds')), 120000)
@@ -414,12 +414,12 @@ export async function POST(request: NextRequest) {
         console.log('[analyze-meal] Calculating daily values...');
         
         // Import the DV calculation function
-        const { calculatePersonalizedDV } = await import('../../lib/profile-utils');
-        
+          const { calculatePersonalizedDV } = await import('../../lib/profile-utils');
+          
         // Add daily value percentages to macronutrients
         if ((analysisResult as any).macronutrients) {
           (analysisResult as any).macronutrients = (analysisResult as any).macronutrients.map((nutrient: any) => ({
-            ...nutrient,
+                    ...nutrient,
             percentDailyValue: calculatePersonalizedDV(nutrient, userProfile)
           }));
         }
@@ -427,12 +427,12 @@ export async function POST(request: NextRequest) {
         // Add daily value percentages to micronutrients  
         if ((analysisResult as any).micronutrients) {
           (analysisResult as any).micronutrients = (analysisResult as any).micronutrients.map((nutrient: any) => ({
-            ...nutrient,
+                    ...nutrient,
             percentDailyValue: calculatePersonalizedDV(nutrient, userProfile)
           }));
-        }
-        
-        console.log('[analyze-meal] Daily values calculated successfully');
+          }
+          
+          console.log('[analyze-meal] Daily values calculated successfully');
       }
       
     } catch (error) {
@@ -444,7 +444,7 @@ export async function POST(request: NextRequest) {
         success: false,
         error: 'OpenAI vision analysis failed to process your meal image.',
         details: 'Only real AI analysis is provided. Please try uploading a different, clearer photo of your meal.',
-        retryable: true,
+          retryable: true,
         no_fallback_data: true
       }, { status: 422 });
     }
