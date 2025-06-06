@@ -19,19 +19,7 @@
     ],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./app/*"],
-      "@/components/*": ["./app/components/*"],
-      "@/components/client/*": ["./app/components/client/*"],
-      "@/components/client/ClientAuthProvider": ["./app/components/client/ClientAuthProvider.tsx"],
-      "@/components/PersonalizedNutritionAnalysis": ["./app/components/PersonalizedNutritionAnalysis.tsx"],
-      "@/components/ui/*": ["./app/components/ui/*"],
-      "@/lib/*": ["./app/lib/*"],
-      "@/lib/supabase/*": ["./app/lib/supabase/*"],
-      "@/lib/supabase/client": ["./app/lib/supabase/client.ts"],
-      "@/lib/supabase/server": ["./app/lib/supabase/server.ts"],
-      "@/api/*": ["./app/api/*"],
-      "@/types/*": ["./app/types/*"],
-      "@/utils/*": ["./app/lib/utils/*"]
+      "@/*": ["app/*"]
     },
     "forceConsistentCasingInFileNames": true,
     "noUncheckedIndexedAccess": true

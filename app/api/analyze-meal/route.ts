@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from '../../lib/supabase/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
-import { getFullUserProfile } from '@/lib/profile-server-utils';
-import { analyzeMealWithOpenAI } from '@/lib/openai-utils';
+import { getFullUserProfile } from '../../lib/profile-server-utils';
+import { analyzeMealWithOpenAI } from '../../lib/openai-utils';
 import OpenAI from 'openai';
 
 export const dynamic = 'force-dynamic';

@@ -6,17 +6,17 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import Image from 'next/image';
 import { Skeleton } from './ui/skeleton';
-import { getEffectiveProfile, validateNutrientData, calculatePersonalizedDailyTargets, categorizePDV, getEffectiveProfileSync } from '@/lib/profile-utils';
+import { getEffectiveProfile, validateNutrientData, calculatePersonalizedDailyTargets, categorizePDV, getEffectiveProfileSync } from '../lib/profile-utils';
 import AIHealthReview from './AIHealthReview';
 import Link from 'next/link';
 import EnhancedNutrientDisplay from './EnhancedNutrientDisplay';
 import { Button } from './ui/button';
 import NutrientDisplay from './NutrientDisplay';
-import { useProfile } from '@/lib/profile-context';
+import { useProfile } from '../lib/profile-context';
 import MacroChart from './MacroChart';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Brain } from 'lucide-react';
-import { UserProfile } from '@/lib/nutrition-utils';
+import { UserProfile } from '../lib/nutrition-utils';
 import { Brain } from 'lucide-react';
 
 // Safe toLowerCase function to prevent errors

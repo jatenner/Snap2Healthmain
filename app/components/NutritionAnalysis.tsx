@@ -10,7 +10,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './client/ClientAuthProvider';
-import { safeMap, getArrayOrEmpty } from '@/lib/utils';
+import { safeMap, getArrayOrEmpty } from '../lib/utils';
 
 interface MacroNutrient {
   name: string;

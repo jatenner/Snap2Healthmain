@@ -8,7 +8,7 @@ import { Camera, Upload, X, Loader2, AlertCircle, CheckCircle } from 'lucide-rea
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import LoadingSpinner from './LoadingSpinner';
-import { createClient } from '@/lib/supabase/client';
+import { createClient } from '../lib/supabase/client';
 import { useAuth } from './client/ClientAuthProvider';
 import { useRouter } from 'next/navigation';
 

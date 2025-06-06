@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { safeForEach, getArrayOrEmpty } from '@/lib/utils';
+import { safeForEach, getArrayOrEmpty } from '../lib/utils';
 
 interface HealthInsightsProps {
   insights?: string[];

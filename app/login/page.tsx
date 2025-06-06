@@ -3,8 +3,8 @@
 import React, { useState, FormEvent, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/components/client/ClientAuthProvider';
-import { createClient, shouldUseMockAuth } from '@/lib/supabase/client';
+import { useAuth } from '../components/client/ClientAuthProvider';
+import { createClient, shouldUseMockAuth } from '../lib/supabase/client';
 
 export default function LoginPage() {
   const router = useRouter();

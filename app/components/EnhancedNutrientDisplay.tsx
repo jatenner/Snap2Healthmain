@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { UserProfile } from '@/lib/nutrition-utils';
-import { cn } from '@/lib/utils';
-import { categorizePDV, calculateDVPercent, FDA_DAILY_VALUES } from '@/lib/profile-utils';
+import { UserProfile } from '../lib/nutrition-utils';
+import { cn } from '../lib/utils';
+import { categorizePDV, calculateDVPercent, FDA_DAILY_VALUES } from '../lib/profile-utils';
 
 // Define types
 interface Nutrient {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient as createServerClient } from '@/lib/supabase/server';
-import { getLocalMealById, shouldUseLocalStorage } from '@/lib/localStorage-utils';
+import { createClient as createServerClient } from '../../../lib/supabase/server';
+import { getLocalMealById, shouldUseLocalStorage } from '../../../lib/localStorage-utils';
 import { safeJsonParse } from '../../analyze-meal/json-fix';
 
 export const dynamic = 'force-dynamic';

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { createClient } from '../lib/supabase/client';
 import { useAuth } from './client/ClientAuthProvider';
 import { 
   Lightbulb, 
