@@ -61,7 +61,6 @@ export default function EnhancedAnalysisProgress({ isVisible, onComplete }: Anal
   useEffect(() => {
     if (!isVisible) return;
 
-    let stepTimer: NodeJS.Timeout;
     let progressTimer: NodeJS.Timeout;
     let elapsedTimer: NodeJS.Timeout;
 
@@ -98,7 +97,7 @@ export default function EnhancedAnalysisProgress({ isVisible, onComplete }: Anal
               clearInterval(progressTimer);
               // Mark current step as completed
               if (steps[stepIndex]) {
-                steps[stepIndex].completed = true;
+                steps[stepIndex]!.completed = true;
               }
               stepIndex++;
               
@@ -123,7 +122,6 @@ export default function EnhancedAnalysisProgress({ isVisible, onComplete }: Anal
     progressSteps();
 
     return () => {
-      clearInterval(stepTimer);
       clearInterval(progressTimer);
       clearInterval(elapsedTimer);
     };

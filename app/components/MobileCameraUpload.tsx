@@ -6,7 +6,7 @@ import {
   Camera, 
   RotateCcw, 
   Zap, 
-  FlashOff, 
+  ZapOff, 
   Grid3X3, 
   X, 
   Check,
@@ -101,8 +101,8 @@ export default function MobileCameraUpload({
         
         // Check for flash capability
         const track = mediaStream.getVideoTracks()[0];
-        const capabilities = track.getCapabilities?.();
-        setHasFlash(!!capabilities?.torch);
+        const capabilities = track?.getCapabilities?.();
+        setHasFlash(!!(capabilities as any)?.torch);
         
         // Wait for video to load and adjust size
         videoRef.current.onloadedmetadata = () => {
@@ -210,7 +210,7 @@ export default function MobileCameraUpload({
     try {
       const track = stream.getVideoTracks()[0];
       await track.applyConstraints({
-        advanced: [{ torch: enable }]
+        advanced: [{ torch: enable } as any]
       });
     } catch (err) {
       console.error('Error toggling flash:', err);
@@ -340,7 +340,7 @@ export default function MobileCameraUpload({
                     flashMode === 'on' ? 'bg-yellow-500' : 'bg-black/30'
                   } text-white hover:bg-black/50 transition-colors`}
                 >
-                  {flashMode === 'on' ? <Zap className="w-5 h-5" /> : <FlashOff className="w-5 h-5" />}
+                  {flashMode === 'on' ? <Zap className="w-5 h-5" /> : <ZapOff className="w-5 h-5" />}
                 </button>
               )}
               

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useContext, createContext } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { useRouter, usePathname } from 'next/navigation';
-import { createClient, shouldUseMockAuth } from '../../lib/supabase/client';
+import { createClient, shouldUseMockAuth } from '@/lib/supabase/client';
 
 // Define user type
 interface AuthUser {

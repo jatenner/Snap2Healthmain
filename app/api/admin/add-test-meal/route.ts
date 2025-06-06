@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '../../../../lib/supabaseClient';
+import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,6 +11,8 @@ export async function GET(request: NextRequest) {
     if (!userId) {
       return NextResponse.json({ error: 'userId required' }, { status: 400 });
     }
+    
+    const supabase = createClient();
     
     // This approach uses the rpc function which can bypass RLS if set up properly
     const { data, error } = await supabase.rpc('add_test_meal', { 
