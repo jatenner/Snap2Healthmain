@@ -3,7 +3,7 @@ const path = require('path');
 
 const nextConfig = {
   // Configure webpack to handle @/ path aliases
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
     config.resolve.alias = {
       ...config.resolve.alias,
       '@': path.resolve(__dirname, './app'),
