@@ -22,6 +22,8 @@
       "@/*": ["./app/*"],
       "@/components/*": ["./app/components/*"],
       "@/components/client/*": ["./app/components/client/*"],
+      "@/components/client/ClientAuthProvider": ["./app/components/client/ClientAuthProvider.tsx"],
+      "@/components/PersonalizedNutritionAnalysis": ["./app/components/PersonalizedNutritionAnalysis.tsx"],
       "@/components/ui/*": ["./app/components/ui/*"],
       "@/lib/*": ["./app/lib/*"],
       "@/lib/supabase/*": ["./app/lib/supabase/*"],
