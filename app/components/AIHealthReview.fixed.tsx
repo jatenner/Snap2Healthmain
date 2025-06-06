@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@/lib/supabase/client';
 import { UserProfile } from '../lib/profile-utils';
 import { Skeleton } from './ui/skeleton';
 import { Button } from './ui/button';
@@ -19,7 +19,7 @@ export default function AIHealthReview({ mealId, userProfile }: AIHealthReviewPr
   const [fallbackReview, setFallbackReview] = useState<string | null>(null);
   const [mealData, setMealData] = useState<any>(null);
   const [profile, setProfile] = useState<UserProfile | null>(userProfile || null);
-  const supabase = createClientComponentClient();
+  const supabase = createClient();
   
   useEffect(() => {
     if (userProfile) {

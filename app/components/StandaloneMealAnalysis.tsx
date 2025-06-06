@@ -22,7 +22,7 @@ import {
 import { useDropzone } from 'react-dropzone';
 import { useProfile } from '../lib/profile-context';
 import { v4 as uuidv4 } from 'uuid';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@/lib/supabase/client';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 
