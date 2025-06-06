@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import { toast } from 'react-hot-toast';
 import { v4 as uuidv4 } from 'uuid';
-
+import EnhancedAnalysisProgress from '../EnhancedAnalysisProgress';
 // Add type declaration for window with custom properties
 declare global {
   interface Window {
@@ -29,6 +29,7 @@ export default function UploadClient() {
   const [dragActive, setDragActive] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [showProgress, setShowProgress] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [goal, setGoal] = useState<string>('');

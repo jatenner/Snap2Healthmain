@@ -15,7 +15,9 @@ import NutrientDisplay from './NutrientDisplay';
 import { useProfile } from '../lib/profile-context';
 import MacroChart from './MacroChart';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Brain } from 'lucide-react';
 import { UserProfile } from '../lib/nutrition-utils';
+import { Brain } from 'lucide-react';
 
 // Safe toLowerCase function to prevent errors
 const safeToLowerCase = (str?: string): string => {
@@ -605,15 +607,102 @@ export default function DynamicMealDisplay() {
   const userProfile = profileContext?.profile || null;
   const [mealRecommendations, setMealRecommendations] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<'macros' | 'micros' | 'personalized'>('macros');
+  const [isPollingInsights, setIsPollingInsights] = useState(false);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // Add unique component key to force proper remounting when data changes
   const componentKey = useMemo(() => searchParams?.get('id') || 'default-key', [searchParams]);
+
+  // Add polling for insights updates
+  const startInsightsPolling = useCallback((mealId: string) => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+    
+    setIsPollingInsights(true);
+    let attempts = 0;
+    const maxAttempts = 24; // Poll for up to 2 minutes (5s intervals)
+    
+    pollingIntervalRef.current = setInterval(async () => {
+      attempts++;
+      
+      try {
+        const response = await fetch(`/api/meals/${mealId}?t=${Date.now()}`);
+        if (response.ok) {
+          const data = await response.json();
+          
+          console.log('[DynamicMealDisplay] Polling response data keys:', Object.keys(data));
+          console.log('[DynamicMealDisplay] Insights check:', {
+            personalized_insights: !!data.personalized_insights,
+            insights: !!data.insights,
+            insights_status: data.insights_status,
+            personalized_insights_length: data.personalized_insights?.length,
+            insights_length: data.insights?.length
+          });
+          
+          // Check if insights are now available
+          if (data.personalized_insights || data.insights) {
+            console.log('[DynamicMealDisplay] ✅ Insights found during polling! Updating UI...');
+            setMealData(prev => ({
+              ...prev,
+              ...data,
+              personalized_insights: data.personalized_insights,
+              insights: data.insights,
+              insights_status: data.insights_status || 'completed'
+            }));
+            
+            // Stop polling
+            setIsPollingInsights(false);
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current);
+              pollingIntervalRef.current = null;
+            }
+            
+            console.log('[DynamicMealDisplay] Insights polling completed successfully');
+          }
+        }
+      } catch (error) {
+        console.error('[DynamicMealDisplay] Error polling for insights:', error);
+      }
+      
+      // Stop polling after max attempts
+      if (attempts >= maxAttempts) {
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+        setIsPollingInsights(false);
+      }
+    }, 5000); // Poll every 5 seconds
+  }, []);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Start polling if insights are missing and we have a meal ID
+  useEffect(() => {
+    if (mealData && mealData.id && 
+        !mealData.personalized_insights && 
+        !mealData.insights && 
+        !isPollingInsights && 
+        mealData.insights_status !== 'completed') {
+      console.log('Starting insights polling for meal:', mealData.id);
+      startInsightsPolling(mealData.id);
+    }
+  }, [mealData, isPollingInsights, startInsightsPolling]);
   
   // Load meal data when component mounts or mealId changes
   useEffect(() => {
     loadMealData();
   }, [searchParams]);
-  
+
+    
   // Process and normalize API responses
   const processApiResponse = (data: any, mealId: string): any => {
     // Create a deep copy to avoid mutations
@@ -833,11 +922,11 @@ export default function DynamicMealDisplay() {
     try {
       console.log('Loading meal data for ID:', mealId);
       
-      // Always fetch fresh data from the API with the force=true parameter
+      // Always fetch fresh data from the API
       // This ensures we get the latest data from Supabase and not cached responses
       const timestamp = Date.now(); // Add timestamp to prevent caching
       console.log('Fetching fresh meal data from API...');
-      const response = await fetch(`/api/analyze-meal?id=${mealId}&t=${timestamp}&force=true`);
+      const response = await fetch(`/api/meals/${mealId}?t=${timestamp}`);
       
       if (!response.ok) {
         const errorData = await response.json();
@@ -1043,8 +1132,31 @@ export default function DynamicMealDisplay() {
   const totalCalories = getTotalCalories(mealData);
 
   // Normalize names to ensure we always have a consistent interface
+  // Prioritize showing actual food items instead of generated meal names
+  const getFoodItemsDisplay = (mealData: any): string => {
+    // Check for foods_identified array first
+    if (mealData.foods_identified && Array.isArray(mealData.foods_identified) && mealData.foods_identified.length > 0) {
+      return mealData.foods_identified.join(', ');
+    }
+    
+    // Check for ingredients array
+    if (mealData.ingredients && Array.isArray(mealData.ingredients) && mealData.ingredients.length > 0) {
+      return mealData.ingredients.map((ingredient: any) => 
+        typeof ingredient === 'string' ? ingredient : ingredient.name || 'Unknown item'
+      ).join(', ');
+    }
+    
+    // Check for detected food
+    if (mealData.detectedFood || mealData.detected_food) {
+      return mealData.detectedFood || mealData.detected_food;
+    }
+    
+    // Fallback to meal name only if no food items found
+    return mealData.name || mealData.mealName || 'Analyzed Meal';
+  };
+
   const displayData = {
-    name: mealData.name || mealData.mealName || 'Analyzed Meal',
+    name: getFoodItemsDisplay(mealData),
     calories: totalCalories,
     detectedFood: mealData.detectedFood || mealData.detected_food || '',
     nutrients: mealData.nutrients || mealData.analysis || null,
@@ -1083,27 +1195,28 @@ export default function DynamicMealDisplay() {
       </div>
 
       <div className="mb-8">
-        <h2 className="text-2xl font-semibold mb-4">Nutritional Information</h2>
-        
-        {/* Properly display calories */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 my-6">
-          <div className="bg-gray-800/40 p-6 rounded-lg flex items-center justify-between">
-            <div>
-              <h3 className="text-xl font-medium">Total Calories</h3>
-              <p className="text-gray-400">Estimated energy content</p>
-            </div>
-            <div className="text-3xl font-bold text-blue-400">
-              {totalCalories} kcal
-            </div>
+        {/* Compact header with calories inline */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+          <h2 className="text-2xl font-semibold">Nutritional Information</h2>
+          <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-4 py-2 rounded-full text-white font-semibold text-lg shadow-lg">
+            {totalCalories} kcal
           </div>
         </div>
 
         {/* Enhanced tabbed interface for nutrients */}
         <Tabs defaultValue="macros" className="w-full">
-          <TabsList className="grid grid-cols-3 mb-6">
-            <TabsTrigger value="macros" className="text-base">Macronutrients</TabsTrigger>
-            <TabsTrigger value="micros" className="text-base">Micronutrients</TabsTrigger>
-            <TabsTrigger value="insights" className="text-base">Insights</TabsTrigger>
+          <TabsList className="grid grid-cols-3 mb-4 h-auto">
+            <TabsTrigger value="macros" className="text-sm py-3 px-2 data-[state=active]:bg-blue-600">
+              <span className="hidden sm:inline">Macronutrients</span>
+              <span className="sm:hidden">Macros</span>
+            </TabsTrigger>
+            <TabsTrigger value="micros" className="text-sm py-3 px-2 data-[state=active]:bg-purple-600">
+              <span className="hidden sm:inline">Micronutrients</span>
+              <span className="sm:hidden">Micros</span>
+            </TabsTrigger>
+            <TabsTrigger value="insights" className="text-sm py-3 px-2 data-[state=active]:bg-green-600">
+              Insights
+            </TabsTrigger>
           </TabsList>
           
           {/* Macronutrients Tab */}
@@ -1241,58 +1354,101 @@ export default function DynamicMealDisplay() {
           {/* Insights Tab */}
           <TabsContent value="insights">
             <div className="space-y-6">
-              {/* Benefits section */}
-              {Array.isArray(mealData?.nutrients?.benefits) && mealData.nutrients.benefits.length > 0 && (
-                <div className="bg-green-900/20 p-5 rounded-lg border border-green-700/30">
-                  <h3 className="text-xl font-semibold mb-3 text-green-400">Health Benefits</h3>
-                  <ul className="list-disc pl-5 space-y-2">
-                    {mealData.nutrients.benefits.map((benefit, index) => (
-                      <li key={index} className="text-gray-300">{benefit}</li>
-                    ))}
-                  </ul>
+              {/* Check for personalized insights first (new optimized flow) */}
+              {(mealData?.personalized_insights || mealData?.insights) && mealData?.insights_status !== 'generating' ? (
+                <div className="bg-gray-800/40 p-6 rounded-lg">
+                  <div className="flex items-center space-x-3 mb-4">
+                    <Brain className="w-6 h-6 text-blue-400" />
+                    <h3 className="text-xl font-semibold text-blue-400">AI Health Insights</h3>
+                  </div>
+                  <div className="prose prose-invert max-w-none">
+                    <div 
+                      className="text-gray-300 leading-relaxed whitespace-pre-wrap"
+                      dangerouslySetInnerHTML={{ 
+                        __html: (mealData.personalized_insights || mealData.insights)
+                          .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white">$1</strong>')
+                          .replace(/### (.*?)\n/g, '<h3 class="text-lg font-semibold text-blue-300 mt-4 mb-2">$1</h3>')
+                          .replace(/## (.*?)\n/g, '<h2 class="text-xl font-semibold text-blue-200 mt-6 mb-3">$1</h2>')
+                          .replace(/# (.*?)\n/g, '<h1 class="text-2xl font-bold text-blue-100 mt-8 mb-4">$1</h1>')
+                          .replace(/\n/g, '<br />')
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-gray-800/40 p-6 rounded-lg text-center">
+                  <div className="flex items-center justify-center space-x-3 mb-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-400"></div>
+                    <Brain className="w-6 h-6 text-blue-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-blue-400 mb-2">
+                    {isPollingInsights ? 'Checking for Updates' : 'Generating AI Insights'}
+                  </h3>
+                  <p className="text-gray-400">
+                    {isPollingInsights 
+                      ? 'Checking for completed insights analysis...'
+                      : 'Our AI is analyzing your meal to provide personalized health insights. This usually takes 10-30 seconds.'
+                    }
+                  </p>
+                  <div className="mt-4">
+                    <div className="text-sm text-gray-500">
+                      <span className="inline-block animate-pulse">●</span>
+                      <span className="mx-1">
+                        {isPollingInsights ? 'Refreshing data' : 'Processing nutritional data'}
+                      </span>
+                      <span className="inline-block animate-pulse">●</span>
+                    </div>
+                  </div>
                 </div>
               )}
-              
-              {/* Concerns section (if available) */}
-              {Array.isArray(mealData?.nutrients?.concerns) && mealData.nutrients.concerns.length > 0 && (
-                <div className="bg-yellow-900/20 p-5 rounded-lg border border-yellow-700/30">
-                  <h3 className="text-xl font-semibold mb-3 text-yellow-400">Nutritional Considerations</h3>
-                  <ul className="list-disc pl-5 space-y-2">
-                    {mealData.nutrients.concerns.map((concern, index) => (
-                      <li key={index} className="text-gray-300">{concern}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              
-              {/* Suggestions section */}
-              {Array.isArray(mealData?.nutrients?.suggestions) && mealData.nutrients.suggestions.length > 0 && (
-                <div className="bg-blue-900/20 p-5 rounded-lg border border-blue-700/30">
-                  <h3 className="text-xl font-semibold mb-3 text-blue-400">Recommendations</h3>
-                  <ul className="list-disc pl-5 space-y-2">
-                    {mealData.nutrients.suggestions.map((suggestion, index) => (
-                      <li key={index} className="text-gray-300">{suggestion}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              
-              {/* Goal alignment */}
-              {mealData?.nutrients?.personalized_feedback?.goal_alignment && (
-                <div className="bg-purple-900/20 p-5 rounded-lg border border-purple-700/30 mt-4">
-                  <h3 className="text-xl font-semibold mb-3 text-purple-400">Goal Alignment</h3>
-                  <p className="text-gray-300">{mealData.nutrients.personalized_feedback.goal_alignment}</p>
-                </div>
-              )}
-              
-              {/* Fallback if no insights data available */}
-              {(!Array.isArray(mealData?.nutrients?.benefits) || mealData.nutrients.benefits.length === 0) &&
-               (!Array.isArray(mealData?.nutrients?.concerns) || mealData.nutrients.concerns.length === 0) &&
-               (!Array.isArray(mealData?.nutrients?.suggestions) || mealData.nutrients.suggestions.length === 0) &&
-               (!mealData?.nutrients?.personalized_feedback?.goal_alignment) && (
-                <div className="bg-gray-800/40 p-4 rounded-lg">
-                  <p className="text-gray-400">Detailed insights not available for this meal.</p>
-                </div>
+
+              {/* Show traditional insights sections as fallback */}
+              {!mealData?.personalized_insights && !mealData?.insights && (
+                <>
+                  {/* Benefits section */}
+                  {Array.isArray(mealData?.nutrients?.benefits) && mealData.nutrients.benefits.length > 0 && (
+                    <div className="bg-green-900/20 p-5 rounded-lg border border-green-700/30">
+                      <h3 className="text-xl font-semibold mb-3 text-green-400">Health Benefits</h3>
+                      <ul className="list-disc pl-5 space-y-2">
+                        {mealData.nutrients.benefits.map((benefit, index) => (
+                          <li key={index} className="text-gray-300">{benefit}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  
+                  {/* Concerns section (if available) */}
+                  {Array.isArray(mealData?.nutrients?.concerns) && mealData.nutrients.concerns.length > 0 && (
+                    <div className="bg-yellow-900/20 p-5 rounded-lg border border-yellow-700/30">
+                      <h3 className="text-xl font-semibold mb-3 text-yellow-400">Nutritional Considerations</h3>
+                      <ul className="list-disc pl-5 space-y-2">
+                        {mealData.nutrients.concerns.map((concern, index) => (
+                          <li key={index} className="text-gray-300">{concern}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  
+                  {/* Suggestions section */}
+                  {Array.isArray(mealData?.nutrients?.suggestions) && mealData.nutrients.suggestions.length > 0 && (
+                    <div className="bg-blue-900/20 p-5 rounded-lg border border-blue-700/30">
+                      <h3 className="text-xl font-semibold mb-3 text-blue-400">Recommendations</h3>
+                      <ul className="list-disc pl-5 space-y-2">
+                        {mealData.nutrients.suggestions.map((suggestion, index) => (
+                          <li key={index} className="text-gray-300">{suggestion}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  
+                  {/* Goal alignment */}
+                  {mealData?.nutrients?.personalized_feedback?.goal_alignment && (
+                    <div className="bg-purple-900/20 p-5 rounded-lg border border-purple-700/30 mt-4">
+                      <h3 className="text-xl font-semibold mb-3 text-purple-400">Goal Alignment</h3>
+                      <p className="text-gray-300">{mealData.nutrients.personalized_feedback.goal_alignment}</p>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </TabsContent>
@@ -1415,7 +1571,7 @@ const generateSuggestions = (mealData: MealData | null, profile: any): string[] 
     suggestions.push("Stay hydrated by drinking water with your meals rather than sugary beverages.");
   }
   
-  return suggestions.slice(0, 4); // Return up to 4 suggestions
+        return suggestions; // Return ALL suggestions, no artificial limit
 };
 
 const generateStrengths = (mealData: MealData | null, profile: any): string[] => {
@@ -1431,7 +1587,7 @@ const generateStrengths = (mealData: MealData | null, profile: any): string[] =>
   
   // Add specific strengths based on nutrient content
   if (highNutrients.length > 0) {
-    const nutrientNames = highNutrients.slice(0, 3).map(n => n.name);
+    const nutrientNames = highNutrients.map(n => n.name); // Show ALL high nutrients
     if (nutrientNames.length === 1) {
       strengths.push(`Good source of ${nutrientNames[0]}.`);
     } else if (nutrientNames.length === 2) {
@@ -1797,25 +1953,12 @@ const extractNutrients = (data: any): any => {
     }
   }
   
-  // Only use fallback data if we truly have NO macronutrient data at all
+  // NO FALLBACK MACRONUTRIENTS - ONLY REAL OPENAI DATA
+  // If there are no macronutrients, the meal analysis failed and should show an error
   if (!macronutrients || (Array.isArray(macronutrients) && macronutrients.length === 0)) {
-    console.warn('No macronutrient data found in any format, checking if we should use fallback values');
-    // ONLY create fallbacks if we have calories but no macros
-    if (calories > 0) {
-      console.warn('Using minimal fallback macronutrients based on calories');
-      // Create basic macros based on calories (40% carbs, 30% protein, 30% fat)
-      const totalCalories = calories;
-      const carbCalories = totalCalories * 0.4;
-      const proteinCalories = totalCalories * 0.3;
-      const fatCalories = totalCalories * 0.3;
-      
-      macronutrients = [
-        { name: "Protein", amount: Math.round(proteinCalories / 4), unit: "g", percentDailyValue: Math.round((proteinCalories / 4) * 2) },
-        { name: "Carbohydrates", amount: Math.round(carbCalories / 4), unit: "g", percentDailyValue: Math.round((carbCalories / 4) / 3) },
-        { name: "Fat", amount: Math.round(fatCalories / 9), unit: "g", percentDailyValue: Math.round((fatCalories / 9) * 1.5) },
-        { name: "Fiber", amount: Math.round(totalCalories / 100), unit: "g", percentDailyValue: Math.round(totalCalories / 100 * 3.5) }
-      ];
-    }
+    console.error('No macronutrient data found - OpenAI analysis may have failed');
+    // Return empty data to indicate analysis failure
+    macronutrients = [];
   }
 
   // Return the extracted or generated data

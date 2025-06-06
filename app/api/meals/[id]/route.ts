@@ -12,6 +12,15 @@ export async function GET(
   const mealId = params.id;
   console.log(`[api/meals/id] Fetching meal with ID: ${mealId}`);
 
+  // Basic validation for meal ID format
+  if (!mealId || mealId.length < 10) {
+    console.log(`[api/meals/id] Invalid meal ID format: ${mealId}`);
+    return NextResponse.json(
+      { error: 'Invalid meal ID format' },
+      { status: 400 }
+    );
+  }
+
   try {
     // If we should use local storage or if it's a dev meal
     if (shouldUseLocalStorage() || mealId.startsWith('dev-')) {
@@ -76,15 +85,24 @@ export async function GET(
     if (error) {
       console.error('[api/meals/id] Database error:', error);
       
-      if (error.code === 'PGRST116') {
+      // Handle specific Postgres error codes
+      if (error.code === 'PGRST116' || error.code === '42P01') {
         return NextResponse.json(
           { error: 'Meal not found' },
           { status: 404 }
         );
       }
       
+      // Handle invalid UUID format
+      if (error.message && error.message.includes('invalid input syntax for type uuid')) {
+        return NextResponse.json(
+          { error: 'Invalid meal ID format' },
+          { status: 400 }
+        );
+      }
+      
       return NextResponse.json(
-        { error: 'Error fetching meal' },
+        { error: 'Error fetching meal from database' },
         { status: 500 }
       );
     }
@@ -161,7 +179,10 @@ export async function GET(
       suggestions: data.suggestions || (analysisData as any)?.suggestions || [],
       recommendations: data.expert_recommendations || (analysisData as any)?.expert_recommendations || (analysisData as any)?.expertRecommendations || [],
       aiInsights: data.personalized_health_insights || (analysisData as any)?.personalized_health_insights || (analysisData as any)?.personalizedHealthInsights || 'AI analysis insights for this meal.',
-      personalizedHealthInsights: data.personalized_health_insights || (analysisData as any)?.personalized_health_insights || (analysisData as any)?.personalizedHealthInsights,
+      personalizedHealthInsights: data.personalized_insights || data.personalized_health_insights || (analysisData as any)?.personalized_health_insights || (analysisData as any)?.personalizedHealthInsights,
+      personalized_insights: data.personalized_insights || data.personalized_health_insights || (analysisData as any)?.personalized_health_insights || (analysisData as any)?.personalizedHealthInsights,
+      insights: data.personalized_insights || data.insights || data.personalized_health_insights || (analysisData as any)?.personalized_health_insights,
+      insights_status: data.insights_status || 'completed',
       expertRecommendations: data.expert_recommendations || (analysisData as any)?.expert_recommendations || (analysisData as any)?.expertRecommendations || [],
       metabolicInsights: data.metabolic_insights || (analysisData as any)?.metabolic_insights || (analysisData as any)?.metabolicInsights,
       mealStory: data.meal_story || (analysisData as any)?.meal_story || (analysisData as any)?.mealStory,

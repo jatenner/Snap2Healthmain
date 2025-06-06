@@ -134,7 +134,7 @@ const categorizeMicronutrients = (micronutrients: MicroNutrient[]) => {
         name.endsWith('vitamin')
     ) {
       nutrient.category = 'Vitamins';
-      categories['Vitamins'].push(nutrient);
+      categories['Vitamins']?.push(nutrient);
     } 
     // Check for minerals with improved matching
     else if (
@@ -143,7 +143,7 @@ const categorizeMicronutrients = (micronutrients: MicroNutrient[]) => {
         name.endsWith('ide') && !name.includes('saccharide') // Many minerals end with -ide (chloride, fluoride)
     ) {
       nutrient.category = 'Minerals';
-      categories['Minerals'].push(nutrient);
+      categories['Minerals']?.push(nutrient);
     } 
     // Check for antioxidants
     else if (
@@ -152,7 +152,7 @@ const categorizeMicronutrients = (micronutrients: MicroNutrient[]) => {
         name.includes('flavon')
     ) {
       nutrient.category = 'Antioxidants';
-      categories['Antioxidants'].push(nutrient);
+      categories['Antioxidants']?.push(nutrient);
     }
     // Check for essential fatty acids
     else if (
@@ -160,17 +160,17 @@ const categorizeMicronutrients = (micronutrients: MicroNutrient[]) => {
         name.includes('fat') && !name.includes('soluble')
     ) {
       nutrient.category = 'Essential Fatty Acids';
-      categories['Essential Fatty Acids'].push(nutrient);
+      categories['Essential Fatty Acids']?.push(nutrient);
     }
     // Check for other nutrients
     else if (otherNutrientNames.some(n => name.includes(n))) {
       nutrient.category = 'Other Nutrients';
-      categories['Other Nutrients'].push(nutrient);
+      categories['Other Nutrients']?.push(nutrient);
     }
     // Anything else
     else {
       nutrient.category = 'Other Nutrients';
-      categories['Other Nutrients'].push(nutrient);
+      categories['Other Nutrients']?.push(nutrient);
     }
   });
   
@@ -375,10 +375,11 @@ const calculatePersonalizedDailyValue = (
       
       // Apply activity multiplier to key nutrients
       if (
+        multiplier &&
         ['protein', 'calories', 'carbohydrates', 'carbohydrate',
          'vitamin b complex', 'potassium', 'magnesium', 'iron'].some(n => name.includes(n))
       ) {
-        adjustedValue *= multiplier;
+        adjustedValue *= multiplier || 1;
       }
     }
   }
@@ -589,7 +590,19 @@ const NutritionAnalysis: React.FC<NutritionAnalysisProps> = ({
       {withUserProfile && profileData && (
         <div className="mt-4 p-3 bg-darkBlue-accent/20 rounded-md">
           <p className="text-xs text-blue-100/80">
-            <span className="font-medium">Personalized Analysis:</span> Daily values are adjusted based on your 
-            {profileData.age ? ` age (${profileData.age}),` : ''} 
-            {profileData.gender ? ` gender (${profileData.gender}),` : ''}
-            {profileData.weight ? ` weight (${profileData.weight}lbs),`
+            <span className="font-medium">Personalized Analysis:</span> Daily values are adjusted based on your{' '}
+            {profileData.age ? `age (${profileData.age}), ` : ''}
+            {profileData.gender ? `gender (${profileData.gender}), ` : ''}
+            {profileData.weight ? `weight (${profileData.weight}lbs), ` : ''}
+            {profileData.height ? `height (${profileData.height}"), ` : ''}
+            {profileData.goal ? `goal (${profileData.goal}), ` : ''}
+            {profileData.activityLevel ? `activity level (${profileData.activityLevel})` : ''}
+            .
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default NutritionAnalysis;

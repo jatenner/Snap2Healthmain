@@ -1,7 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import { Camera, BarChart3, Lightbulb, History, Target, Sparkles } from 'lucide-react';
 import { useAuth } from './components/client/ClientAuthProvider';
+import EnhancedMealHistory from './components/EnhancedMealHistory';
+import NutritionDashboard from './components/NutritionDashboard';
 
 export default function Home() {
   const { isAuthenticated } = useAuth();

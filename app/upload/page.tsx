@@ -174,125 +174,116 @@ export default function UploadPage() {
             </Card>
           </div>
           
-          <div className="grid gap-6 md:grid-cols-2">
-            {/* Upload Section */}
-            <Card className="bg-gray-800 border-gray-700">
-        <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <Upload className="w-5 h-5" />
-                  Upload or Capture
-                </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-                {!isUsingCamera ? (
-                  <div
-                    {...getRootProps()}
-                    className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
-                      isDragActive
-                        ? 'border-blue-400 bg-blue-50/10'
-                        : 'border-gray-600 hover:border-gray-500'
-                    }`}
-                  >
-                    <input {...getInputProps()} />
-                    <ImageIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    {isDragActive ? (
-                      <p className="text-blue-400">Drop your meal photo here...</p>
-                    ) : (
-                      <div className="text-gray-300">
-                        <p className="mb-2">Drag & drop a meal photo here</p>
-                        <p className="text-sm text-gray-400">or click to browse</p>
+          {/* Single Unified Upload Section */}
+          <Card className="bg-gray-800 border-gray-700 max-w-2xl mx-auto">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2 justify-center">
+                <Upload className="w-5 h-5" />
+                Upload & Analyze Your Meal
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {!isUsingCamera ? (
+                <div
+                  {...getRootProps()}
+                  className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+                    isDragActive
+                      ? 'border-blue-400 bg-blue-50/10'
+                      : 'border-gray-600 hover:border-gray-500'
+                  }`}
+                >
+                  <input {...getInputProps()} />
+                  
+                  {previewUrl ? (
+                    <div className="space-y-4">
+                      <div className="relative rounded-lg overflow-hidden max-w-lg mx-auto">
+                        <Image
+                          src={previewUrl}
+                          alt="Meal preview"
+                          width={400}
+                          height={300}
+                          className="w-full h-64 object-cover"
+                        />
                       </div>
-                    )}
-              </div>
-                ) : (
-                  <div className="space-y-4">
-                    <video
-                      autoPlay
-                      muted
-                      className="w-full h-64 bg-black rounded-lg"
-                      ref={(video) => {
-                        if (video && stream) {
-                          video.srcObject = stream;
-                        }
-                      }}
-                    />
-                    <div className="flex gap-2">
-                      <Button onClick={capturePhoto} className="flex-1">
-                        <Camera className="w-4 h-4 mr-2" />
-                        Capture Photo
-                      </Button>
-                      <Button onClick={stopCamera} variant="outline">
-                        Cancel
-              </Button>
-            </div>
-            </div>
-          )}
-
-                <div className="flex gap-2">
-                  {!isUsingCamera && (
-                    <Button onClick={startCamera} variant="outline" className="flex-1">
-                      <Camera className="w-4 h-4 mr-2" />
-                      Use Camera
-                    </Button>
+                      <p className="text-gray-300">Click to change image or drag a new one</p>
+                    </div>
+                  ) : (
+                    <>
+                      <ImageIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      {isDragActive ? (
+                        <p className="text-blue-400">Drop your meal photo here...</p>
+                      ) : (
+                        <div className="text-gray-300">
+                          <p className="mb-2">Drag & drop a meal photo here</p>
+                          <p className="text-sm text-gray-400">or click to browse</p>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
-
-                {error && (
-                  <div className="bg-red-900/20 border border-red-800 rounded-lg p-3">
-                    <p className="text-red-200 text-sm">{error}</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-            {/* Preview and Analysis Section */}
-            <Card className="bg-gray-800 border-gray-700">
-              <CardHeader>
-                <CardTitle className="text-white">Preview & Analyze</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {previewUrl ? (
-                  <div className="space-y-4">
-                    <div className="relative rounded-lg overflow-hidden">
-                      <Image
-                        src={previewUrl}
-                        alt="Meal preview"
-                        width={400}
-                        height={300}
-                        className="w-full h-64 object-cover"
-                      />
-                    </div>
-                    
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={handleAnalyze}
-                        disabled={isAnalyzing}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700"
-                      >
-                        {isAnalyzing ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Analyzing...
-                          </>
-                        ) : (
-                          'Analyze Meal'
-                        )}
-                      </Button>
-                      <Button onClick={resetUpload} variant="outline">
-                        Reset
-                      </Button>
-                    </div>
+              ) : (
+                <div className="space-y-4">
+                  <video
+                    autoPlay
+                    muted
+                    className="w-full h-64 bg-black rounded-lg mx-auto max-w-lg"
+                    ref={(video) => {
+                      if (video && stream) {
+                        video.srcObject = stream;
+                      }
+                    }}
+                  />
+                  <div className="flex gap-2 justify-center">
+                    <Button onClick={capturePhoto} className="bg-blue-600 hover:bg-blue-700">
+                      <Camera className="w-4 h-4 mr-2" />
+                      Capture Photo
+                    </Button>
+                    <Button onClick={stopCamera} variant="outline">
+                      Cancel
+                    </Button>
                   </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-                    <ImageIcon className="w-16 h-16 mb-4" />
-                    <p>No image selected</p>
-                    <p className="text-sm">Upload or capture a photo to get started</p>
-                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 justify-center">
+                {!isUsingCamera && !previewUrl && (
+                  <Button onClick={startCamera} variant="outline" className="flex-1 max-w-xs">
+                    <Camera className="w-4 h-4 mr-2" />
+                    Use Camera
+                  </Button>
                 )}
-              </CardContent>
-            </Card>
-          </div>
+                
+                {previewUrl && (
+                  <>
+                    <Button
+                      onClick={handleAnalyze}
+                      disabled={isAnalyzing}
+                      className="flex-1 max-w-xs bg-blue-600 hover:bg-blue-700"
+                    >
+                      {isAnalyzing ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Analyzing...
+                        </>
+                      ) : (
+                        'Analyze Meal'
+                      )}
+                    </Button>
+                    <Button onClick={resetUpload} variant="outline" className="max-w-xs">
+                      Reset
+                    </Button>
+                  </>
+                )}
+              </div>
+
+              {error && (
+                <div className="bg-red-900/20 border border-red-800 rounded-lg p-3">
+                  <p className="text-red-200 text-sm">{error}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

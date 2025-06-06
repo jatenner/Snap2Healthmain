@@ -211,7 +211,7 @@ export async function uploadImageToSupabase(file: File, fileName: string): Promi
 
 export async function getCurrentUserId(): Promise<string | null> {
   if (shouldUseMockAuth()) {
-    return 'development-mode';
+    return '11111111-1111-1111-1111-111111111111'; // Use proper UUID format for development
   }
 
   try {

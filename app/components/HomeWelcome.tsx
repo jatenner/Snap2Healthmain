@@ -22,7 +22,8 @@ export default function HomeWelcome() {
       setUserName(profile.full_name);
     } else if (user?.email) {
       // Fallback to email username if profile not loaded
-      const emailName = user.email.split('@')[0];
+      const emailParts = user.email.split('@');
+      const emailName = emailParts[0] || user.email;
       setUserName(emailName);
     }
   }, [profile, user]);

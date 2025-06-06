@@ -47,7 +47,7 @@ const SAMPLE_MEALS = {
     name: 'Salmon with Vegetables',
     image: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288',
     date: '2023-05-07T18:15:00Z',
-    calories: 450,
+    calories: 0, // No fallback calories - OpenAI must provide
     macros: {
       protein: 35,
       carbs: 15,

@@ -124,7 +124,7 @@ const fattyAcidNames = [
 const getNutrientDescription = (name: string): string => {
   const descriptions: Record<string, string> = {
     // Macronutrients
-    'protein': 'Essential for muscle protein synthesis, neurotransmitter production, and cellular repair. Leucine-rich proteins trigger mTOR pathway activation, crucial for muscle growth and longevity pathways.',
+    'protein': 'Builds and repairs your muscles, keeps you feeling full longer, and helps your body recover after workouts. Great for maintaining a strong, lean physique.',
     'carbohydrates': 'Primary fuel for brain function and high-intensity exercise. Glucose is the preferred substrate for neurons, with glycogen stores critical for sustained cognitive and physical performance.',
     'fat': 'Essential for hormone production, fat-soluble vitamin absorption, and cellular membrane integrity. Omega-3 fatty acids modulate inflammation and support neuroplasticity.',
     'fiber': 'Critical for microbiome health and metabolic regulation. Soluble fiber feeds beneficial bacteria, producing short-chain fatty acids that reduce inflammation and improve insulin sensitivity.',
@@ -214,24 +214,24 @@ const categorizeNutrients = (nutrients: Nutrient[] = []): Record<string, Nutrien
     const category = nutrient.category || 'unknown';
     
     if (category === 'vitamin' || name.includes('vitamin')) {
-      categories['Vitamins'].push(nutrient);
+      categories['Vitamins']?.push(nutrient);
     } else if (category === 'mineral' || 
        ['calcium', 'iron', 'zinc', 'magnesium', 'potassium', 'sodium', 'phosphorus'].some(m => name.includes(m))) {
-      categories['Minerals'].push(nutrient);
+      categories['Minerals']?.push(nutrient);
     } else if (category === 'antioxidant' || 
        ['flavonoid', 'carotenoid', 'lycopene', 'lutein', 'resveratrol', 'polyphenol'].some(a => name.includes(a))) {
-      categories['Antioxidants'].push(nutrient);
+      categories['Antioxidants']?.push(nutrient);
     } else if (category === 'fatty-acid' || 
        ['omega', 'dha', 'epa', 'fatty acid'].some(f => name.includes(f))) {
-      categories['Essential Fatty Acids'].push(nutrient);
+      categories['Essential Fatty Acids']?.push(nutrient);
     } else {
-      categories['Other'].push(nutrient);
+      categories['Other']?.push(nutrient);
     }
   });
   
   // Remove empty categories
   Object.keys(categories).forEach(key => {
-    if (categories[key].length === 0) {
+    if (categories[key] && categories[key].length === 0) {
       delete categories[key];
     }
   });
@@ -805,11 +805,20 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
       setIsGeneratingInsights(false);
     } else {
       // Only auto-generate if we have no insights at all
-      console.log('[PersonalizedNutritionAnalysis] No insights found - will need to generate');
-      // Don't auto-generate on load anymore to avoid delays
-      // User can click "Regenerate" if they want insights
-      setPersonalizedInsights('AI insights generation is available. Click "Regenerate Enhanced Analysis" below to generate personalized insights for this meal.');
-      setIsGeneratingInsights(false);
+      console.log('[PersonalizedNutritionAnalysis] No insights found - checking again...');
+      
+      // Try checking the database or API to get fresh insights
+      const freshInsights = analysisData?.personalized_insights || analysisData?.insights;
+      if (freshInsights && freshInsights.length > 100) {
+        console.log('[PersonalizedNutritionAnalysis] Found fresh insights from data');
+        setPersonalizedInsights(freshInsights);
+        setIsGeneratingInsights(false);
+      } else {
+        // Auto-generate insights instead of showing fallback
+        console.log('[PersonalizedNutritionAnalysis] Automatically generating insights...');
+        setIsGeneratingInsights(true);
+        generatePersonalizedInsights();
+      }
     }
   }, [analysisData]);
 
@@ -929,19 +938,27 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
   const getExistingInsights = (): string => {
     // Check multiple possible locations for insights in priority order
     const sources = [
-      analysisData?.insights,
       analysisData?.personalized_insights,
-      analysisData?.analysis?.insights,
+      analysisData?.insights,
       analysisData?.analysis?.personalized_insights,
+      analysisData?.analysis?.insights,
       (analysisData?.analysis as any)?.personalized_health_insights,
       analysisData?.personalizedHealthInsights,
       analysisData?.scientificInsights,
       (analysisData?.analysis as any)?.scientificInsights
     ];
 
+    console.log('[getExistingInsights] Checking sources:', {
+      'personalized_insights': !!analysisData?.personalized_insights,
+      'insights': !!analysisData?.insights,
+      'analysis.personalized_insights': !!analysisData?.analysis?.personalized_insights,
+      'analysis.insights': !!analysisData?.analysis?.insights
+    });
+
     for (const source of sources) {
-      if (source && typeof source === 'string' && source.length > 200) {
+      if (source && typeof source === 'string' && source.length > 100) {
         console.log('[getExistingInsights] Found insights of length:', source.length);
+        console.log('[getExistingInsights] Preview:', source.substring(0, 200) + '...');
         return source;
       }
     }

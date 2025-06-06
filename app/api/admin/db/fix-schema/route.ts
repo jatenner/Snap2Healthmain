@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -145,5 +146,193 @@ export async function GET() {
       },
       { status: 500 }
     );
+  }
+}
+
+export async function POST(req: NextRequest) {
+  console.log('[fix-schema] Starting database schema fix...');
+
+  // Create admin Supabase client
+  const supabaseAdmin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    }
+  );
+
+  const steps = [];
+  const errors = [];
+
+  try {
+    // Step 1: Check current table structure
+    console.log('[fix-schema] Checking current table structure...');
+    
+    const { data: sampleData, error: selectError } = await supabaseAdmin
+      .from('meals')
+      .select('*')
+      .limit(1);
+    
+    if (selectError && !selectError.message.includes('No rows')) {
+      errors.push(`Cannot access meals table: ${selectError.message}`);
+      throw new Error('Table access failed');
+    }
+    
+    steps.push('✅ Connected to meals table');
+    
+    // Step 2: Test if insights_status column exists
+    console.log('[fix-schema] Testing insights_status column...');
+    
+    const testId = 'column-test-' + Date.now();
+    const { error: insertError } = await supabaseAdmin
+      .from('meals')
+      .insert([{
+        id: testId,
+        user_id: 'test-user',
+        meal_name: 'Column Test',
+        image_url: 'test.jpg',
+        calories: 100,
+        protein: 10,
+        fat: 5,
+        carbs: 15,
+        macronutrients: [],
+        micronutrients: [],
+        ingredients: [],
+        benefits: [],
+        concerns: [],
+        suggestions: [],
+        analysis: {},
+        goal: 'test',
+        personalized_insights: 'test',
+        insights_status: 'pending'
+      }]);
+    
+    if (insertError) {
+      if (insertError.message.includes('insights_status')) {
+        steps.push('❌ insights_status column missing');
+        
+        // Step 3: Use SQL to add the column
+        console.log('[fix-schema] Adding insights_status column...');
+        
+        const alterTableSQL = `
+          ALTER TABLE public.meals 
+          ADD COLUMN IF NOT EXISTS insights_status TEXT DEFAULT 'pending';
+        `;
+        
+        // Try using RPC function if available
+        try {
+          const { error: rpcError } = await supabaseAdmin.rpc('exec_sql', { 
+            sql: alterTableSQL 
+          });
+          
+          if (rpcError) {
+            steps.push('❌ RPC method failed - trying direct SQL approach');
+            
+            // Alternative approach: Use Supabase SQL editor functionality
+            const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+                'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY!
+              },
+              body: JSON.stringify({ sql: alterTableSQL })
+            });
+            
+            if (!response.ok) {
+              throw new Error(`SQL execution failed: ${response.statusText}`);
+            }
+            
+            steps.push('✅ insights_status column added via direct SQL');
+          } else {
+            steps.push('✅ insights_status column added via RPC');
+          }
+        } catch (sqlError: any) {
+          errors.push(`Failed to add column: ${sqlError.message}`);
+          steps.push('⚠️  Manual column addition required');
+          steps.push('Please run this SQL in Supabase Dashboard > SQL Editor:');
+          steps.push(`ALTER TABLE public.meals ADD COLUMN IF NOT EXISTS insights_status TEXT DEFAULT 'pending';`);
+        }
+        
+        // Step 4: Test the fix
+        console.log('[fix-schema] Testing column addition...');
+        
+        const testId2 = 'column-test-2-' + Date.now();
+        const { error: testError2 } = await supabaseAdmin
+          .from('meals')
+          .insert([{
+            id: testId2,
+            user_id: 'test-user',
+            meal_name: 'Column Test 2',
+            image_url: 'test.jpg',
+            calories: 100,
+            protein: 10,
+            fat: 5,
+            carbs: 15,
+            macronutrients: [],
+            micronutrients: [],
+            ingredients: [],
+            benefits: [],
+            concerns: [],
+            suggestions: [],
+            analysis: {},
+            goal: 'test',
+            personalized_insights: 'test',
+            insights_status: 'completed'
+          }]);
+        
+        if (testError2) {
+          if (testError2.message.includes('insights_status')) {
+            errors.push('Column addition failed - manual intervention required');
+          } else {
+            errors.push(`Unexpected error: ${testError2.message}`);
+          }
+        } else {
+          steps.push('✅ Column addition verified - working correctly');
+          // Clean up test record
+          await supabaseAdmin.from('meals').delete().eq('id', testId2);
+        }
+        
+      } else {
+        errors.push(`Unexpected insert error: ${insertError.message}`);
+      }
+    } else {
+      steps.push('✅ insights_status column already exists');
+      // Clean up test record
+      await supabaseAdmin.from('meals').delete().eq('id', testId);
+    }
+
+    const isFixed = errors.length === 0;
+    
+    return NextResponse.json({
+      success: isFixed,
+      message: isFixed ? 'Database schema fixed successfully' : 'Manual fixes required',
+      steps: steps,
+      errors: errors,
+      sql_command: isFixed ? null : `ALTER TABLE public.meals ADD COLUMN IF NOT EXISTS insights_status TEXT DEFAULT 'pending';`,
+      next_steps: isFixed ? [
+        'Database is ready for meal analysis',
+        'Test meal upload functionality'
+      ] : [
+        'Add missing column via Supabase Dashboard > SQL Editor',
+        'Run this fix again to verify'
+      ],
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error: any) {
+    console.error('[fix-schema] Failed:', error);
+    
+    return NextResponse.json({
+      success: false,
+      message: 'Schema fix failed',
+      error: error.message,
+      steps: steps,
+      errors: [...errors, error.message],
+      timestamp: new Date().toISOString()
+    }, { status: 500 });
   }
 }

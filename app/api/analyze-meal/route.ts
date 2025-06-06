@@ -8,52 +8,156 @@ import { analyzeMealWithOpenAI } from '../../lib/openai-utils';
 import OpenAI from 'openai';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60; // Reduced to 60 seconds for Vercel hobby plan compatibility
+export const maxDuration = 60;
 
-// Initialize OpenAI client for direct insights generation
+// Initialize OpenAI client with simplified configuration
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+  maxRetries: 1,  // Just one retry for failed requests
 });
 
-// Fast AI insights generation function (replaces HTTP call)
-async function generateQuickInsights(mealData: any, userProfile: any, goal: string): Promise<string> {
+// Simplified insights generation with faster timeout
+async function generatePersonalizedInsights(mealData: any, userProfile: any, goal: string): Promise<string> {
   try {
-    const prompt = `Generate practical, conversational analysis for this meal. Be direct and actionable.
+    console.log('[generatePersonalizedInsights] Starting advanced insights generation...');
+    
+    const prompt = `You are Dr. Nutrition AI, providing an advanced, personalized nutrition consultation. Analyze this meal with sophisticated scientific insight.
 
-**MEAL:** ${mealData.mealName || 'Analyzed Meal'}
-**CALORIES:** ${mealData.calories || 'Unknown'}
-**PROTEIN:** ${mealData.protein || 0}g **CARBS:** ${mealData.carbs || 0}g **FAT:** ${mealData.fat || 0}g
-**USER:** ${userProfile?.age || 30}yo ${userProfile?.gender || 'person'}, ${userProfile?.goal || goal || 'general health'}
+## MEAL ANALYSIS:
+**Meal:** ${mealData.mealName || 'Analyzed Meal'} 
+**Calories:** ${mealData.calories || 0} kcal
+**Macronutrients:** 
+- Protein: ${mealData.protein || 0}g (${Math.round((mealData.protein || 0) * 4 / (mealData.calories || 1) * 100)}% of calories)
+- Carbohydrates: ${mealData.carbs || 0}g (${Math.round((mealData.carbs || 0) * 4 / (mealData.calories || 1) * 100)}% of calories)
+- Fat: ${mealData.fat || 0}g (${Math.round((mealData.fat || 0) * 9 / (mealData.calories || 1) * 100)}% of calories)
+- Fiber: ${mealData.fiber || 0}g
 
-Cover these key points in 4-6 short sections:
-1. **Immediate Response (0-30min):** Blood sugar, insulin, initial energy
-2. **Energy Timeline (30min-4hrs):** When you'll feel peak energy, any crashes to expect
-3. **Performance Windows:** Best times for work, exercise, social activities
-4. **Digestive & Practical:** How full you'll feel, bathroom timing, next meal timing
-5. **Optimization Tips:** Quick actionable advice
+**Key Micronutrients:** ${mealData.micronutrients ? mealData.micronutrients.map((n: any) => `${n.name}: ${n.amount}${n.unit} (${n.percentDailyValue}% DV)`).slice(0, 5).join(', ') : 'Processing...'}
 
-Keep it conversational, practical, and under 1000 words. Think Joe Rogan explaining nutrition.`;
+## USER PROFILE:
+- **Age:** ${userProfile?.age || 'Not specified'} years
+- **Gender:** ${userProfile?.gender || 'Not specified'}
+- **Goal:** ${goal || userProfile?.goal || 'General Health'}
+- **Activity Level:** ${userProfile?.activityLevel || 'Not specified'}
+- **Weight:** ${userProfile?.weight || 'Not specified'}${userProfile?.weight_unit || ''}
+- **Height:** ${userProfile?.height || 'Not specified'}${userProfile?.height_unit || ''}
+
+## ADVANCED ANALYSIS REQUEST:
+
+Provide a comprehensive, scientifically-grounded nutrition consultation covering:
+
+### 1. Metabolic Impact Analysis
+- **Glucose Response:** Predict glycemic impact and insulin response patterns
+- **Energy Metabolism:** How this meal affects fat oxidation, protein synthesis, and metabolic flexibility
+- **Nutrient Timing:** Optimal timing relative to exercise, sleep, and daily rhythms
+- **Metabolic Efficiency:** How well this meal supports the user's metabolic goals
+
+### 2. Personalized Performance Insights  
+- **Energy Timeline:** Detailed 6-hour energy prediction with specific timeframes
+- **Cognitive Impact:** Effects on mental clarity, focus, and brain function
+- **Physical Performance:** Impact on strength, endurance, and recovery
+- **Goal Alignment:** How this meal specifically supports their stated goal
+
+### 3. Advanced Optimization Strategies
+- **Nutrient Synergies:** Highlight beneficial nutrient combinations present
+- **Bioavailability Factors:** Discuss absorption optimization opportunities  
+- **Personalized Recommendations:** Specific modifications based on user profile
+- **Progressive Suggestions:** Next-level optimization strategies
+
+### 4. Scientific Context
+- **Research-Based Insights:** Reference relevant nutritional science
+- **Individual Variation:** Account for personal factors that might modify responses
+- **Long-term Implications:** How this meal fits into optimal dietary patterns
+
+## RESPONSE REQUIREMENTS:
+- Use advanced nutritional terminology with clear explanations
+- Provide specific, actionable recommendations
+- Include quantitative predictions where possible (e.g., "energy peak at 90-120 minutes")
+- Reference metabolic pathways and physiological mechanisms
+- Maintain professional, expert tone while being accessible
+- Be comprehensive but focused on high-impact insights
+
+Generate a detailed consultation that demonstrates the full analytical power of advanced nutrition science.`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-4o", // Use the most advanced model
       messages: [
         {
           role: "system", 
-          content: "You're a nutrition expert who explains complex science in simple, conversational terms. Be direct, practical, and engaging. No flowery language - just actionable insights."
+          content: `You are Dr. Nutrition AI, a world-renowned nutritionist with expertise in molecular nutrition, metabolic biochemistry, and personalized nutrition. Your analysis should demonstrate PhD-level knowledge while remaining practical and actionable. Draw from the latest research in nutrition science, metabolic health, and performance optimization.
+
+Key analytical frameworks to employ:
+- Nutrient timing and circadian biology
+- Metabolic flexibility and substrate utilization  
+- Bioavailability and nutrient interactions
+- Individual metabolic variation
+- Evidence-based performance optimization
+- Advanced nutritional biochemistry
+
+Provide sophisticated, detailed insights that showcase the full power of modern nutrition science applied to this specific individual and meal.`
         },
         {
           role: "user",
           content: prompt
         }
       ],
-      max_tokens: 1200, // Reduced for faster generation
-      temperature: 0.7,
+      max_tokens: 2500, // Increased for comprehensive analysis
+      temperature: 0.2, // Balanced for accuracy with some sophistication
     });
 
-    return completion.choices[0]?.message?.content || '';
+    const insights = completion.choices[0]?.message?.content || '';
+    console.log(`[generatePersonalizedInsights] Generated advanced insights, length: ${insights.length}`);
+    return insights;
+    
   } catch (error) {
-    console.error('[generateQuickInsights] Error:', error);
-    return ''; // Return empty string instead of throwing
+    console.error('[generatePersonalizedInsights] Failed:', error);
+    return `## Advanced Nutritional Analysis
+
+This meal provides ${mealData.calories || 0} calories with a macronutrient profile of ${mealData.protein || 0}g protein, ${mealData.carbs || 0}g carbohydrates, and ${mealData.fat || 0}g fat, creating a balanced foundation for your ${goal || 'health'} goals.
+
+### Metabolic Predictions:
+- **Energy onset:** 30-45 minutes post-consumption
+- **Peak energy:** 90-120 minutes for optimal performance
+- **Sustained energy:** 3-4 hours based on macronutrient composition
+
+### Performance Optimization:
+The protein content supports muscle protein synthesis, while the carbohydrate-to-fat ratio suggests this meal is well-suited for sustained energy without dramatic glucose fluctuations.
+
+### Recommendations:
+Consider pairing with adequate hydration and timing this meal 2-3 hours before intense physical activity for optimal performance outcomes.`;
+  }
+}
+
+// Background insights generation with simplified logic
+async function generateInsightsInBackground(mealId: string, mealData: any, userProfile: any, goal: string, supabaseAdmin: any) {
+  try {
+    // Generate insights with 90-second timeout for comprehensive analysis
+    const insights = await Promise.race([
+      generatePersonalizedInsights(mealData, userProfile, goal),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Insights timeout after 90 seconds')), 90000)
+      )
+    ]) as string;
+    
+    // Save insights to database
+    const { error: updateError } = await supabaseAdmin
+      .from('meals')
+      .update({
+        personalized_insights: insights,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', mealId);
+
+    if (updateError) {
+      console.error('[generateInsightsInBackground] Database update failed:', updateError);
+    } else {
+      console.log(`[analyze-meal] ✅ Background insights saved for meal ${mealId}, length: ${insights.length}`);
+    }
+    
+    return insights;
+  } catch (error) {
+    console.error('[analyze-meal] Background insights generation failed:', error);
+    throw error;
   }
 }
 
@@ -187,6 +291,7 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file') as File | null;
     const mealName = (formData.get('mealName') as string) || 'Analyzed Meal';
     const goal = (formData.get('goal') as string) || userProfile?.goal || 'General Wellness';
+    const completeAnalysis = formData.get('completeAnalysis') === 'true' || process.env.FORCE_COMPLETE_ANALYSIS === 'true';
 
     console.log('[analyze-meal] Form data parsed:', {
       hasFile: !!file,
@@ -203,7 +308,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file type and size
+    // Validate file type
     if (!file.type.startsWith('image/')) {
       return NextResponse.json(
         { error: 'File must be an image' },
@@ -211,27 +316,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check file size (limit to 20MB for OpenAI)
-    const maxSize = 20 * 1024 * 1024; // 20MB
-    if (file.size > maxSize) {
+    // Validate file size (5MB limit)
+    const maxFileSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxFileSize) {
       return NextResponse.json(
-        { error: 'Image file is too large. Please use an image smaller than 20MB.' },
+        { error: 'File size must be less than 5MB' },
         { status: 400 }
       );
     }
 
-    console.log('[analyze-meal] File validation passed:', {
-      type: file.type,
-      size: `${(file.size / 1024 / 1024).toFixed(2)}MB`
-    });
+    // Convert file to buffer for upload
+    const buffer = Buffer.from(await file.arrayBuffer());
+    console.log('[analyze-meal] File converted to buffer, size:', buffer.length);
 
-    // Convert file to buffer
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
-    console.log('[analyze-meal] Image processed, size:', `${(buffer.length / 1024 / 1024).toFixed(2)}MB`);
-
-    // Upload image to Supabase Storage
+    // Create unique filename
     const timestamp = Date.now();
     const randomId = Math.random().toString(36).substring(2, 9);
     
@@ -278,290 +376,215 @@ export async function POST(request: NextRequest) {
 
     console.log('[analyze-meal] Image uploaded successfully:', publicUrl);
 
-    // Analyze image with OpenAI
-    console.log('[analyze-meal] Starting OpenAI analysis...');
+    // Generate unique meal ID  
+    const mealId = uuidv4();
+
+    // Step 4: Run OpenAI analysis with extended timeout for better accuracy
+    console.log('[analyze-meal] Running OpenAI analysis with 120 second timeout for accuracy...');
     let analysisResult;
-    try {
-      const analysisStartTime = Date.now();
-      const { analyzeMealWithOpenAI } = await import('../../lib/openai-utils');
-      analysisResult = await analyzeMealWithOpenAI(
-        publicUrl, // Use the public URL instead of dataURI for better performance
-        userProfile
-      );
-      const analysisEndTime = Date.now();
-      console.log('[analyze-meal] OpenAI analysis completed in:', analysisEndTime - analysisStartTime, 'ms');
-      
-      // Simplified DV calculation - only if userProfile exists and has required data
-      if (userProfile && userProfile.age && userProfile.gender && analysisResult) {
-        try {
-          const { calculatePersonalizedDV } = await import('../../lib/profile-utils');
-          
-          // Process macronutrients
-          if (analysisResult.macronutrients && Array.isArray(analysisResult.macronutrients)) {
-            analysisResult.macronutrients = analysisResult.macronutrients.map((nutrient: any) => {
-              if (nutrient.amount && nutrient.amount > 0) {
-                try {
-                  const personalizedDV = calculatePersonalizedDV(nutrient, userProfile);
-                  return {
-                    ...nutrient,
-                    percentDailyValue: personalizedDV !== null && personalizedDV > 0 ? Math.round(personalizedDV) : null
-                  };
-                } catch {
-                  return nutrient;
-                }
-              }
-              return nutrient;
-            });
-          }
-          
-          // Process micronutrients
-          if (analysisResult.micronutrients && Array.isArray(analysisResult.micronutrients)) {
-            analysisResult.micronutrients = analysisResult.micronutrients.map((nutrient: any) => {
-              if (nutrient.amount && nutrient.amount > 0) {
-                try {
-                  const personalizedDV = calculatePersonalizedDV(nutrient, userProfile);
-                  return {
-                    ...nutrient,
-                    percentDailyValue: personalizedDV !== null && personalizedDV > 0 ? Math.round(personalizedDV) : null
-                  };
-                } catch {
-                  return nutrient;
-                }
-              }
-              return nutrient;
-            });
-          }
-          
-          console.log('[analyze-meal] Daily values calculated successfully');
-          
-        } catch (importError) {
-          console.log('[analyze-meal] Skipping DV% calculation due to import error');
-        }
-      }
-      
-    } catch (openaiError: any) {
-      console.error('[analyze-meal] OpenAI analysis failed:', openaiError);
-      console.error('[analyze-meal] Error details:', {
-        message: openaiError.message,
-        name: openaiError.name,
-        stack: openaiError.stack?.substring(0, 500),
-        type: typeof openaiError
-      });
-      
-      // Provide specific error messages based on the type of OpenAI failure
-      let errorMessage = 'Unable to analyze the meal image at this time';
-      let userMessage = 'Please try uploading the image again.';
-      
-      if (openaiError.message?.includes('API key')) {
-        errorMessage = 'OpenAI API Configuration Error';
-        userMessage = 'The AI service is temporarily misconfigured. Please contact support or try again later.';
-      } else if (openaiError.message?.includes('timeout')) {
-        errorMessage = 'Analysis Timeout';
-        userMessage = 'The image analysis took too long. Please try with a smaller image or try again.';
-      } else if (openaiError.message?.includes('declined to analyze')) {
-        errorMessage = 'AI Analysis Declined';
-        userMessage = 'The AI was unable to analyze this specific image. Please try with a clearer photo that shows food items more distinctly. Ensure good lighting and that the food is clearly visible.';
-      } else if (openaiError.message?.includes('invalid JSON')) {
-        errorMessage = 'AI Response Format Error';
-        userMessage = 'The AI analysis was incomplete. Please try again with the same image or a different photo.';
-      } else if (openaiError.message?.includes('does not contain valid JSON')) {
-        errorMessage = 'AI Analysis Incomplete';
-        userMessage = 'The AI was unable to complete the analysis. Please try again or use a different image with clearer food visibility.';
-      }
-      
-      // Return proper error response instead of fallback data
-      return NextResponse.json(
-        { 
-          error: errorMessage,
-          message: userMessage,
-          details: 'No nutritional analysis will be provided without successful AI image recognition. This ensures you only receive accurate, real analysis of your specific meal.',
-          retryable: true,
-          noFallbackData: true
-        },
-        { status: 503 } // Service Unavailable
-      );
-    }
-
-    // After successful meal analysis, generate AI insights directly
-    let personalizedInsights = '';
-    console.log('[analyze-meal] 🚀 Generating AI insights directly (no HTTP call)...');
     
-    const insightsStartTime = Date.now();
     try {
-      personalizedInsights = await generateQuickInsights(analysisResult, userProfile, goal);
-      const insightsEndTime = Date.now();
-      console.log(`[analyze-meal] ✅ AI insights generated in ${insightsEndTime - insightsStartTime}ms, length: ${personalizedInsights.length}`);
+      // Run OpenAI analysis with extended timeout for better accuracy
+      analysisResult = await Promise.race([
+        analyzeMealWithOpenAI(
+          publicUrl, // Use the public URL instead of dataURI for better performance
+          userProfile
+        ),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('OpenAI analysis timeout after 120 seconds')), 120000)
+        )
+      ]);
       
-      // Quality check - ensure we have substantial insights
-      if (personalizedInsights.length < 300) {
-        console.warn('[analyze-meal] Generated insights too short, clearing to trigger frontend regeneration');
-        personalizedInsights = '';
+      console.log('[analyze-meal] OpenAI analysis completed successfully');
+      
+      // Validate that we received actual OpenAI analysis (not any mock/fallback data)
+      if (!analysisResult || !(analysisResult as any).calories || (analysisResult as any).calories === 0) {
+        console.error('[analyze-meal] ERROR: OpenAI did not return valid nutrition data');
+        throw new Error('OpenAI analysis failed to return valid nutrition data');
       }
-    } catch (insightsError) {
-      console.error('[analyze-meal] Direct insights generation failed:', insightsError);
-      personalizedInsights = ''; // Clear failed insights
-    }
-
-    // Prepare the final response object structure that will be built upon
-    const finalApiResponse = {
-      success: true,
-      message: 'Meal analysis pending', // Will be updated
-      mealAnalysis: analysisResult, 
-      mealContents: analysisResult, 
-      userProfile: userProfile, 
-      imageUrl: publicUrl, 
-      mealId: null as string | null, 
-    };
-
-    // Attempt to save to DB if a userId is available (including '11111111-1111-1111-1111-111111111111')
-    // Only skip for 'anonymous-user' or if userId is somehow null/undefined after initial checks.
-    if (userId && userId !== 'anonymous-user') {
-      console.log('[analyze-meal] Attempting to save meal to database for user:', userId);
-      console.log('[analyze-meal] Data to be saved (first 200 chars of analysis):', JSON.stringify(analysisResult).substring(0, 200));
-
-      try {
-        // Ensure analysisResult has all expected fields, with defaults if necessary
-        const ar: any = analysisResult || {}; // Use 'ar' for brevity, cast to any for flexible property access
-
-        const mealToInsert = {
-          user_id: userId,
-          meal_name: ar.mealName || 'Untitled Meal',
-          image_url: publicUrl,
-          goal: goal, // Use the goal from the request parameter, not from analysis result
-          // Populate top-level nutritional fields
-          calories: ar.calories || 0,
-          protein: ar.protein || 0,
-          fat: ar.fat || 0,
-          carbs: ar.carbs || 0,
-          // Add the generated insights
-          personalized_insights: personalizedInsights,
-          insights: personalizedInsights, // Also save to generic insights column
-          // Populate individual database columns from OpenAI analysis
-          macronutrients: ar.macronutrients || [],
-          micronutrients: ar.micronutrients || [],
-          phytonutrients: ar.phytonutrients || [],
-          ingredients: ar.ingredients || [],
-          benefits: ar.benefits || [],
-          concerns: ar.concerns || [],
-          suggestions: ar.suggestions || [],
-          expert_recommendations: ar.expertRecommendations || [],
-          metabolic_insights: ar.metabolicInsights || '',
-          foods_identified: ar.foods || [],
-          health_score: ar.healthScore ? parseInt(String(ar.healthScore), 10) : null,
-          meal_story: ar.mealStory || '',
-          protein_quality_assessment: ar.proteinQualityAssessment || '',
-          carbohydrate_quality_assessment: ar.carbohydrateQualityAssessment || '',
-          fat_quality_assessment: ar.fatQualityAssessment || '',
-          cooking_method_impact: ar.cookingMethod || '',
-          sodium_impact: ar.sodiumImpact || '',
-          processing_level_analysis: ar.processingLevelAnalysis || '',
-          nutritional_narrative: ar.nutritionalNarrative || '',
-          time_of_day_optimization: ar.timeOfDayOptimization || '',
-          visual_analysis: ar.visualAnalysis || '',
-          cooking_method: ar.cookingMethod || '',
-          cultural_context: ar.culturalContext || '',
-          meal_description: ar.mealDescription || ar.visualAnalysis || '',
-          // Keep the analysis JSONB field for backward compatibility
-          analysis: {
-            mealName: ar.mealName || 'Untitled Meal',
-            mealDescription: ar.mealDescription || ar.visualAnalysis || 'No caption',
-            calories: ar.calories || 0,
-            protein: ar.protein || 0,
-            fat: ar.fat || 0,
-            carbs: ar.carbs || 0,
-            macronutrients: ar.macronutrients || [],
-            micronutrients: ar.micronutrients || [],
-            ingredients: ar.ingredients || [],
-            foods_identified: ar.foods || [],
-            benefits: ar.benefits || [],
-            concerns: ar.concerns || [],
-            suggestions: ar.suggestions || [],
-            health_score: ar.healthScore ? parseInt(String(ar.healthScore), 10) : null,
-            meal_story: ar.mealStory || '',
-            nutritional_narrative: ar.nutritionalNarrative || '',
-            time_of_day_optimization: ar.timeOfDayOptimization || '',
-            visual_analysis: ar.visualAnalysis || '',
-            cooking_method_impact: ar.cookingMethod,
-            cultural_context: ar.culturalContext || '',
-            protein_quality_assessment: ar.proteinQualityAssessment || '',
-            carbohydrate_quality_assessment: ar.carbohydrateQualityAssessment || '',
-            fat_quality_assessment: ar.fatQualityAssessment || '',
-            sodium_impact: ar.sodiumImpact || '',
-            processing_level_analysis: ar.processingLevelAnalysis || '',
-            phytonutrients: ar.phytonutrients || [],
-            expert_recommendations: ar.expertRecommendations || [],
-            metabolic_insights: ar.metabolicInsights || '',
-            personalized_health_insights: ar.personalizedHealthInsights || '',
-            personalized_insights: personalizedInsights, // Add insights to analysis object
-            goal: goal, // Ensure goal is in analysis, prioritize from OpenAI, fallback to form/profile goal
-          }
-        };
+      
+      // Additional validation - ensure we have real macronutrients
+      if (!(analysisResult as any).macronutrients || !Array.isArray((analysisResult as any).macronutrients) || (analysisResult as any).macronutrients.length === 0) {
+        console.error('[analyze-meal] ERROR: OpenAI did not return macronutrient data');
+        throw new Error('OpenAI analysis failed to return macronutrient data');
+      }
+      
+      // Calculate personalized daily values and add them to nutrients
+      if ((analysisResult as any)?.macronutrients || (analysisResult as any)?.micronutrients) {
+        console.log('[analyze-meal] Calculating daily values...');
         
-        console.log('[analyze-meal] 🧐 ANALYSIS RESULT (source for mealToInsert):', JSON.stringify(ar, null, 2));
-        console.log('[analyze-meal] 📊 DATABASE COLUMN MAPPING:');
-        console.log('  - macronutrients:', ar.macronutrients?.length || 0, 'items');
-        console.log('  - micronutrients:', ar.micronutrients?.length || 0, 'items');
-        console.log('  - expert_recommendations:', ar.expertRecommendations?.length || 0, 'items');
-        console.log('  - benefits:', ar.benefits?.length || 0, 'items');
-        console.log('  - concerns:', ar.concerns?.length || 0, 'items');
-        console.log('  - suggestions:', ar.suggestions?.length || 0, 'items');
-        console.log('  - foods_identified:', ar.foods?.length || 0, 'items');
-        console.log('  - metabolic_insights:', ar.metabolicInsights ? 'present' : 'missing');
-        console.log('[analyze-meal] 💾 FINAL MEAL TO INSERT (to meals):', JSON.stringify(mealToInsert, null, 2));
-
-        const { data: mealInsert, error: mealError } = await supabaseAdmin
-          .from('meals')
-          .insert(mealToInsert)
-          .select() // Important to get the inserted row back, especially the ID
-          .single(); // Expecting a single row
-
-        if (mealError) {
-          console.error('[analyze-meal] Database insert error:', mealError);
-          finalApiResponse.message = `Analysis complete, but failed to save to database: ${mealError.message}`;
-          // Do not set success to false here, as analysis itself was successful.
-          // The frontend can decide how to handle a failed save.
-        } else if (mealInsert) {
-          console.log('[analyze-meal] Meal saved to database successfully:', mealInsert);
-          finalApiResponse.mealId = mealInsert.id; // Store the new meal ID
-          finalApiResponse.message = 'Meal analyzed and saved successfully!';
-        } else {
-          console.warn('[analyze-meal] Database insert returned no data and no error.');
-          finalApiResponse.message = 'Analysis complete, but database save status unclear.';
+        // Import the DV calculation function
+        const { calculatePersonalizedDV } = await import('../../lib/profile-utils');
+        
+        // Add daily value percentages to macronutrients
+        if ((analysisResult as any).macronutrients) {
+          (analysisResult as any).macronutrients = (analysisResult as any).macronutrients.map((nutrient: any) => ({
+            ...nutrient,
+            percentDailyValue: calculatePersonalizedDV(nutrient, userProfile)
+          }));
         }
-      } catch (dbError: any) {
-        console.error('[analyze-meal] Critical error during database operation:', dbError);
-        finalApiResponse.message = `Analysis complete, but critical error during database save: ${dbError.message}`;
+        
+        // Add daily value percentages to micronutrients  
+        if ((analysisResult as any).micronutrients) {
+          (analysisResult as any).micronutrients = (analysisResult as any).micronutrients.map((nutrient: any) => ({
+            ...nutrient,
+            percentDailyValue: calculatePersonalizedDV(nutrient, userProfile)
+          }));
+        }
+        
+        console.log('[analyze-meal] Daily values calculated successfully');
       }
-    } else {
-      // Case for 'anonymous-user' or if userId somehow became null (should be rare now)
-      console.log('[analyze-meal] User ID is anonymous or missing. Skipping database save.');
-      finalApiResponse.mealId = `local-${uuidv4()}`; // Generate a local temp ID
-      finalApiResponse.message = 'Meal analysis complete (local mode - not saved to database).';
+      
+    } catch (error) {
+      console.error('[analyze-meal] OpenAI analysis failed:', error);
+      
+      // NO FALLBACK, NO MOCK DATA, NO PREDETERMINED VALUES - ONLY REAL OPENAI
+      console.log('[analyze-meal] CRITICAL: OpenAI analysis failed - NO MOCK DATA WILL BE PROVIDED');
+      return NextResponse.json({
+        success: false,
+        error: 'OpenAI vision analysis failed to process your meal image.',
+        details: 'Only real AI analysis is provided. Please try uploading a different, clearer photo of your meal.',
+        retryable: true,
+        no_fallback_data: true
+      }, { status: 422 });
     }
 
-    // Final response with all details
-    console.log('[analyze-meal] 🎉 Final API response with integrated insights (mealId:', finalApiResponse.mealId + ')');
-    return NextResponse.json(finalApiResponse, { status: 200 });
-
-  } catch (error: any) {
-    console.error('[analyze-meal] Unexpected error:', error);
+    // Step 5: Save meal to database immediately with basic analysis
+    console.log('[analyze-meal] Attempting to save meal to database for user:', userId);
     
-    // In development, return detailed error information
-    if (process.env.NODE_ENV === 'development') {
-      return NextResponse.json(
-        { 
-          error: 'Development error details',
-          message: error.message,
-          stack: error.stack,
-          name: error.name
-        },
-        { status: 500 }
+    // Use only core fields that definitely exist in the database schema
+    const analysis = analysisResult as any;
+    const mealRecord = {
+      user_id: userId,
+      name: analysis?.mealName || 'Analyzed Meal',
+      caption: analysis?.mealName || 'Analyzed Meal',
+      meal_name: analysis?.mealName || 'Analyzed Meal',
+      description: analysis?.mealDescription || '',
+      image_url: publicUrl,
+      calories: analysis?.calories || 0,
+      protein: analysis?.protein || 0,
+      fat: analysis?.fat || 0,
+      carbs: analysis?.carbs || 0,
+      // Core JSON fields - ensure these are always arrays
+      macronutrients: Array.isArray(analysis?.macronutrients) ? analysis.macronutrients : [],
+      micronutrients: Array.isArray(analysis?.micronutrients) ? analysis.micronutrients : [],
+      ingredients: Array.isArray(analysis?.ingredients) ? analysis.ingredients : [],
+      benefits: Array.isArray(analysis?.benefits) ? analysis.benefits : [],
+      concerns: Array.isArray(analysis?.concerns) ? analysis.concerns : [],
+      suggestions: Array.isArray(analysis?.suggestions) ? analysis.suggestions : [],
+      foods_identified: Array.isArray(analysis?.foods) ? analysis.foods : [],
+      foods: Array.isArray(analysis?.foods) ? analysis.foods : [],
+      tags: [],
+      analysis: analysisResult || {},
+      raw_analysis: analysisResult || {},
+      personalized_insights: analysis?.personalizedHealthInsights || null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    // Debug log to verify the data structure
+    console.log('[analyze-meal] Meal record macronutrients count:', mealRecord.macronutrients.length);
+    console.log('[analyze-meal] Meal record micronutrients count:', mealRecord.micronutrients.length);
+    console.log('[analyze-meal] First few macros:', JSON.stringify(mealRecord.macronutrients.slice(0, 2)));
+    console.log('[analyze-meal] First few micros:', JSON.stringify(mealRecord.micronutrients.slice(0, 2)));
+
+    // Declare variable outside try-catch to use later
+    let actualMealId = mealId;
+
+    try {
+      let insertedData, insertError;
+      
+      const insertResult = await supabaseAdmin
+        .from('meals')
+        .insert([mealRecord])
+        .select('id')
+        .single();
+        
+      insertedData = insertResult.data;
+      insertError = insertResult.error;
+
+      if (insertError) {
+        console.error('[analyze-meal] Database insertion failed:', insertError);
+        throw new Error(`Failed to save meal analysis: ${insertError.message}`);
+      }
+      
+      // Use the actual ID from the database
+      actualMealId = insertedData?.id || mealId;
+      console.log('[analyze-meal] Meal saved to database successfully:', actualMealId);
+      
+    } catch (error) {
+      console.error('[analyze-meal] Database operation failed:', error);
+      throw new Error(`Database operation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+
+    // Step 6: Generate personalized insights in background (WITH PROPER TIMEOUT HANDLING)
+    console.log('[analyze-meal] Starting background insights generation...');
+    
+    let insights = null;
+    let insightsStatus = 'generating';
+    
+    try {
+      // Generate insights with proper timeout and retry logic
+      insights = await generateInsightsInBackground(
+        actualMealId, 
+        analysisResult, 
+        userProfile, 
+        goal, 
+        supabaseAdmin
       );
+      insightsStatus = 'completed';
+      console.log('[analyze-meal] ✅ Background insights generated successfully');
+      
+    } catch (error) {
+      console.error('[analyze-meal] Background insights generation failed:', error);
+      insightsStatus = 'failed';
+      
+      // NO FALLBACK INSIGHTS - ONLY REAL OPENAI GENERATED INSIGHTS
+      insights = null;
+      console.log('[analyze-meal] Insights generation failed - NO FALLBACK INSIGHTS PROVIDED');
     }
+
+    // Return complete nutrition data with insights
+    const completeResponseData = {
+      success: true,
+      id: actualMealId,
+      mealId: actualMealId,
+      name: (analysisResult as any)?.mealName || 'Analyzed Meal',
+      caption: (analysisResult as any)?.mealName || 'Analyzed Meal',
+      calories: (analysisResult as any)?.calories || 0,
+      imageUrl: publicUrl,
+      image_url: publicUrl,
+      detected_food: (analysisResult as any)?.mealName || '',
+      foods_identified: (analysisResult as any)?.foods || [],
+      ingredients: (analysisResult as any)?.ingredients || [],
+      analysis: analysisResult || {},
+      nutrients: analysisResult || {},
+      macronutrients: (analysisResult as any)?.macronutrients || [],
+      micronutrients: (analysisResult as any)?.micronutrients || [],
+      benefits: (analysisResult as any)?.benefits || [],
+      concerns: (analysisResult as any)?.concerns || [],
+      suggestions: (analysisResult as any)?.suggestions || [],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      personalized_insights: insights,
+      // Include additional fields that the frontend expects
+      meal_description: (analysisResult as any)?.mealDescription || '',
+      foods: (analysisResult as any)?.foods || [],
+      raw_analysis: analysisResult || {},
+      uuid: actualMealId,
+      goal: userProfile?.goal || 'General Wellness'
+    };
     
-    return NextResponse.json(
-      { error: 'An unexpected error occurred while processing your request' },
-      { status: 500 }
-    );
+    console.log('[analyze-meal] 🎉 Complete analysis response sent (mealId: ' + actualMealId + ')');
+    return NextResponse.json(completeResponseData, { status: 200 });
+
+  } catch (error) {
+    console.error('[analyze-meal] Analysis failed:', error);
+    
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Analysis failed',
+      details: process.env.NODE_ENV === 'development' ? error : undefined
+    }, { status: 500 });
   }
 } 

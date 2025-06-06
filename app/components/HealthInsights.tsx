@@ -53,8 +53,7 @@ const HealthInsights: React.FC<HealthInsightsProps> = ({
       // Check each category's keywords
       for (const [category, keywords] of Object.entries(keywordMap)) {
         if (keywords.some(keyword => lowercaseInsight.includes(keyword))) {
-          // @ts-ignore
-          categories[category].push(insight);
+          categories[category]?.push(insight);
           categorized = true;
           break;
         }
@@ -62,7 +61,7 @@ const HealthInsights: React.FC<HealthInsightsProps> = ({
       
       // If not matched to any category
       if (!categorized) {
-        categories['Other'].push(insight);
+        categories['Other']?.push(insight);
       }
     });
     
@@ -85,7 +84,7 @@ const HealthInsights: React.FC<HealthInsightsProps> = ({
       'General Advice': []
     };
     
-    const keywordMap = {
+    const keywordMap: Record<string, string[]> = {
       'Dietary Adjustments': ['increase', 'decrease', 'reduce', 'limit', 'avoid', 'cut back', 'lower', 'higher'],
       'Food Suggestions': ['include', 'add', 'eat', 'consume', 'try', 'choose', 'opt for', 'sources', 'foods'],
       'Nutrient Focus': ['protein', 'carb', 'fat', 'vitamin', 'mineral', 'nutrient', 'fiber', 'omega'],
@@ -99,8 +98,8 @@ const HealthInsights: React.FC<HealthInsightsProps> = ({
       
       // Check each category's keywords
       for (const [category, keywords] of Object.entries(keywordMap)) {
-        if (keywords.some(keyword => lowercaseRecommendation.includes(keyword))) {
-          categories[category]?.push(recommendation);
+        if (keywords.some(keyword => lowercaseRecommendation.includes(keyword)) && categories[category]) {
+          categories[category].push(recommendation);
           categorized = true;
           break;
         }
@@ -108,7 +107,9 @@ const HealthInsights: React.FC<HealthInsightsProps> = ({
       
       // If not matched to any category
       if (!categorized) {
-        categories['General Advice'].push(recommendation);
+        if (categories['General Advice']) {
+          categories['General Advice'].push(recommendation);
+        }
       }
     });
     

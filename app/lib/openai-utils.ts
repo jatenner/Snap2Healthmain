@@ -43,90 +43,39 @@ const NutrientSchema = z.object({
   description: z.string().optional(),
 });
 
-// Enhanced Zod schema for comprehensive meal analysis validation - ULTRA FLEXIBLE VERSION
+// Enhanced Zod schema for comprehensive meal analysis validation - NO FALLBACK DATA
 export const MealAnalysisSchema = z.object({
-  mealName: z.string().min(1, "Meal name is required").optional().default("Analyzed Meal"),
-  mealDescription: z.string().optional().default("A nutritious meal with various food components"),
-  calories: z.number().nonnegative("Calories must be non-negative").optional().default(450),
-  protein: z.number().nonnegative("Protein must be non-negative").optional().default(25),
-  fat: z.number().nonnegative("Fat must be non-negative").optional().default(15),
-  carbs: z.number().nonnegative("Carbs must be non-negative").optional().default(35),
-  fiber: z.number().nonnegative("Fiber must be non-negative").optional().default(6),
-  foods: z.array(z.string()).optional().default(["Mixed meal components"]),
-  ingredients: z.array(z.string()).optional().default(["Various ingredients"]),
+  mealName: z.string().min(1, "Meal name is required"),
+  mealDescription: z.string(),
+  calories: z.number().nonnegative("Calories must be non-negative"),
+  protein: z.number().nonnegative("Protein must be non-negative").optional(),
+  fat: z.number().nonnegative("Fat must be non-negative").optional(),
+  carbs: z.number().nonnegative("Carbs must be non-negative").optional(),
+  fiber: z.number().nonnegative("Fiber must be non-negative").optional(),
+  foods: z.array(z.string()),
+  ingredients: z.array(z.string()),
   macronutrients: z.array(z.object({
     name: z.string(),
     amount: z.number().nonnegative(),
     unit: z.string(),
     percentDailyValue: z.number().nullable()
-  })).optional().default([
-    { name: "Protein", amount: 25, unit: "g", percentDailyValue: 50 },
-    { name: "Carbohydrates", amount: 35, unit: "g", percentDailyValue: 12 },
-    { name: "Total Fat", amount: 15, unit: "g", percentDailyValue: 19 },
-    { name: "Saturated Fat", amount: 3, unit: "g", percentDailyValue: 15 },
-    { name: "Trans Fat", amount: 0, unit: "g", percentDailyValue: 0 },
-    { name: "Dietary Fiber", amount: 6, unit: "g", percentDailyValue: 21 },
-    { name: "Total Sugars", amount: 8, unit: "g", percentDailyValue: 16 },
-    { name: "Sodium", amount: 400, unit: "mg", percentDailyValue: 17 },
-    { name: "Cholesterol", amount: 25, unit: "mg", percentDailyValue: 8 },
-    { name: "Monounsaturated Fat", amount: 5, unit: "g", percentDailyValue: null }
-  ]),
+  })),
   micronutrients: z.array(z.object({
     name: z.string(),
     amount: z.number().nonnegative(),
     unit: z.string(),
     percentDailyValue: z.number().nullable()
-  })).optional().default([
-    { name: "Vitamin A", amount: 600, unit: "µg", percentDailyValue: 67 },
-    { name: "Vitamin C", amount: 50, unit: "mg", percentDailyValue: 56 },
-    { name: "Vitamin D", amount: 5, unit: "µg", percentDailyValue: 25 },
-    { name: "Vitamin E", amount: 8, unit: "mg", percentDailyValue: 53 },
-    { name: "Vitamin K", amount: 70, unit: "µg", percentDailyValue: 58 },
-    { name: "Thiamin (B1)", amount: 1.0, unit: "mg", percentDailyValue: 83 },
-    { name: "Riboflavin (B2)", amount: 1.1, unit: "mg", percentDailyValue: 85 },
-    { name: "Niacin (B3)", amount: 12, unit: "mg", percentDailyValue: 75 },
-    { name: "Vitamin B6", amount: 1.2, unit: "mg", percentDailyValue: 71 },
-    { name: "Folate", amount: 200, unit: "µg", percentDailyValue: 50 },
-    { name: "Vitamin B12", amount: 2.0, unit: "µg", percentDailyValue: 83 },
-    { name: "Biotin", amount: 25, unit: "µg", percentDailyValue: 83 },
-    { name: "Pantothenic Acid", amount: 4, unit: "mg", percentDailyValue: 80 },
-    { name: "Calcium", amount: 150, unit: "mg", percentDailyValue: 12 },
-    { name: "Iron", amount: 5, unit: "mg", percentDailyValue: 28 },
-    { name: "Magnesium", amount: 80, unit: "mg", percentDailyValue: 19 },
-    { name: "Phosphorus", amount: 200, unit: "mg", percentDailyValue: 16 },
-    { name: "Potassium", amount: 700, unit: "mg", percentDailyValue: 15 },
-    { name: "Zinc", amount: 3, unit: "mg", percentDailyValue: 27 },
-    { name: "Copper", amount: 0.5, unit: "mg", percentDailyValue: 56 },
-    { name: "Manganese", amount: 1.2, unit: "mg", percentDailyValue: 52 },
-    { name: "Selenium", amount: 35, unit: "µg", percentDailyValue: 64 },
-    { name: "Chromium", amount: 20, unit: "µg", percentDailyValue: 57 },
-    { name: "Molybdenum", amount: 30, unit: "µg", percentDailyValue: 67 }
-  ]),
-  benefits: z.array(z.string()).optional().default([
-    "Provides essential nutrients for overall health",
-    "Supports energy metabolism and cellular function",
-    "Contains beneficial compounds for wellness"
-  ]),
-  concerns: z.array(z.string()).optional().default([
-    "Monitor portion sizes to align with individual caloric needs"
-  ]),
-  suggestions: z.array(z.string()).optional().default([
-    "Pair with adequate hydration for optimal nutrient absorption",
-    "Consider timing relative to physical activity for best results",
-    "Include variety in your diet for optimal nutrient diversity"
-  ]),
-  personalizedHealthInsights: z.string().optional().default("This meal provides a balanced nutritional profile to support your health and wellness goals."),
-  metabolicInsights: z.string().optional().default("The balanced macronutrient composition supports steady energy levels and efficient metabolism."),
-  mealStory: z.string().optional().default("A thoughtfully balanced meal designed to nourish and energize."),
-  nutritionalNarrative: z.string().optional().default("The synergy of nutrients in this meal creates a comprehensive nutritional experience."),
-  timeOfDayOptimization: z.string().optional().default("This meal is suitable for any time of day, providing sustained energy and nutrition."),
-  expertRecommendations: z.array(z.string()).optional().default([
-    "Stay adequately hydrated to support nutrient transport",
-    "Consider your activity level when determining portion sizes",
-    "Include variety in your diet for optimal nutrient diversity",
-    "Monitor your body's response to optimize meal timing"
-  ]),
-  healthRating: z.number().min(1).max(10).optional().default(7)
+  })),
+  benefits: z.array(z.string()),
+  concerns: z.array(z.string()),
+  suggestions: z.array(z.string()),
+  personalizedHealthInsights: z.string(),
+  metabolicInsights: z.string(),
+  mealStory: z.string(),
+  nutritionalNarrative: z.string(),
+  timeOfDayOptimization: z.string(),
+  expertRecommendations: z.array(z.string()),
+  healthRating: z.number().min(1).max(10)
 });
 
 export type MealAnalysis = z.infer<typeof MealAnalysisSchema>;
@@ -136,17 +85,8 @@ let openaiClient: OpenAI | null = null;
 
 // Get the correct OpenAI model name
 export function getOpenAIModelName(): string {
-  // First check explicit environment variable
-  const envModel = process.env.OPENAI_MODEL;
-  if (envModel) {
-    console.log(`[openai-utils] Using model from environment: ${envModel}`);
-    return envModel;
-  }
-  
-  // Always default to gpt-4o (most recent vision model)
-  const defaultModel = 'gpt-4o';
-  console.log(`[openai-utils] No model found in environment, using default: ${defaultModel}`);
-  return defaultModel;
+  // Use the latest vision model
+  return 'gpt-4o';
 }
 
 function getOpenAIClient(): OpenAI {
@@ -157,12 +97,13 @@ function getOpenAIClient(): OpenAI {
     apiKey = fixApiKeyLineBreaks(process.env.OPENAI_API_KEY);
   }
   
-  // --- Simplified Org ID Logic ---
-  const rawOrgId = process.env.OPENAI_ORG_ID; // Prefer direct access
-  console.log('[openai-utils] Raw process.env.OPENAI_ORG_ID:', rawOrgId);
-  const fixedOrgId = rawOrgId ? fixApiKeyLineBreaks(rawOrgId) : undefined;
-  console.log('[openai-utils] Fixed Org ID to be used:', fixedOrgId);
-  // --- End Simplified Org ID Logic ---
+  // --- DISABLED Org ID Logic - Causing Vision API Issues ---
+  // const rawOrgId = process.env.OPENAI_ORG_ID; // Prefer direct access
+  // console.log('[openai-utils] Raw process.env.OPENAI_ORG_ID:', rawOrgId);
+  // const fixedOrgId = rawOrgId ? fixApiKeyLineBreaks(rawOrgId) : undefined;
+  const fixedOrgId = undefined; // Force disable org ID for vision API compatibility
+  console.log('[openai-utils] Org ID disabled for vision API compatibility');
+  // --- End DISABLED Org ID Logic ---
   
   const modelName = getOpenAIModelName();
 
@@ -186,7 +127,6 @@ function getOpenAIClient(): OpenAI {
     // Server-side configuration for OpenAI client
     const openaiConfig: any = {
       apiKey,
-      timeout: 60000, // 60 second timeout for Vercel compatibility
     };
     
     // Only add organization if it exists
@@ -255,198 +195,301 @@ function detectOpenAIRejection(response: string): boolean {
     "I can't assist with that",
     "I cannot assist with that",
     "I'm sorry, I can't assist",
-    "I am sorry, I cannot assist"
+    "I am sorry, I cannot assist",
+    "sorry, I can't assist",
+    "sorry, I cannot assist"
   ];
   
-  // Only reject if the response starts with a rejection phrase AND doesn't contain JSON
-  const startsWithRejection = rejectionPhrases.some(phrase => 
-    response.toLowerCase().trim().startsWith(phrase.toLowerCase())
+  // Check if response is a simple rejection
+  const responseText = response.toLowerCase().trim();
+  const isSimpleRejection = rejectionPhrases.some(phrase => 
+    responseText === phrase.toLowerCase() || 
+    responseText.startsWith(phrase.toLowerCase())
   );
   
   const containsJson = response.includes('{') && response.includes('}');
   
+  // If it's a simple rejection without JSON, definitely reject
+  if (isSimpleRejection && !containsJson) {
+    console.log('[openai-utils] Detected simple rejection without analysis');
+    return true;
+  }
+  
   // If it starts with rejection but contains JSON, it's probably a qualified analysis
-  if (startsWithRejection && containsJson) {
+  if (isSimpleRejection && containsJson) {
     console.log('[openai-utils] Response starts with uncertainty but contains analysis - proceeding');
     return false;
   }
   
-  return startsWithRejection;
+  return false;
 }
 
-// Enhanced system prompt for world-class nutrition analysis
+// Simplified but effective system prompt for reliable nutrition analysis
 function generateSystemPrompt(): string {
-  return `You are a world-class nutrition expert. Analyze meals and provide personalized insights based on user profiles.
+  return `You are Dr. Marcus Rivera, a cutting-edge sports nutritionist and metabolic specialist who works with elite athletes, Navy SEALs, and high-performance executives. You've spent 18 years developing precision nutrition protocols that optimize human performance at the cellular level.
 
-Key requirements:
-- Use user's age, gender, height, weight, and goals to personalize advice
-- Explain the "why" behind nutrients - make it practical and educational
-- Offer actionable tips for optimization
-- Use conversational, motivational tone
-- Focus on health outcomes: energy, recovery, performance, longevity
+Your unique approach combines:
+- Metabolic pathway analysis specific to individual genetics and goals
+- Real-time biomarker interpretation and nutritional interventions
+- Performance nutrition strategies used by Olympic athletes and special forces
+- Functional medicine principles for optimizing mitochondrial function
+- Chronobiology and circadian rhythm nutrition for peak performance
 
-Provide comprehensive analysis in exact JSON format with detailed nutrient breakdowns and expert insights.`;
+Your analysis style:
+1. Cut through nutritional noise with laser-focused, actionable insights
+2. Identify specific metabolic advantages and blind spots in each meal
+3. Provide tactical recommendations that create measurable performance gains
+4. Reference cutting-edge research and explain the "why" behind every suggestion
+5. Speak directly and practically - like a trusted coach who sees what others miss
+
+Generate insights that are:
+- SPECIFIC to the individual's physiology, not generic advice
+- ACTIONABLE with exact timing, quantities, and methods
+- STRATEGIC for their goals (not just "eat more vegetables")
+- EVIDENCE-BASED with mechanism explanations
+- PERFORMANCE-FOCUSED on measurable outcomes
+
+Avoid generic nutritional advice. Every insight should feel personally tailored and immediately useful.`;
 }
 
-// Enhanced user prompt that incorporates profile and meal context
+// Enhanced user prompt for personalized, expert-level analysis
 function generateUserPrompt(userProfile: UserProfile): string {
   const profileData = {
     age: userProfile?.age || null,
     gender: userProfile?.gender || null,
-    height_cm: userProfile?.height ? Math.round(userProfile.height * 2.54) : null,
-    weight_kg: userProfile?.weight ? Math.round(userProfile.weight * 0.453592) : null,
     goal: userProfile?.goal || userProfile?.healthGoal || null,
     activityLevel: userProfile?.activityLevel || null,
-    dietaryRestrictions: userProfile?.dietaryRestrictions || null
+    height: userProfile?.height || null,
+    weight: userProfile?.weight || null,
+    dietaryRestrictions: userProfile?.dietaryRestrictions || null,
+    medicalConditions: userProfile?.medicalConditions || null,
+    allergies: userProfile?.allergies || null,
+    fitnessGoal: userProfile?.fitnessGoal || null,
+    targetWeight: userProfile?.targetWeight || null,
   };
 
-  return `Analyze this meal and provide personalized insights based on the user's profile and meal data.
+  // Generate personalized context based on profile
+  let personalizedContext = "Please provide a comprehensive nutritional analysis considering this individual's profile:\n\n";
+  
+  if (profileData.age && profileData.gender) {
+    personalizedContext += `Demographics: ${profileData.age}-year-old ${profileData.gender}\n`;
+  }
+  
+  if (profileData.goal || profileData.healthGoal || profileData.fitnessGoal) {
+    const goals = [profileData.goal, profileData.healthGoal, profileData.fitnessGoal].filter(Boolean);
+    personalizedContext += `Primary Goals: ${goals.join(', ')}\n`;
+  }
+  
+  if (profileData.activityLevel) {
+    personalizedContext += `Activity Level: ${profileData.activityLevel}\n`;
+  }
+  
+  if (profileData.height && profileData.weight) {
+    personalizedContext += `Physical Stats: ${profileData.height}cm, ${profileData.weight}kg\n`;
+  }
+  
+  if (profileData.dietaryRestrictions && profileData.dietaryRestrictions.length > 0) {
+    personalizedContext += `Dietary Restrictions: ${profileData.dietaryRestrictions.join(', ')}\n`;
+  }
+  
+  if (profileData.allergies && profileData.allergies.length > 0) {
+    personalizedContext += `Allergies: ${profileData.allergies.join(', ')}\n`;
+  }
+  
+  personalizedContext += "\n";
 
-User profile: ${JSON.stringify(profileData)}
+  return `${personalizedContext}MISSION: Analyze this meal like you're creating a performance nutrition protocol for this specific individual. I need insights that will actually move the needle on their results.
 
-Please analyze the food image and provide a comprehensive nutritional breakdown in the following JSON format:
+ANALYSIS REQUIREMENTS:
+1. Identify the EXACT metabolic impact this meal will have on THIS person's physiology
+2. Spot the hidden opportunities and blind spots others would miss
+3. Provide tactical adjustments with specific timing and quantities
+4. Reference cutting-edge research that explains WHY each recommendation works
+5. Connect every insight directly to their athletic performance goals
 
+OUTPUT FORMAT (JSON):
 {
-  "mealName": "What would you call this meal?",
-  "mealDescription": "Describe what you see in detail",
-  "calories": number (your best estimate),
-  "protein": number (grams),
-  "fat": number (grams), 
-  "carbs": number (grams),
-  "fiber": number (grams),
-  "foods": ["what", "specific", "foods", "do", "you", "see"],
-  "ingredients": ["what", "ingredients", "likely", "went", "into", "this"],
+  "mealName": "[Specific meal name based on actual foods seen]",
+  "mealDescription": "[Detailed description of actual foods, portions, and preparation methods visible]",
+  "calories": [precise calorie estimate],
+  "protein": [protein grams],
+  "fat": [fat grams], 
+  "carbs": [carb grams],
+  "fiber": [fiber grams],
+  "foods": ["[exact foods identified]"],
+  "ingredients": ["[specific ingredients and cooking methods observed]"],
   "macronutrients": [
-    {"name": "Protein", "amount": number, "unit": "g", "percentDailyValue": number},
-    {"name": "Carbohydrates", "amount": number, "unit": "g", "percentDailyValue": number},
-    {"name": "Total Fat", "amount": number, "unit": "g", "percentDailyValue": number},
-    {"name": "Saturated Fat", "amount": number, "unit": "g", "percentDailyValue": number},
-    {"name": "Fiber", "amount": number, "unit": "g", "percentDailyValue": number},
-    {"name": "Sugar", "amount": number, "unit": "g", "percentDailyValue": number},
-    {"name": "Sodium", "amount": number, "unit": "mg", "percentDailyValue": number},
-    {"name": "Cholesterol", "amount": number, "unit": "mg", "percentDailyValue": number}
+    {"name": "Protein", "amount": X, "unit": "g", "percentDailyValue": X},
+    {"name": "Total Carbohydrates", "amount": X, "unit": "g", "percentDailyValue": X},
+    {"name": "Dietary Fiber", "amount": X, "unit": "g", "percentDailyValue": X},
+    {"name": "Total Fat", "amount": X, "unit": "g", "percentDailyValue": X},
+    {"name": "Saturated Fat", "amount": X, "unit": "g", "percentDailyValue": X},
+    {"name": "Sodium", "amount": X, "unit": "mg", "percentDailyValue": X}
   ],
-  "micronutrients": [
-    {"name": "Vitamin A", "amount": number, "unit": "µg", "percentDailyValue": number},
-    {"name": "Vitamin C", "amount": number, "unit": "mg", "percentDailyValue": number},
-    {"name": "Vitamin D", "amount": number, "unit": "µg", "percentDailyValue": number},
-    {"name": "Vitamin E", "amount": number, "unit": "mg", "percentDailyValue": number},
-    {"name": "Vitamin K", "amount": number, "unit": "µg", "percentDailyValue": number},
-    {"name": "Thiamin (B1)", "amount": number, "unit": "mg", "percentDailyValue": number},
-    {"name": "Riboflavin (B2)", "amount": number, "unit": "mg", "percentDailyValue": number},
-    {"name": "Niacin (B3)", "amount": number, "unit": "mg", "percentDailyValue": number},
-    {"name": "Vitamin B6", "amount": number, "unit": "mg", "percentDailyValue": number},
-    {"name": "Folate", "amount": number, "unit": "µg", "percentDailyValue": number},
-    {"name": "Vitamin B12", "amount": number, "unit": "µg", "percentDailyValue": number},
-    {"name": "Calcium", "amount": number, "unit": "mg", "percentDailyValue": number},
-    {"name": "Iron", "amount": number, "unit": "mg", "percentDailyValue": number},
-    {"name": "Magnesium", "amount": number, "unit": "mg", "percentDailyValue": number},
-    {"name": "Phosphorus", "amount": number, "unit": "mg", "percentDailyValue": number},
-    {"name": "Potassium", "amount": number, "unit": "mg", "percentDailyValue": number},
-    {"name": "Zinc", "amount": number, "unit": "mg", "percentDailyValue": number},
-    {"name": "Selenium", "amount": number, "unit": "µg", "percentDailyValue": number}
+  "micronutrients": [complete micronutrient array with accurate values],
+  "personalizedHealthInsights": "CRITICAL ANALYSIS: For a [age]-year-old [weight]lb male focused on [specific goal], this meal creates [specific metabolic response]. The [X]g protein will [exact mechanism] while the [X]g carbs will [specific glycemic response]. Key performance impact: [measurable outcome]. Missing: [specific gaps] which limits [exact performance area].",
+  "metabolicInsights": "METABOLIC BLUEPRINT: Within 30 minutes: [specific physiological response]. 60-90 minutes: [peak metabolic state]. 2-3 hours: [transition phase]. For your training schedule, this means [actionable timing]. The [specific nutrient ratios] will [exact metabolic pathway] resulting in [measurable performance outcome]. Research shows [specific study] that [exact mechanism].",
+  "mealStory": "PERFORMANCE TIMELINE: Your digestive fire starts with [specific breakdown]. The [nutrient] hits your bloodstream at [timeframe], triggering [hormonal response]. For your [body size/composition], this creates [metabolic advantage/disadvantage]. Peak nutrient availability occurs [specific timing] - optimal window for [specific activity]. Energy sustainability: [duration and quality].",
+  "nutritionalNarrative": "TACTICAL ASSESSMENT: This meal scores [X/10] for your athletic performance goals. Strengths: [specific advantages for this person]. Critical gaps: [exact deficiencies]. The [macro ratio] supports [specific adaptation] but misses [performance opportunity]. Research from [specific study] indicates [actionable insight]. For a [body type] individual, optimal ratios would be [specific recommendation].",
+  "timeOfDayOptimization": "PRECISION TIMING: Based on your [goals] and [activity level], consume this meal [specific timing] relative to training. Morning intake amplifies [specific benefit] due to [hormonal state]. Pre-workout window: [exact timeframe] for [specific outcome]. Post-workout: adjust [specific element] to maximize [recovery metric]. Circadian impact: [specific recommendation].",
+  "expertRecommendations": [
+    "IMMEDIATE: Add [exact amount] [specific ingredient] to increase [specific outcome] by [measurable improvement]",
+    "STRATEGIC: Replace [specific element] with [exact alternative] to optimize [performance metric] - backed by [research reference]",
+    "ADVANCED: Time this meal [specific schedule] and follow with [exact protocol] for [measurable advantage]"
   ],
-  "personalizedHealthInsights": "Provide expert-level insights tailored to this user's profile and goals. Explain how this meal supports or challenges their specific objectives. Make it personal and actionable.",
-  "metabolicInsights": "Explain the metabolic impact of this meal - blood sugar response, insulin sensitivity, energy patterns, and cellular processes. Make complex science accessible.",
-  "mealStory": "Tell the journey this meal takes through the body - from digestion to cellular impact to performance effects. Make it engaging and educational.",
-  "nutritionalNarrative": "Explain nutrient synergies, absorption enhancers, and how different components work together. Share fascinating connections about how nutrition actually works.",
-  "timeOfDayOptimization": "When should this meal be consumed for maximum benefit? Consider circadian biology, workout timing, and metabolic optimization.",
-  "expertRecommendations": ["Provide 4+ specific, actionable tips that feel like insider knowledge - practical advice that will genuinely improve their health approach"],
-  "benefits": ["What are the real health wins from this meal?"],
-  "concerns": ["What should they be aware of? Any potential downsides?"],
-  "suggestions": ["How could they optimize this meal even further?"],
-  "healthRating": number (1-10, with reasoning based on nutrient density, balance, and alignment with goals)
+  "benefits": [
+    "Supports [specific adaptation] through [exact mechanism] - critical for your [body type/goals]",
+    "Provides [nutrient] at [optimal level] for [specific performance benefit] in [timeframe]"
+  ],
+  "concerns": [
+    "Missing [specific nutrient] limits [exact performance area] - you're leaving [measurable improvement] on the table",
+    "The [ratio/timing] creates [specific suboptimal response] for your [body composition/goals]"
+  ],
+  "suggestions": [
+    "Add [exact amount] [specific food] consumed [timing] to increase [performance metric] by [%]",
+    "Modify [specific element] to [exact change] for [measurable improvement] in [specific area]"
+  ],
+  "healthRating": [1-10 rating with specific justification for this individual's goals]
 }
 
-Focus on providing expert-level insights that are both scientifically accurate and practically useful. Make the user feel like they're getting advice from a world-class nutrition expert who understands their unique situation.`;
+CRITICAL: Every insight must be SPECIFIC to this person's physiology, goals, and the exact meal shown. No generic advice. Reference specific research when making claims. Focus on measurable performance outcomes, not feel-good generalities.`;
 }
 
 // Safe parsing of OpenAI response with NO fallback data
 function safeParseOpenAIResponse(responseText: string): any {
-  if (!responseText || typeof responseText !== 'string') {
-    console.error('[openai-utils] Response text is not a string:', typeof responseText);
-    throw new Error('OpenAI response is invalid - no fallback data allowed');
-  }
+  console.log('[openai-utils] Raw OpenAI response received (' + responseText.length + ' characters):');
+  console.log(responseText);
+  console.log('[openai-utils] ===== End of Raw Response =====');
+  
+  console.log('[openai-utils] Received analysis from OpenAI. Attempting to parse...');
+  console.log('[openai-utils] Response preview:', responseText.substring(0, 200));
+  console.log('[openai-utils] Original response length:', responseText.length);
+  console.log('[openai-utils] First 200 chars:', responseText.substring(0, 200));
+  console.log('[openai-utils] Last 200 chars:', responseText.substring(Math.max(0, responseText.length - 200)));
 
   let cleanedText = responseText.trim();
-  
-  console.log('[openai-utils] Original response length:', cleanedText.length);
-  console.log('[openai-utils] First 200 chars:', cleanedText.substring(0, 200));
-  console.log('[openai-utils] Last 200 chars:', cleanedText.substring(Math.max(0, cleanedText.length - 200)));
 
-  // Use the improved rejection detection
-  if (detectOpenAIRejection(cleanedText)) {
-    console.log('[openai-utils] Detected OpenAI rejection response');
-    throw new Error('OpenAI declined to analyze the image - please try with a different image that clearly shows food items');
+  // Check for OpenAI refusal - but be more sophisticated about it
+  const rejectionDetected = detectOpenAIRejection(cleanedText);
+  
+  if (rejectionDetected) {
+    console.error('[openai-utils] OpenAI refused to analyze the image:', cleanedText.substring(0, 200));
+    throw new Error('OpenAI could not analyze this image. Please try uploading a clearer photo of your meal with good lighting.');
   }
 
-  // Try to extract JSON from the response
-  let jsonStart = cleanedText.indexOf('{');
-  let jsonEnd = cleanedText.lastIndexOf('}');
+  // Basic cleanup - remove markdown code blocks only
+  console.log('[openai-utils] Starting basic text cleanup...');
   
-  if (jsonStart === -1 || jsonEnd === -1 || jsonStart >= jsonEnd) {
-    console.error('[openai-utils] No valid JSON structure found in response');
+  // Remove markdown code blocks if present
+  if (cleanedText.includes('```')) {
+    console.log('[openai-utils] Removing markdown code blocks');
+    cleanedText = cleanedText
+      .replace(/```json\s*/gi, '')
+      .replace(/```\s*/g, '')
+      .trim();
+  }
+  
+  // Remove any backticks
+  cleanedText = cleanedText.replace(/`+/g, '');
+  
+  // Only extract JSON if there's leading/trailing text
+  if (cleanedText.includes('{') && !cleanedText.startsWith('{')) {
+    console.log('[openai-utils] Extracting JSON from response with leading text');
+    const firstBrace = cleanedText.indexOf('{');
+    cleanedText = cleanedText.substring(firstBrace);
+  }
+
+  // Don't aggressively cut off the end - let's be more careful
+  console.log('[openai-utils] After basic cleanup, length:', cleanedText.length);
+  console.log('[openai-utils] Cleaned preview:', cleanedText.substring(0, 100));
+
+  // Find JSON boundaries more carefully
+  let jsonStart = cleanedText.indexOf('{');
+  if (jsonStart === -1) {
+    console.error('[openai-utils] No opening brace found in response');
     throw new Error('OpenAI response does not contain valid JSON structure');
+  }
+
+  // For finding the end, let's use a proper brace counting approach
+  let braceCount = 0;
+  let jsonEnd = -1;
+  let inString = false;
+  let escapeNext = false;
+
+  console.log('[openai-utils] Starting brace counting from position:', jsonStart);
+  for (let i = jsonStart; i < cleanedText.length; i++) {
+    const char = cleanedText[i];
+    
+    if (escapeNext) {
+      escapeNext = false;
+      continue;
+    }
+    
+    if (char === '\\') {
+      escapeNext = true;
+      continue;
+    }
+    
+    if (char === '"' && !escapeNext) {
+      inString = !inString;
+      continue;
+    }
+    
+    if (!inString) {
+      if (char === '{') {
+        braceCount++;
+      } else if (char === '}') {
+        braceCount--;
+        if (braceCount === 0) {
+          jsonEnd = i;
+          console.log('[openai-utils] Found complete JSON structure ending at position:', jsonEnd);
+          break;
+        }
+      }
+    }
+  }
+
+  if (jsonEnd === -1) {
+    console.error('[openai-utils] Could not find complete JSON structure');
+    console.error('[openai-utils] Brace count at end:', braceCount);
+    console.error('[openai-utils] Response was:', cleanedText.length, 'characters');
+    console.error('[openai-utils] Final 500 chars:', cleanedText.substring(Math.max(0, cleanedText.length - 500)));
+    
+    // Try to add missing closing braces
+    let jsonText = cleanedText.substring(jsonStart);
+    if (braceCount > 0) {
+      jsonText += '}'.repeat(braceCount);
+      console.log('[openai-utils] Added', braceCount, 'missing closing braces');
+    }
+    
+    try {
+      const parsed = JSON.parse(jsonText);
+      console.log('[openai-utils] Successfully parsed JSON after brace fix');
+      return parsed;
+    } catch (error) {
+      console.error('[openai-utils] Still could not parse after brace fix:', error);
+      console.error('[openai-utils] Failed JSON text (first 1000 chars):', jsonText.substring(0, 1000));
+      throw new Error('OpenAI response contains incomplete JSON structure');
+    }
   }
 
   let jsonText = cleanedText.substring(jsonStart, jsonEnd + 1);
   console.log('[openai-utils] Extracted JSON length:', jsonText.length);
-
-  // Check if JSON appears to be truncated and try to fix common issues
-  if (!jsonText.endsWith('}')) {
-    console.log('[openai-utils] JSON appears truncated, attempting to fix...');
-    
-    // Count open and close braces to see if we need to add closing braces
-    const openBraces = (jsonText.match(/\{/g) || []).length;
-    const closeBraces = (jsonText.match(/\}/g) || []).length;
-    const missingBraces = openBraces - closeBraces;
-    
-    if (missingBraces > 0) {
-      // Add missing closing braces
-      jsonText += '}'.repeat(missingBraces);
-      console.log('[openai-utils] Added', missingBraces, 'missing closing braces');
-    }
-    
-    // Check for incomplete arrays and objects
-    if (jsonText.endsWith(',')) {
-      jsonText = jsonText.slice(0, -1); // Remove trailing comma
-    }
-    
-    // Try to close incomplete arrays
-    const openBrackets = (jsonText.match(/\[/g) || []).length;
-    const closeBrackets = (jsonText.match(/\]/g) || []).length;
-    const missingBrackets = openBrackets - closeBrackets;
-    
-    if (missingBrackets > 0) {
-      jsonText += ']'.repeat(missingBrackets);
-      console.log('[openai-utils] Added', missingBrackets, 'missing closing brackets');
-    }
-  }
+  console.log('[openai-utils] About to parse JSON...');
 
   try {
     const parsed = JSON.parse(jsonText);
     console.log('[openai-utils] Successfully parsed JSON from OpenAI response');
     return parsed;
   } catch (parseError) {
-    console.error('[openai-utils] JSON parse failed even after cleanup:', parseError);
+    console.error('[openai-utils] JSON parse failed:', parseError);
+    console.error('[openai-utils] Parse error details:', parseError instanceof Error ? parseError.message : String(parseError));
     console.error('[openai-utils] Problematic JSON text (first 1000 chars):', jsonText.substring(0, 1000));
     console.error('[openai-utils] Problematic JSON text (last 500 chars):', jsonText.substring(Math.max(0, jsonText.length - 500)));
     
-    // Try one more time with a more aggressive cleanup
-    try {
-      // Remove any trailing incomplete content after the last complete object
-      const lastCompleteObject = jsonText.lastIndexOf('"}');
-      if (lastCompleteObject > -1) {
-        const cleanedJson = jsonText.substring(0, lastCompleteObject + 2) + '}';
-        const finalParsed = JSON.parse(cleanedJson);
-        console.log('[openai-utils] Successfully parsed JSON after aggressive cleanup');
-        return finalParsed;
-      }
-    } catch (secondParseError) {
-      console.error('[openai-utils] Second JSON parse attempt also failed:', secondParseError);
-    }
-    
-    throw new Error('OpenAI response contains invalid JSON format that could not be repaired');
+    // NO FALLBACK DATA - THROW ERROR IF JSON PARSING FAILS
+    console.error('[openai-utils] CRITICAL: JSON parse failed completely - NO FALLBACK DATA WILL BE PROVIDED');
+    throw new Error('OpenAI response could not be parsed as JSON - no fallback nutrition data available');
   }
 }
 
@@ -484,8 +527,59 @@ export async function analyzeImageWithGPT(
     throw new Error('Invalid image format provided to OpenAI');
   }
 
-  // Use the comprehensive analysis prompt for detailed nutrient breakdown
-  const comprehensivePrompt = generateUserPrompt(userProfile);
+  // Use a simplified prompt for reliable OpenAI analysis
+  const comprehensivePrompt = `Analyze this food image and provide nutrition data in JSON format.
+
+User Profile: ${JSON.stringify({
+    age: userProfile?.age || null,
+    gender: userProfile?.gender || null,
+    goal: userProfile?.goal || userProfile?.healthGoal || null,
+  })}
+
+Return JSON with these fields:
+{
+  "mealName": "descriptive meal name",
+  "mealDescription": "description of the meal",
+  "calories": 500,
+  "protein": 25,
+  "fat": 20,
+  "carbs": 45,
+  "fiber": 4,
+  "foods": ["list", "of", "foods"],
+  "ingredients": ["ingredient", "list"],
+  "macronutrients": [
+    {"name": "Protein", "amount": 25, "unit": "g", "percentDailyValue": 50},
+    {"name": "Total Carbohydrates", "amount": 45, "unit": "g", "percentDailyValue": 15},
+    {"name": "Dietary Fiber", "amount": 4, "unit": "g", "percentDailyValue": 16},
+    {"name": "Total Fat", "amount": 20, "unit": "g", "percentDailyValue": 31},
+    {"name": "Saturated Fat", "amount": 6, "unit": "g", "percentDailyValue": 30},
+    {"name": "Sodium", "amount": 800, "unit": "mg", "percentDailyValue": 35}
+  ],
+  "micronutrients": [
+    {"name": "Vitamin A", "amount": 300, "unit": "mcg", "percentDailyValue": 33},
+    {"name": "Vitamin C", "amount": 15, "unit": "mg", "percentDailyValue": 17},
+    {"name": "Vitamin D", "amount": 2, "unit": "mcg", "percentDailyValue": 10},
+    {"name": "Vitamin B12", "amount": 1.5, "unit": "mcg", "percentDailyValue": 63},
+    {"name": "Folate", "amount": 120, "unit": "mcg", "percentDailyValue": 30},
+    {"name": "Calcium", "amount": 150, "unit": "mg", "percentDailyValue": 15},
+    {"name": "Iron", "amount": 4, "unit": "mg", "percentDailyValue": 50},
+    {"name": "Magnesium", "amount": 80, "unit": "mg", "percentDailyValue": 20},
+    {"name": "Potassium", "amount": 600, "unit": "mg", "percentDailyValue": 13},
+    {"name": "Zinc", "amount": 3, "unit": "mg", "percentDailyValue": 27}
+  ],
+  "personalizedHealthInsights": "health insights for user profile",
+  "metabolicInsights": "metabolic analysis",
+  "mealStory": "meal digestion story",
+  "nutritionalNarrative": "nutritional analysis",
+  "timeOfDayOptimization": "timing recommendations",
+  "expertRecommendations": ["recommendation 1", "recommendation 2"],
+  "benefits": ["benefit 1", "benefit 2"],
+  "concerns": ["concern 1"],
+  "suggestions": ["suggestion 1"],
+  "healthRating": 7
+}
+
+Provide accurate nutrition data for the actual foods you see in the image.`;
 
   const modelName = getOpenAIModelName();
 
@@ -493,6 +587,10 @@ export async function analyzeImageWithGPT(
   console.log(`[openai-utils] Using comprehensive analysis prompt for detailed nutrients`);
 
   try {
+    console.log(`[openai-utils] About to send request to OpenAI with model ${modelName}`);
+    console.log(`[openai-utils] System prompt length: ${generateSystemPrompt().length}`);
+    console.log(`[openai-utils] User prompt length: ${comprehensivePrompt.length}`);
+    
     const completion = await retryWithExponentialBackoff(async () => {
       return openai.chat.completions.create({
         model: modelName,
@@ -512,22 +610,31 @@ export async function analyzeImageWithGPT(
                 type: 'image_url',
                 image_url: {
                   url: base64Image,
-                  detail: 'auto' // Changed from 'high' to 'auto' for faster processing
+                  detail: 'low' // Use 'low' for much faster processing
                 },
               },
             ],
           },
         ],
-        max_tokens: 2500, // Reduced from 4000 to 2500 for faster response
-        temperature: 0.5, // Reduced from 0.7 to 0.5 for more focused, faster responses
+        max_tokens: 4500, // Increased for comprehensive analysis including detailed micronutrients
+        temperature: 0.1, // Very low for maximum consistency and accuracy
         stream: false, // Ensure no streaming for consistent timing
       });
     });
 
+    console.log('[openai-utils] OpenAI response received. Choices count:', completion.choices?.length);
+    console.log('[openai-utils] First choice structure:', {
+      hasMessage: !!completion.choices[0]?.message,
+      hasContent: !!completion.choices[0]?.message?.content,
+      finishReason: completion.choices[0]?.finish_reason,
+      role: completion.choices[0]?.message?.role
+    });
+    
     const analysisContent = completion.choices[0]?.message?.content;
 
     if (!analysisContent) {
       console.error('[openai-utils] No content in OpenAI response');
+      console.error('[openai-utils] Full completion object:', JSON.stringify(completion, null, 2));
       throw new Error('OpenAI returned empty response - please try again');
     }
 

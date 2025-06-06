@@ -57,7 +57,13 @@ export default function AnalysisPage() {
       try {
         const response = await fetch(`/api/meals/${mealId}`);
         if (!response.ok) {
-          throw new Error('Failed to fetch meal analysis');
+          if (response.status === 404) {
+            throw new Error('Meal analysis not found. This meal may have been deleted or the link is incorrect.');
+          } else if (response.status === 500) {
+            throw new Error('Server error while loading meal analysis. Please try again later.');
+          } else {
+            throw new Error(`Failed to fetch meal analysis (${response.status})`);
+          }
         }
         const data = await response.json();
         
@@ -88,6 +94,7 @@ export default function AnalysisPage() {
         
         setAnalysis(transformedData);
       } catch (err: any) {
+        console.error('Error fetching meal analysis:', err);
         setError(err.message || 'Failed to load analysis');
       } finally {
         setLoading(false);
@@ -118,13 +125,36 @@ export default function AnalysisPage() {
             </svg>
           </div>
           <h2 className="text-white text-xl font-semibold mb-2">Analysis Not Found</h2>
-          <p className="text-gray-400 mb-6">{error}</p>
-          <Link 
-            href="/upload" 
-            className="inline-flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-          >
-            Upload New Meal
-          </Link>
+          <p className="text-gray-400 mb-6">
+            {error || 'This meal analysis could not be found. It may have been deleted or the link is incorrect.'}
+          </p>
+          <div className="space-y-3">
+            <Link 
+              href="/upload" 
+              className="inline-flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors w-full justify-center"
+            >
+              Upload New Meal
+            </Link>
+            <Link 
+              href="/meal-history" 
+              className="inline-flex items-center px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white font-medium rounded-lg transition-colors w-full justify-center"
+            >
+              View Meal History
+            </Link>
+            <Link 
+              href="/" 
+              className="inline-flex items-center px-6 py-3 bg-gray-800 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors w-full justify-center"
+            >
+              Back to Home
+            </Link>
+          </div>
+          {mealId && (
+            <div className="mt-6 p-4 bg-gray-800 rounded-lg">
+              <p className="text-xs text-gray-500 mb-2">Meal ID:</p>
+              <p className="text-xs text-gray-400 font-mono break-all">{mealId}</p>
+              <p className="text-xs text-red-400 mt-2">This ID appears to be invalid or incomplete</p>
+            </div>
+          )}
         </div>
       </div>
     );

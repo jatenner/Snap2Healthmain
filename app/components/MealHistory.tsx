@@ -91,9 +91,9 @@ export default function MealHistory({
             .order('created_at', { ascending: sortOrder === 'asc' });
             
           if (!error && dbMeals && dbMeals.length > 0) {
-            const formattedDbMeals = dbMeals.map(meal => ({
+            const formattedDbMeals = dbMeals.map((meal: any) => ({
               id: meal.id,
-              mealName: meal.caption || meal.name || meal.detected_food || 'Analyzed Meal',
+              mealName: meal.caption || meal.name || (meal as any).detected_food || 'Analyzed Meal',
               imageUrl: normalizeImageUrl(meal.image_url),
               calories: meal.calories || (meal.analysis?.calories) || 0,
               created_at: meal.created_at
@@ -103,7 +103,7 @@ export default function MealHistory({
             console.log(`[MealHistory] Fetched ${formattedDbMeals.length} meals from database`);
             
             // Save these to localStorage for faster future loading
-            formattedDbMeals.forEach(meal => {
+            formattedDbMeals.forEach((meal: any) => {
               try {
                 // Store key Supabase meal data in localStorage for improved loading speed
                 const key = `meal_analysis_${meal.id}`;

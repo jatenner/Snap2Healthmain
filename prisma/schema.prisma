@@ -42,29 +42,26 @@ model Account {
 }
 
 model Meal {
-  id            String    @id @default(cuid())
-  userId        String    // Relation to User model needed if it's per user
-  // user       User   @relation(fields: [userId], references: [id]) // Example relation
-  name          String?
-  caption       String?
-  image_url     String?
-  calories      Int?
-  protein       Float?
-  fat           Float?
-  carbs         Float?
-  macronutrients Json?     // Detailed macronutrients
-  micronutrients Json?     // Detailed micronutrients
-  nutrients     Json?     // General or combined nutrients column
-  ingredients   String[]  // List of ingredients
-  benefits      String[]
-  concerns      String[]
-  suggestions   String[]
-  analysis      Json?     // General analysis JSON blob
-  goal          String?   // User's goal for this meal
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                        String    @id @default(cuid())
+  user_id                   String    // Snake case to match Supabase
+  meal_name                 String?   // Name of the meal
+  image_url                 String?   // URL to meal image
+  calories                  Int?      // Calorie count
+  protein                   Float?    // Protein in grams
+  fat                       Float?    // Fat in grams
+  carbs                     Float?    // Carbohydrates in grams
+  macronutrients           Json?     // Detailed macronutrients array
+  micronutrients           Json?     // Detailed micronutrients array
+  ingredients              String[]  // List of ingredients
+  benefits                 String[]  // Health benefits
+  concerns                 String[]  // Health concerns
+  suggestions              String[]  // Suggestions for improvement
+  analysis                 Json?     // Full OpenAI analysis JSON
+  goal                     String?   // User's nutritional goal
+  personalized_insights    String?   // AI-generated personalized insights
+  insights_status          String?   // Status of insights generation
+  created_at               DateTime  @default(now())
+  updated_at               DateTime  @updatedAt
 
-  // If you have a direct relation to the User model
-  // user User @relation(fields: [userId], references: [id])
-  // @@index([userId])
+  @@map("meals")
 } 
