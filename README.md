@@ -162,3 +162,5 @@ Built with ❤️ for better nutrition tracking
 
 <!-- ✅ ALL MODULE RESOLUTION ISSUES FIXED - PRODUCTION BUILD SUCCESSFUL -->
 # Railway deployment with environment variables
+
+<!-- Railway deployment trigger with env vars -->
