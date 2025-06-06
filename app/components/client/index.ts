@@ -1,2 +1,2 @@
 // Client components barrel export
-export { useAuth } from './ClientAuthProvider'; 
+export { useAuth, default as ClientAuthProvider } from './ClientAuthProvider'; 
