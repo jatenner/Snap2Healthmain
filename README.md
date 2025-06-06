@@ -161,3 +161,4 @@ For support, please open an issue on GitHub or contact the development team.
 Built with ❤️ for better nutrition tracking
 
 <!-- ✅ ALL MODULE RESOLUTION ISSUES FIXED - PRODUCTION BUILD SUCCESSFUL -->
+# Railway deployment with environment variables
