@@ -209,12 +209,15 @@ export async function POST(request: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    // Verify authentication (skip in development mode)
+    // Verify authentication (skip in development mode or with force bypass)
     let session: import('@supabase/supabase-js').Session | null = null;
     let userId: string | null = null;
     let userProfile: any = null;
 
-    if (process.env.NODE_ENV !== 'development') {
+    // Allow bypass for temporary demo mode or development
+    const allowBypass = process.env.FORCE_DEV_MODE === 'true' || process.env.NODE_ENV === 'development';
+    
+    if (!allowBypass) {
       const { data: { session: authSession }, error: sessionError } = await supabase.auth.getSession();
 
       if (sessionError) {
@@ -240,30 +243,30 @@ export async function POST(request: NextRequest) {
         }
       }
     } else {
-      // DEVELOPMENT MODE
-      console.log('[analyze-meal] Development mode - attempting to get real user session first...');
+      // BYPASS MODE (Development or Force Dev Mode)
+      console.log('[analyze-meal] Bypass mode enabled - attempting to get real user session first...');
       const { data: { session: devAuthSession }, error: devSessionError } = await supabase.auth.getSession();
 
       if (devAuthSession && !devSessionError) {
         userId = devAuthSession.user.id;
-        console.log('[analyze-meal] Development mode - Real user session found:', userId);
+        console.log('[analyze-meal] Bypass mode - Real user session found:', userId);
         try {
           userProfile = await getFullUserProfile(userId);
-          console.log('[analyze-meal] Development mode - User profile fetched:', userProfile ? JSON.stringify(userProfile).substring(0,200) : 'null');
+          console.log('[analyze-meal] Bypass mode - User profile fetched:', userProfile ? JSON.stringify(userProfile).substring(0,200) : 'null');
         } catch (profileError) {
-          console.warn('[analyze-meal] Development mode - Could not fetch real user profile:', profileError);
+          console.warn('[analyze-meal] Bypass mode - Could not fetch real user profile:', profileError);
           // Fallback to mock if real profile fetch fails
           userProfile = null; 
         }
       } else {
-        console.log('[analyze-meal] Development mode - No real user session found, or error occurred:', devSessionError?.message);
+        console.log('[analyze-meal] Bypass mode - No real user session found, or error occurred:', devSessionError?.message);
         userId = null; // No real user ID
       }
 
       // If real user profile couldn't be fetched or no session, use mock data
       if (!userProfile) {
         userId = '11111111-1111-1111-1111-111111111111'; // Mock user ID
-        console.log('[analyze-meal] Development mode - Falling back to mock user ID:', userId);
+        console.log('[analyze-meal] Bypass mode - Falling back to mock user ID:', userId);
         userProfile = {
           id: userId,
           age: 30,
@@ -274,9 +277,9 @@ export async function POST(request: NextRequest) {
           height_unit: 'in',
           activityLevel: 'moderate',
           goal: 'Athletic Performance',
-          name: 'Dev User - Mock Profile (Fallback)'
+          name: 'Demo User - Bypass Mode'
         };
-        console.log('[analyze-meal] Development mode - Using default mock profile (fallback):', JSON.stringify(userProfile).substring(0,200));
+        console.log('[analyze-meal] Bypass mode - Using default mock profile (fallback):', JSON.stringify(userProfile).substring(0,200));
       }
     }
 
