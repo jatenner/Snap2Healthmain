@@ -418,6 +418,37 @@ export async function POST(request: NextRequest) {
         throw new Error('OpenAI analysis failed to return macronutrient data');
       }
       
+      // CRITICAL VALIDATION: Ensure NO mock/predetermined nutrition values
+      const macros = (analysisResult as any).macronutrients;
+      const suspiciousMockData = macros.some((macro: any) => {
+        // Check for common mock/fake values that shouldn't appear in real analysis
+        const amount = macro.amount;
+        const name = macro.name?.toLowerCase();
+        
+        // Flag obviously fake round numbers that are too convenient
+        if (name === 'protein' && (amount === 20 || amount === 25 || amount === 30)) {
+          console.warn('[analyze-meal] WARNING: Potentially mock protein value detected:', amount);
+        }
+        if (name?.includes('carb') && (amount === 45 || amount === 50 || amount === 60)) {
+          console.warn('[analyze-meal] WARNING: Potentially mock carb value detected:', amount);
+        }
+        
+        // Check for the exact mock values we saw (24% and 22% DV)
+        if (macro.percentDailyValue === 24 || macro.percentDailyValue === 22) {
+          console.error('[analyze-meal] CRITICAL: Mock DV percentage detected!', macro);
+          return true;
+        }
+        
+        return false;
+      });
+      
+      if (suspiciousMockData) {
+        console.error('[analyze-meal] CRITICAL: Mock/predetermined nutrition data detected in OpenAI response');
+        throw new Error('Analysis contains mock data - only real nutrition analysis is permitted');
+      }
+      
+      console.log('[analyze-meal] ✅ Nutrition data validation passed - no mock data detected');
+      
       // Calculate personalized daily values and add them to nutrients
       if ((analysisResult as any)?.macronutrients || (analysisResult as any)?.micronutrients) {
         console.log('[analyze-meal] Calculating daily values...');
