@@ -165,3 +165,6 @@ Built with ❤️ for better nutrition tracking
 
 <!-- Railway deployment trigger with env vars -->
 # Force Railway redeployment with FORCE_DEV_MODE
+
+<!-- Railway deployment trigger with FORCE_DEV_MODE bypass enabled -->
+<!-- Deployment timestamp: 2024-01-XX -->
