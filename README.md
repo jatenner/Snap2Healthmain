@@ -164,3 +164,4 @@ Built with ❤️ for better nutrition tracking
 # Railway deployment with environment variables
 
 <!-- Railway deployment trigger with env vars -->
+# Force Railway redeployment with FORCE_DEV_MODE
