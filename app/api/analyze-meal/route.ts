@@ -279,16 +279,16 @@ export async function POST(request: NextRequest) {
         userProfile = {
           id: userId,
           age: 30,
-          gender: 'male',
+          gender: 'Male',
           weight: 225, 
           weight_unit: 'lb',
           height: 72,
           height_unit: 'in',
-          activityLevel: 'moderate',
+          activity_level: 'Very Active',
           goal: 'Athletic Performance',
-          name: 'Demo User - Bypass Mode'
+          name: 'Demo User - 225lb Active Male'
         };
-        console.log('[analyze-meal] Bypass mode - Using default mock profile (fallback):', JSON.stringify(userProfile).substring(0,200));
+        console.log('[analyze-meal] Bypass mode - Using 225lb profile:', JSON.stringify(userProfile, null, 2));
       }
     }
 
@@ -430,10 +430,21 @@ export async function POST(request: NextRequest) {
           
         // Add daily value percentages to macronutrients
         if ((analysisResult as any).macronutrients) {
-          (analysisResult as any).macronutrients = (analysisResult as any).macronutrients.map((nutrient: any) => ({
-                    ...nutrient,
-            percentDailyValue: calculatePersonalizedDV(nutrient, userProfile)
-          }));
+          console.log('[analyze-meal] Calculating personalized DV for macronutrients using profile:', {
+            weight: userProfile?.weight,
+            weight_unit: userProfile?.weight_unit,
+            activity_level: userProfile?.activity_level,
+            goal: userProfile?.goal
+          });
+          
+          (analysisResult as any).macronutrients = (analysisResult as any).macronutrients.map((nutrient: any) => {
+            const personalizedDV = calculatePersonalizedDV(nutrient, userProfile);
+            console.log(`[analyze-meal] DV Calculation: ${nutrient.name} ${nutrient.amount}${nutrient.unit} = ${personalizedDV}% of personalized daily value`);
+            return {
+              ...nutrient,
+              percentDailyValue: personalizedDV
+            };
+          });
         }
         
         // Add daily value percentages to micronutrients  
