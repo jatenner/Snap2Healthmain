@@ -214,15 +214,30 @@ export async function POST(request: NextRequest) {
     let userId: string | null = null;
     let userProfile: any = null;
 
-    // Allow bypass for temporary demo mode or development
-    console.log('[analyze-meal] Environment check:', {
+    // Debug environment variables for Railway deployment
+    console.log('[analyze-meal] Environment variables:', {
       FORCE_DEV_MODE: process.env.FORCE_DEV_MODE,
       BYPASS_AUTH: process.env.BYPASS_AUTH,
-      NODE_ENV: process.env.NODE_ENV,
-      allowBypass: process.env.FORCE_DEV_MODE === 'true' || process.env.BYPASS_AUTH === 'true' || process.env.NODE_ENV === 'development'
+      NODE_ENV: process.env.NODE_ENV
     });
-    const allowBypass = process.env.FORCE_DEV_MODE === 'true' || process.env.BYPASS_AUTH === 'true' || process.env.NODE_ENV === 'development' || true; // TEMP: Always allow bypass for testing
     
+    // Allow bypass for temporary demo mode or development
+    const allowBypass = process.env.FORCE_DEV_MODE === 'true' || process.env.BYPASS_AUTH === 'true' || process.env.NODE_ENV === 'development';
+    
+    console.log('[analyze-meal] Auth check:', { 
+      hasSession: !!session, 
+      allowBypass, 
+      willBypass: !session && allowBypass 
+    });
+
+    // Check authentication unless bypass is enabled
+    if (!session && !allowBypass) {
+      return NextResponse.json(
+        { error: 'You must be logged in to analyze meals' },
+        { status: 401 }
+      );
+    }
+
     if (!allowBypass) {
       const { data: { session: authSession }, error: sessionError } = await supabase.auth.getSession();
 
