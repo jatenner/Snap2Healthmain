@@ -258,14 +258,9 @@ function generateUserPrompt(userProfile: UserProfile): string {
     age: userProfile?.age || null,
     gender: userProfile?.gender || null,
     goal: userProfile?.goal || null,
-    activityLevel: userProfile?.activityLevel || null,
-    height: userProfile?.height || null,
     weight: userProfile?.weight || null,
-    dietaryRestrictions: userProfile?.dietaryRestrictions || null,
-    medicalConditions: userProfile?.medicalConditions || null,
-    allergies: userProfile?.allergies || null,
-    fitnessGoal: userProfile?.fitnessGoal || null,
-    targetWeight: userProfile?.targetWeight || null,
+    weight_unit: userProfile?.weight_unit || null,
+    activity_level: userProfile?.activity_level || null,
   };
 
   // Generate personalized context based on profile
@@ -275,25 +270,17 @@ function generateUserPrompt(userProfile: UserProfile): string {
     personalizedContext += `Demographics: ${profileData.age}-year-old ${profileData.gender}\n`;
   }
   
-  if (profileData.goal || profileData.fitnessGoal) {
-    const goals = [profileData.goal, profileData.fitnessGoal].filter(Boolean);
+  if (profileData.goal || profileData.goal) {
+    const goals = [profileData.goal, profileData.goal].filter(Boolean);
     personalizedContext += `Primary Goals: ${goals.join(', ')}\n`;
   }
   
-  if (profileData.activityLevel) {
-    personalizedContext += `Activity Level: ${profileData.activityLevel}\n`;
+  if (profileData.activity_level) {
+    personalizedContext += `Activity Level: ${profileData.activity_level}\n`;
   }
   
-  if (profileData.height && profileData.weight) {
-    personalizedContext += `Physical Stats: ${profileData.height}cm, ${profileData.weight}kg\n`;
-  }
-  
-  if (profileData.dietaryRestrictions && profileData.dietaryRestrictions.length > 0) {
-    personalizedContext += `Dietary Restrictions: ${profileData.dietaryRestrictions.join(', ')}\n`;
-  }
-  
-  if (profileData.allergies && profileData.allergies.length > 0) {
-    personalizedContext += `Allergies: ${profileData.allergies.join(', ')}\n`;
+  if (profileData.weight && profileData.weight) {
+    personalizedContext += `Physical Stats: ${profileData.weight} ${profileData.weight_unit}\n`;
   }
   
   personalizedContext += "\n";
@@ -534,7 +521,12 @@ User Profile: ${JSON.stringify({
     age: userProfile?.age || null,
     gender: userProfile?.gender || null,
     goal: userProfile?.goal || null,
+    weight: userProfile?.weight || null,
+    weight_unit: userProfile?.weight_unit || null,
+    activity_level: userProfile?.activity_level || null,
   })}
+
+CRITICAL: Do NOT calculate standard FDA Daily Value percentages. Leave percentDailyValue as null for all nutrients - personalized calculations will be done separately.
 
 Return JSON with these fields:
 {
@@ -548,24 +540,24 @@ Return JSON with these fields:
   "foods": ["list", "of", "foods"],
   "ingredients": ["ingredient", "list"],
   "macronutrients": [
-    {"name": "Protein", "amount": 25, "unit": "g", "percentDailyValue": 50},
-    {"name": "Total Carbohydrates", "amount": 45, "unit": "g", "percentDailyValue": 15},
-    {"name": "Dietary Fiber", "amount": 4, "unit": "g", "percentDailyValue": 16},
-    {"name": "Total Fat", "amount": 20, "unit": "g", "percentDailyValue": 31},
-    {"name": "Saturated Fat", "amount": 6, "unit": "g", "percentDailyValue": 30},
-    {"name": "Sodium", "amount": 800, "unit": "mg", "percentDailyValue": 35}
+    {"name": "Protein", "amount": 25, "unit": "g", "percentDailyValue": null},
+    {"name": "Total Carbohydrates", "amount": 45, "unit": "g", "percentDailyValue": null},
+    {"name": "Dietary Fiber", "amount": 4, "unit": "g", "percentDailyValue": null},
+    {"name": "Total Fat", "amount": 20, "unit": "g", "percentDailyValue": null},
+    {"name": "Saturated Fat", "amount": 6, "unit": "g", "percentDailyValue": null},
+    {"name": "Sodium", "amount": 800, "unit": "mg", "percentDailyValue": null}
   ],
   "micronutrients": [
-    {"name": "Vitamin A", "amount": 300, "unit": "mcg", "percentDailyValue": 33},
-    {"name": "Vitamin C", "amount": 15, "unit": "mg", "percentDailyValue": 17},
-    {"name": "Vitamin D", "amount": 2, "unit": "mcg", "percentDailyValue": 10},
-    {"name": "Vitamin B12", "amount": 1.5, "unit": "mcg", "percentDailyValue": 63},
-    {"name": "Folate", "amount": 120, "unit": "mcg", "percentDailyValue": 30},
-    {"name": "Calcium", "amount": 150, "unit": "mg", "percentDailyValue": 15},
-    {"name": "Iron", "amount": 4, "unit": "mg", "percentDailyValue": 50},
-    {"name": "Magnesium", "amount": 80, "unit": "mg", "percentDailyValue": 20},
-    {"name": "Potassium", "amount": 600, "unit": "mg", "percentDailyValue": 13},
-    {"name": "Zinc", "amount": 3, "unit": "mg", "percentDailyValue": 27}
+    {"name": "Vitamin A", "amount": 300, "unit": "mcg", "percentDailyValue": null},
+    {"name": "Vitamin C", "amount": 15, "unit": "mg", "percentDailyValue": null},
+    {"name": "Vitamin D", "amount": 2, "unit": "mcg", "percentDailyValue": null},
+    {"name": "Vitamin B12", "amount": 1.5, "unit": "mcg", "percentDailyValue": null},
+    {"name": "Folate", "amount": 120, "unit": "mcg", "percentDailyValue": null},
+    {"name": "Calcium", "amount": 150, "unit": "mg", "percentDailyValue": null},
+    {"name": "Iron", "amount": 4, "unit": "mg", "percentDailyValue": null},
+    {"name": "Magnesium", "amount": 80, "unit": "mg", "percentDailyValue": null},
+    {"name": "Potassium", "amount": 600, "unit": "mg", "percentDailyValue": null},
+    {"name": "Zinc", "amount": 3, "unit": "mg", "percentDailyValue": null}
   ],
   "personalizedHealthInsights": "health insights for user profile",
   "metabolicInsights": "metabolic analysis",
