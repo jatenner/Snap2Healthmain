@@ -215,6 +215,11 @@ export async function POST(request: NextRequest) {
     let userProfile: any = null;
 
     // Allow bypass for temporary demo mode or development
+    console.log('[analyze-meal] Environment check:', {
+      FORCE_DEV_MODE: process.env.FORCE_DEV_MODE,
+      NODE_ENV: process.env.NODE_ENV,
+      allowBypass: process.env.FORCE_DEV_MODE === 'true' || process.env.NODE_ENV === 'development'
+    });
     const allowBypass = process.env.FORCE_DEV_MODE === 'true' || process.env.NODE_ENV === 'development';
     
     if (!allowBypass) {
