@@ -239,7 +239,7 @@ export async function POST(request: NextRequest) {
         userId = session.user.id;
         console.log('[analyze-meal] User authenticated:', userId);
         try {
-          const { getFullUserProfile } = await import('../../lib/profile-persistence');
+          const { getFullUserProfile } = await import('../../lib/profile-server-utils');
           userProfile = await getFullUserProfile(userId);
           console.log('[analyze-meal] User profile fetched for authenticated user:', userProfile ? JSON.stringify(userProfile).substring(0,200) : 'null');
         } catch (profileError) {
@@ -256,7 +256,7 @@ export async function POST(request: NextRequest) {
         userId = devAuthSession.user.id;
         console.log('[analyze-meal] Bypass mode - Real user session found:', userId);
         try {
-          const { getFullUserProfile } = await import('../../lib/profile-persistence');
+          const { getFullUserProfile } = await import('../../lib/profile-server-utils');
           userProfile = await getFullUserProfile(userId);
           console.log('[analyze-meal] Bypass mode - User profile fetched:', userProfile ? JSON.stringify(userProfile).substring(0,200) : 'null');
         } catch (profileError) {
