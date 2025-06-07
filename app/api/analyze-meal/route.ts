@@ -283,7 +283,9 @@ export async function POST(request: NextRequest) {
           goal: 'Athletic Performance',
           name: 'Demo User - 225lb Active Male'
         };
-        console.log('[analyze-meal] Using mock 225lb profile:', JSON.stringify(userProfile, null, 2));
+        console.log('[analyze-meal] CRITICAL: Using 225lb mock profile for DV calculations:', JSON.stringify(userProfile, null, 2));
+      } else {
+        console.log('[analyze-meal] CRITICAL: Using real user profile for DV calculations:', JSON.stringify(userProfile, null, 2));
       }
     }
 
@@ -423,6 +425,16 @@ export async function POST(request: NextRequest) {
         // Import the DV calculation function
           const { calculatePersonalizedDV } = await import('../../lib/profile-utils');
           
+        // CRITICAL DEBUG: Log profile being used for calculations
+        console.log('[analyze-meal] CRITICAL DEBUG - Profile used for DV calculation:', JSON.stringify(userProfile, null, 2));
+        console.log('[analyze-meal] Profile analysis for 225lb user:', {
+          weight: userProfile?.weight,
+          weight_unit: userProfile?.weight_unit,
+          activity_level: userProfile?.activity_level,
+          goal: userProfile?.goal,
+          isValidProfile: !!(userProfile?.weight && userProfile?.weight_unit && userProfile?.activity_level)
+        });
+          
         // Add daily value percentages to macronutrients
         if ((analysisResult as any).macronutrients) {
           console.log('[analyze-meal] Calculating personalized DV for macronutrients using profile:', {
@@ -432,14 +444,31 @@ export async function POST(request: NextRequest) {
             goal: userProfile?.goal
           });
           
-          (analysisResult as any).macronutrients = (analysisResult as any).macronutrients.map((nutrient: any) => {
+          console.log('[analyze-meal] BEFORE DV calculation - Original macronutrients:', JSON.stringify((analysisResult as any).macronutrients, null, 2));
+          
+          (analysisResult as any).macronutrients = (analysisResult as any).macronutrients.map((nutrient: any, index: number) => {
+            const originalDV = nutrient.percentDailyValue;
             const personalizedDV = calculatePersonalizedDV(nutrient, userProfile);
-            console.log(`[analyze-meal] DV Calculation: ${nutrient.name} ${nutrient.amount}${nutrient.unit} = ${personalizedDV}% of personalized daily value`);
+            
+            console.log(`[analyze-meal] CRITICAL DV Debug #${index + 1}:`, {
+              nutrient: nutrient.name,
+              amount: nutrient.amount,
+              unit: nutrient.unit,
+              originalDV_from_OpenAI: originalDV,
+              personalizedDV_calculated: personalizedDV,
+              profile_weight: userProfile?.weight,
+              profile_activity: userProfile?.activity_level,
+              changed: originalDV !== personalizedDV
+            });
+            
             return {
               ...nutrient,
-              percentDailyValue: personalizedDV
+              percentDailyValue: personalizedDV,
+              originalDV: originalDV // Keep track of original for debugging
             };
           });
+          
+          console.log('[analyze-meal] AFTER DV calculation - Updated macronutrients:', JSON.stringify((analysisResult as any).macronutrients, null, 2));
         }
         
         // Add daily value percentages to micronutrients  
