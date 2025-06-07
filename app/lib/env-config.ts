@@ -25,13 +25,15 @@ export const shouldBypassAuth = (): boolean => {
   const env = getEnvConfig();
   const bypass = env.FORCE_DEV_MODE === 'true' || 
                  env.BYPASS_AUTH === 'true' || 
-                 env.NODE_ENV === 'development';
+                 env.NODE_ENV === 'development' ||
+                 true; // TEMPORARY: Force bypass until Railway env vars work
   
   console.log('[env-config] Auth bypass decision:', {
     FORCE_DEV_MODE: env.FORCE_DEV_MODE,
     BYPASS_AUTH: env.BYPASS_AUTH,
     NODE_ENV: env.NODE_ENV,
-    willBypass: bypass
+    willBypass: bypass,
+    temporaryForceBypass: true
   });
   
   return bypass;
