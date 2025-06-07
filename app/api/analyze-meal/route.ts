@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { createClient } from '../../lib/supabase/server';
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { createClient as createServerClient } from '../../lib/supabase/server';
+import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import { getFullUserProfile } from '../../lib/profile-server-utils';
 import { analyzeMealWithOpenAI } from '../../lib/openai-utils';
 import OpenAI from 'openai';
+import { shouldBypassAuth } from '../../lib/env-config';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -201,10 +202,10 @@ export async function POST(request: NextRequest) {
 
   try {
     // Create authenticated Supabase client
-    const supabase = createClient();
+    const supabase = createServerClient();
 
     // Create admin client for database and storage operations
-    const supabaseAdmin = createSupabaseClient(
+    const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
@@ -214,21 +215,8 @@ export async function POST(request: NextRequest) {
     let userId: string | null = null;
     let userProfile: any = null;
 
-    // Debug environment variables for Railway deployment
-    console.log('[analyze-meal] Environment variables:', {
-      FORCE_DEV_MODE: process.env.FORCE_DEV_MODE,
-      BYPASS_AUTH: process.env.BYPASS_AUTH,
-      NODE_ENV: process.env.NODE_ENV
-    });
-    
-    // Allow bypass for temporary demo mode or development
-    const allowBypass = process.env.FORCE_DEV_MODE === 'true' || process.env.BYPASS_AUTH === 'true' || process.env.NODE_ENV === 'development';
-    
-    console.log('[analyze-meal] Auth check:', { 
-      hasSession: !!session, 
-      allowBypass, 
-      willBypass: !session && allowBypass 
-    });
+    // Use centralized environment configuration
+    const allowBypass = shouldBypassAuth();
 
     // Check authentication unless bypass is enabled
     if (!session && !allowBypass) {
