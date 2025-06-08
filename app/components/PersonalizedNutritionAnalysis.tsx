@@ -1214,87 +1214,165 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
 
           {activeTab === 'ai-insights' && (
             <div className="space-y-8">
-              <h3 className="text-3xl font-bold text-white mb-8 flex items-center">
-                <span className="w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center mr-4">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
-                </span>
-                Scientific Analysis & Personalized Insights
-              </h3>
-
-              {/* Personalized Insights */}
+              {/* Personalized Insights - Redesigned */}
               <div className="space-y-6">
                 <div className="bg-gradient-to-br from-purple-900/30 to-indigo-900/30 backdrop-blur-sm border border-purple-500/20 rounded-xl p-6">
-                  <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center space-x-3">
-                      <div className="p-2 bg-purple-500/20 rounded-lg">
-                        <span className="text-2xl">🧠</span>
-            </div>
-                      <h3 className="text-xl font-semibold text-purple-300">Scientific Analysis & Personalized Insights</h3>
+                      <div className="p-3 bg-purple-500/20 rounded-xl">
+                        <span className="text-3xl">🧠</span>
+                      </div>
+                      <div>
+                        <h3 className="text-2xl font-bold text-white">AI Health Insights</h3>
+                        <p className="text-purple-300">Personalized analysis for your 225 lb profile</p>
+                      </div>
                     </div>
                     {personalizedInsights && (
                       <button
                         onClick={() => {
                           setForceRegenerate(true);
-                          generatePersonalizedInsights(); // Regenerate with enhanced prompt
+                          generatePersonalizedInsights();
                         }}
                         disabled={isGeneratingInsights}
-                        className="px-4 py-2 bg-purple-600/50 hover:bg-purple-600/70 disabled:opacity-50 disabled:cursor-not-allowed text-purple-200 text-sm rounded-lg border border-purple-500/30 transition-all duration-200 hover:border-purple-400/50"
+                        className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-all duration-200 hover:scale-105 shadow-lg"
                       >
-                        {isGeneratingInsights ? 'Generating...' : 'Regenerate Enhanced Analysis'}
+                        {isGeneratingInsights ? (
+                          <div className="flex items-center space-x-2">
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            <span>Analyzing...</span>
+                          </div>
+                        ) : (
+                          'Regenerate Analysis'
+                        )}
                       </button>
                     )}
                   </div>
                   
                   {isGeneratingInsights ? (
-                    <div className="flex items-center justify-center py-8">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
-                        <span className="text-purple-300">Generating deep scientific analysis...</span>
-                      </div>
+                    <div className="flex flex-col items-center justify-center py-16">
+                      <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-6"></div>
+                      <h4 className="text-xl font-semibold text-purple-300 mb-2">Analyzing Your Meal</h4>
+                      <p className="text-purple-200/70">AI is processing nutritional data and generating personalized insights...</p>
                     </div>
                   ) : personalizedInsights ? (
-                    <div className="prose prose-invert prose-purple max-w-none">
-                      {personalizedInsights ? (
-            <div className="space-y-6">
-                          {personalizedInsights.split('\n\n').map((paragraph, index) => {
-                            // Check if this is a section header (starts with ##)
-                            if (paragraph.trim().startsWith('## ')) {
-                              const headerText = paragraph.replace(/^## /, '').trim();
-                              return (
-                                <div key={index} className="border-l-4 border-purple-500 pl-4 mb-4">
-                                  <h3 className="text-lg font-semibold text-purple-300 mb-2">
-                                    {headerText}
-                                  </h3>
-                  </div>
-                              );
-                            }
-                            // Check if this is a subsection header (starts with **)
-                            else if (paragraph.trim().includes('**') && paragraph.trim().length < 200) {
-                              const cleanText = paragraph.replace(/\*\*/g, '');
-                              return (
-                                <div key={index} className="mt-6 mb-3">
-                                  <h4 className="text-md font-medium text-purple-200 opacity-90">
-                                    {cleanText}
-                                  </h4>
+                    <div className="space-y-6">
+                      {/* Parse and display insights in beautiful cards */}
+                      {personalizedInsights.split('\n\n').map((section, index) => {
+                        // Skip empty sections
+                        if (!section.trim()) return null;
+
+                        // Handle main section headers (### or ##)
+                        if (section.trim().startsWith('### ') || section.trim().startsWith('## ')) {
+                          const headerText = section.replace(/^###?\s/, '').trim();
+                          const iconMap: Record<string, string> = {
+                            'metabolic': '⚡',
+                            'glucose': '🩸',
+                            'energy': '💪',
+                            'nutrient': '🥗',
+                            'timing': '⏰',
+                            'recovery': '🔄',
+                            'performance': '🎯',
+                            'health': '❤️',
+                            'analysis': '📊',
+                            'impact': '📈',
+                            'response': '🧬',
+                            'metabolism': '🔥'
+                          };
+                          
+                          const icon = Object.entries(iconMap).find(([key]) => 
+                            headerText.toLowerCase().includes(key)
+                          )?.[1] || '📋';
+
+                          return (
+                            <div key={index} className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 rounded-xl p-6 border border-indigo-500/20">
+                              <div className="flex items-center space-x-3 mb-4">
+                                <span className="text-2xl">{icon}</span>
+                                <h4 className="text-xl font-bold text-white">{headerText}</h4>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        // Handle subsection headers (####)
+                        if (section.trim().startsWith('#### ')) {
+                          const headerText = section.replace(/^####\s/, '').trim();
+                          return (
+                            <div key={index} className="bg-gradient-to-r from-blue-500/10 to-teal-500/10 rounded-lg p-4 border border-blue-500/20">
+                              <h5 className="text-lg font-semibold text-blue-300 mb-2">{headerText}</h5>
+                            </div>
+                          );
+                        }
+
+                        // Handle content sections with auto-categorization
+                        const lowerSection = section.toLowerCase();
+                        let cardStyle = "bg-gray-800/50 border border-gray-600/30";
+                        let iconEmoji = "📝";
+                        let titleColor = "text-gray-300";
+
+                        if (lowerSection.includes('glucose') || lowerSection.includes('blood sugar') || lowerSection.includes('glycemic')) {
+                          cardStyle = "bg-gradient-to-br from-red-900/20 to-orange-900/20 border border-red-500/30";
+                          iconEmoji = "🩸";
+                          titleColor = "text-red-300";
+                        } else if (lowerSection.includes('energy') || lowerSection.includes('metabolism') || lowerSection.includes('calories')) {
+                          cardStyle = "bg-gradient-to-br from-yellow-900/20 to-amber-900/20 border border-yellow-500/30";
+                          iconEmoji = "⚡";
+                          titleColor = "text-yellow-300";
+                        } else if (lowerSection.includes('protein') || lowerSection.includes('muscle') || lowerSection.includes('recovery')) {
+                          cardStyle = "bg-gradient-to-br from-blue-900/20 to-cyan-900/20 border border-blue-500/30";
+                          iconEmoji = "💪";
+                          titleColor = "text-blue-300";
+                        } else if (lowerSection.includes('vitamin') || lowerSection.includes('mineral') || lowerSection.includes('nutrient')) {
+                          cardStyle = "bg-gradient-to-br from-green-900/20 to-emerald-900/20 border border-green-500/30";
+                          iconEmoji = "🥗";
+                          titleColor = "text-green-300";
+                        } else if (lowerSection.includes('timing') || lowerSection.includes('morning') || lowerSection.includes('circadian')) {
+                          cardStyle = "bg-gradient-to-br from-purple-900/20 to-indigo-900/20 border border-purple-500/30";
+                          iconEmoji = "⏰";
+                          titleColor = "text-purple-300";
+                        }
+
+                        // Extract title from first sentence or use generic title
+                        const sentences = section.split('.');
+                        const firstSentence = sentences[0];
+                        let title = "Analysis";
+                        
+                        if (firstSentence.length < 100) {
+                          title = firstSentence.replace(/^(The|This|Your|A)?\s*/i, '').trim();
+                        } else if (lowerSection.includes('glucose')) {
+                          title = "Glucose Response";
+                        } else if (lowerSection.includes('energy')) {
+                          title = "Energy Metabolism";
+                        } else if (lowerSection.includes('protein')) {
+                          title = "Protein Impact";
+                        } else if (lowerSection.includes('nutrient')) {
+                          title = "Nutrient Analysis";
+                        } else if (lowerSection.includes('timing')) {
+                          title = "Optimal Timing";
+                        }
+
+                        return (
+                          <div key={index} className={`${cardStyle} rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300`}>
+                            <div className="flex items-start space-x-4">
+                              <div className="flex-shrink-0">
+                                <div className="w-12 h-12 bg-gray-700/50 rounded-full flex items-center justify-center">
+                                  <span className="text-xl">{iconEmoji}</span>
                                 </div>
-                              );
-                            }
-                            // Regular paragraph content
-                            else if (paragraph.trim()) {
-                              return (
-                                <div key={index} className="text-gray-300 leading-relaxed mb-4">
-                                  {paragraph.split('\n').map((line, lineIndex) => {
-                                    // Handle bold text within paragraphs
-                                    if (line.includes('**')) {
-                                      const parts = line.split(/(\*\*.*?\*\*)/g);
+                              </div>
+                              <div className="flex-1">
+                                <h5 className={`text-lg font-semibold ${titleColor} mb-3`}>{title}</h5>
+                                <div className="prose prose-invert prose-sm max-w-none">
+                                  {section.split('\n').map((paragraph, pIndex) => {
+                                    if (!paragraph.trim()) return null;
+                                    
+                                    // Handle bold text
+                                    if (paragraph.includes('**')) {
+                                      const parts = paragraph.split(/(\*\*.*?\*\*)/g);
                                       return (
-                                        <p key={lineIndex} className="mb-2">
+                                        <p key={pIndex} className="text-gray-300 leading-relaxed mb-3">
                                           {parts.map((part, partIndex) => {
                                             if (part.startsWith('**') && part.endsWith('**')) {
                                               return (
-                                                <span key={partIndex} className="font-semibold text-purple-200">
+                                                <span key={partIndex} className="font-semibold text-white">
                                                   {part.replace(/\*\*/g, '')}
                                                 </span>
                                               );
@@ -1303,85 +1381,119 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
                                           })}
                                         </p>
                                       );
-                                    } else if (line.trim()) {
-                                      return <p key={lineIndex} className="mb-2">{line}</p>;
                                     }
-                                    return null;
+                                    
+                                    return (
+                                      <p key={pIndex} className="text-gray-300 leading-relaxed mb-3">
+                                        {paragraph}
+                                      </p>
+                                    );
                                   })}
                                 </div>
-                              );
-                            }
-                            return null;
-                          })}
-                        </div>
-                      ) : (
-                        <div className="text-center py-8">
-                          <div className="animate-pulse">
-                            <div className="bg-purple-900/30 h-4 rounded mb-4"></div>
-                            <div className="bg-purple-900/30 h-4 rounded mb-4 w-3/4 mx-auto"></div>
-                            <div className="bg-purple-900/30 h-4 rounded mb-4 w-1/2 mx-auto"></div>
+                              </div>
+                            </div>
                           </div>
-                          <p className="text-purple-300 mt-4">
-                            {isGeneratingInsights ? 'Generating personalized insights...' : 'Click to generate insights'}
-                          </p>
-                          </div>
-                        )}
-                          </div>
+                        );
+                      }).filter(Boolean)}
+                    </div>
                   ) : (
-                    <div className="text-center py-8">
-                      <div className="text-gray-400 mb-4">Click below to generate AI-powered insights about how this meal will affect your daily life</div>
+                    <div className="text-center py-16">
+                      <div className="mb-6">
+                        <div className="w-20 h-20 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <span className="text-3xl">🤖</span>
+                        </div>
+                        <h4 className="text-xl font-semibold text-white mb-2">AI Analysis Ready</h4>
+                        <p className="text-gray-400 mb-6">Get personalized insights about how this meal affects your health goals</p>
+                      </div>
                       <button
                         onClick={generatePersonalizedInsights}
-                        className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-all duration-200 hover:scale-105"
+                        className="px-8 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl font-semibold transition-all duration-200 hover:scale-105 shadow-lg"
                       >
-                        Generate Scientific Analysis
+                        Generate AI Health Analysis
                       </button>
-                      </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
+                </div>
               </div>
               
-              {/* Expert Recommendations */}
+              {/* Expert Recommendations - Enhanced */}
               {analysisData.expert_recommendations && analysisData.expert_recommendations.length > 0 && (
-                <div className="bg-gradient-to-br from-green-900/50 to-teal-900/50 border border-green-700/50 rounded-xl p-8">
-                  <h4 className="text-2xl font-semibold text-white mb-6 flex items-center">
-                    <svg className="w-6 h-6 mr-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Expert Recommendations
-                  </h4>
-                  <div className="space-y-4">
+                <div className="bg-gradient-to-br from-emerald-900/30 to-green-900/30 border border-emerald-500/30 rounded-xl p-8 shadow-lg">
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="w-12 h-12 bg-emerald-500/20 rounded-xl flex items-center justify-center">
+                      <span className="text-2xl">👨‍⚕️</span>
+                    </div>
+                    <div>
+                      <h4 className="text-2xl font-bold text-white">Expert Recommendations</h4>
+                      <p className="text-emerald-300">Professional nutrition guidance</p>
+                    </div>
+                  </div>
+                  <div className="grid gap-4">
                     {analysisData.expert_recommendations.map((recommendation, index) => (
-                      <div key={index} className="flex items-start">
-                        <div className="w-3 h-3 bg-green-400 rounded-full mt-2 mr-4 flex-shrink-0"></div>
-                        <p className="text-green-100 text-lg leading-relaxed">{recommendation}</p>
-                </div>
+                      <div key={index} className="flex items-start space-x-4 bg-emerald-900/20 rounded-lg p-4 border border-emerald-500/20">
+                        <div className="flex-shrink-0 w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center text-white font-bold text-sm mt-1">
+                          {index + 1}
+                        </div>
+                        <p className="text-emerald-100 leading-relaxed flex-1">{recommendation}</p>
+                      </div>
                     ))}
                   </div>
                 </div>
               )}
               
-              {/* Additional Analysis Sections */}
-              {analysisData.meal_story && (
-                <div className="bg-gradient-to-br from-indigo-900/50 to-purple-900/50 border border-indigo-700/50 rounded-xl p-8">
-                  <h4 className="text-2xl font-semibold text-white mb-6">Metabolic Journey</h4>
-                  <p className="text-indigo-100 leading-relaxed text-lg">{analysisData.meal_story}</p>
-                </div>
-              )}
-              
-              {analysisData.nutritional_narrative && (
-                <div className="bg-gradient-to-br from-orange-900/50 to-red-900/50 border border-orange-700/50 rounded-xl p-8">
-                  <h4 className="text-2xl font-semibold text-white mb-6">Nutritional Science</h4>
-                  <p className="text-orange-100 leading-relaxed text-lg">{analysisData.nutritional_narrative}</p>
-                </div>
-              )}
-              
-              {analysisData.time_of_day_optimization && (
-                <div className="bg-gradient-to-br from-cyan-900/50 to-blue-900/50 border border-cyan-700/50 rounded-xl p-8">
-                  <h4 className="text-2xl font-semibold text-white mb-6">Circadian Optimization</h4>
-                  <p className="text-cyan-100 leading-relaxed text-lg">{analysisData.time_of_day_optimization}</p>
-                </div>
-              )}
+              {/* Additional Analysis Sections - Enhanced */}
+              <div className="grid gap-6">
+                {analysisData.meal_story && (
+                  <div className="bg-gradient-to-br from-indigo-900/30 to-blue-900/30 border border-indigo-500/30 rounded-xl p-8 shadow-lg">
+                    <div className="flex items-center space-x-3 mb-6">
+                      <div className="w-12 h-12 bg-indigo-500/20 rounded-xl flex items-center justify-center">
+                        <span className="text-2xl">🧬</span>
+                      </div>
+                      <div>
+                        <h4 className="text-2xl font-bold text-white">Metabolic Journey</h4>
+                        <p className="text-indigo-300">How your body processes this meal</p>
+                      </div>
+                    </div>
+                    <div className="prose prose-invert prose-lg max-w-none">
+                      <p className="text-indigo-100 leading-relaxed">{analysisData.meal_story}</p>
+                    </div>
+                  </div>
+                )}
+                
+                {analysisData.nutritional_narrative && (
+                  <div className="bg-gradient-to-br from-orange-900/30 to-red-900/30 border border-orange-500/30 rounded-xl p-8 shadow-lg">
+                    <div className="flex items-center space-x-3 mb-6">
+                      <div className="w-12 h-12 bg-orange-500/20 rounded-xl flex items-center justify-center">
+                        <span className="text-2xl">🔬</span>
+                      </div>
+                      <div>
+                        <h4 className="text-2xl font-bold text-white">Nutritional Science</h4>
+                        <p className="text-orange-300">Science behind the nutrients</p>
+                      </div>
+                    </div>
+                    <div className="prose prose-invert prose-lg max-w-none">
+                      <p className="text-orange-100 leading-relaxed">{analysisData.nutritional_narrative}</p>
+                    </div>
+                  </div>
+                )}
+                
+                {analysisData.time_of_day_optimization && (
+                  <div className="bg-gradient-to-br from-cyan-900/30 to-teal-900/30 border border-cyan-500/30 rounded-xl p-8 shadow-lg">
+                    <div className="flex items-center space-x-3 mb-6">
+                      <div className="w-12 h-12 bg-cyan-500/20 rounded-xl flex items-center justify-center">
+                        <span className="text-2xl">🌅</span>
+                      </div>
+                      <div>
+                        <h4 className="text-2xl font-bold text-white">Circadian Optimization</h4>
+                        <p className="text-cyan-300">Best timing for this meal</p>
+                      </div>
+                    </div>
+                    <div className="prose prose-invert prose-lg max-w-none">
+                      <p className="text-cyan-100 leading-relaxed">{analysisData.time_of_day_optimization}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
