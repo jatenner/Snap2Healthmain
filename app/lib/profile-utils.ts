@@ -612,9 +612,119 @@ export function calculatePersonalizedDV(nutrient: any, profile: UserProfile | nu
       // Limit to <10% of daily calories
       rda = (dailyCalories * 0.1) / 4; // 4 calories per gram of sugar
       break;
+      
+    // Additional B-vitamins
+    case 'thiamin':
+    case 'vitamin b1':
+      rda = gender?.toLowerCase().includes('male') ? 1.2 : 1.1; // mg
+      break;
+      
+    case 'riboflavin':
+    case 'vitamin b2':
+      rda = gender?.toLowerCase().includes('male') ? 1.3 : 1.1; // mg
+      break;
+      
+    case 'niacin':
+    case 'vitamin b3':
+      rda = gender?.toLowerCase().includes('male') ? 16 : 14; // mg NE
+      break;
+      
+    case 'vitamin b6':
+    case 'pyridoxine':
+      if (age && age <= 50) {
+        rda = gender?.toLowerCase().includes('male') ? 1.3 : 1.3; // mg
+      } else {
+        rda = gender?.toLowerCase().includes('male') ? 1.7 : 1.5; // mg
+      }
+      break;
+      
+    case 'biotin':
+    case 'vitamin b7':
+      rda = 30; // mcg
+      break;
+      
+    case 'pantothenic acid':
+    case 'vitamin b5':
+      rda = 5; // mg
+      break;
+      
+    // Fat-soluble vitamins
+    case 'vitamin e':
+      rda = 15; // mg alpha-tocopherol
+      break;
+      
+    case 'vitamin k':
+      rda = gender?.toLowerCase().includes('male') ? 120 : 90; // mcg
+      break;
+      
+    // Additional minerals
+    case 'phosphorus':
+      rda = 700; // mg
+      break;
+      
+    case 'iodine':
+      rda = 150; // mcg
+      break;
+      
+    case 'selenium':
+      rda = 55; // mcg
+      break;
+      
+    case 'copper':
+      rda = 900; // mcg
+      break;
+      
+    case 'manganese':
+      rda = gender?.toLowerCase().includes('male') ? 2.3 : 1.8; // mg
+      break;
+      
+    case 'chromium':
+      if (age && age <= 50) {
+        rda = gender?.toLowerCase().includes('male') ? 35 : 25; // mcg
+      } else {
+        rda = gender?.toLowerCase().includes('male') ? 30 : 20; // mcg
+      }
+      break;
+      
+    case 'molybdenum':
+      rda = 45; // mcg
+      break;
+      
+    // Special fatty acids
+    case 'omega-3':
+    case 'omega 3':
+    case 'epa + dha':
+      rda = 1600; // mg (recommended EPA+DHA)
+      if (gender?.toLowerCase().includes('female')) rda = 1100; // mg
+      break;
+      
+    case 'monounsaturated fat':
+    case 'polyunsaturated fat':
+      // Healthy fats - aim for 20-25% of calories
+      rda = (dailyCalories * 0.22) / 9; // 22% of calories, 9 cal/g fat
+      break;
+      
+    case 'trans fat':
+      // Limit to as low as possible - use 1% of calories as upper limit
+      rda = (dailyCalories * 0.01) / 9; // 1% of calories maximum
+      break;
+      
+    // Special cases for common nutrients
+    case 'caffeine':
+      rda = 400; // mg upper limit (healthy adults)
+      break;
+      
+    case 'choline':
+      rda = gender?.toLowerCase().includes('male') ? 550 : 425; // mg
+      break;
+      
+    case 'fluoride':
+      rda = gender?.toLowerCase().includes('male') ? 4 : 3; // mg
+      break;
     
     default:
       // If we don't have special handling for this nutrient, return the original percentDailyValue
+      console.log(`[DV%] No custom calculation for "${nutrientName}" - using API value: ${nutrient.percentDailyValue}`);
       return typeof nutrient.percentDailyValue === 'number' ? nutrient.percentDailyValue : 0;
   }
 
