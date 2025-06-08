@@ -4,8 +4,22 @@ import './globals.css'
 import { ClientAuthProvider } from './components/client/ClientAuthProvider'
 import { ProfileProvider } from './lib/profile-context'
 import { NavBarWithAuth } from './components/NavBarWithAuth'
+import dynamic from 'next/dynamic'
 
 const inter = Inter({ subsets: ['latin'] })
+
+const GlobalAIChat = dynamic(() => import('./components/GlobalAIChat'), {
+  ssr: false,
+  loading: () => (
+    <div className="fixed bottom-6 right-6 z-50">
+      <div className="w-14 h-14 bg-purple-600 rounded-full shadow-lg animate-pulse">
+        <div className="w-full h-full flex items-center justify-center text-white">
+          💬
+        </div>
+      </div>
+    </div>
+  )
+})
 
 export const metadata: Metadata = {
   title: 'Snap2Health | AI-Powered Nutrition Analysis',
@@ -29,6 +43,10 @@ export default function RootLayout({
               <main>
                 {children}
               </main>
+              
+              {/* Global AI Chat Widget */}
+              <GlobalAIChat />
+              
             </div>
           </ProfileProvider>
         </ClientAuthProvider>
