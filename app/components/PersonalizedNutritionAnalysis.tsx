@@ -1333,10 +1333,10 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
 
                         // Extract title from first sentence or use generic title
                         const sentences = section.split('.');
-                        const firstSentence = sentences[0];
+                        const firstSentence = sentences[0] || '';
                         let title = "Analysis";
                         
-                        if (firstSentence.length < 100) {
+                        if (firstSentence && firstSentence.length < 100) {
                           title = firstSentence.replace(/^(The|This|Your|A)?\s*/i, '').trim();
                         } else if (lowerSection.includes('glucose')) {
                           title = "Glucose Response";
