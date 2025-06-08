@@ -2,11 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
 });
@@ -62,28 +57,343 @@ function extractLearningInsights(content: string, userProfile: any) {
   return insights;
 }
 
+// Enhanced historical analysis function
+async function getEnhancedUserContext(user_id: string, supabase: any) {
+  try {
+    console.log('[Enhanced Context] Gathering comprehensive user data for:', user_id);
+    
+    // Get comprehensive meal history with trends (last 30 days)
+    const { data: mealHistory } = await supabase
+      .from('meals')
+      .select(`
+        id, meal_name, calories, created_at,
+        macronutrients, micronutrients, 
+        personalized_insights, analysis,
+        image_url
+      `)
+      .eq('user_id', user_id)
+      .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    // Get recent chat conversations for context patterns
+    const { data: recentChats } = await supabase
+      .from('chat_messages')
+      .select('content, ai_response, created_at')
+      .eq('user_id', user_id)
+      .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    // Analyze meal patterns and trends
+    const mealAnalysis = analyzeMealTrends(mealHistory || []);
+    const chatPatterns = analyzeChatPatterns(recentChats || []);
+    
+    return {
+      mealHistory: mealHistory || [],
+      mealAnalysis,
+      recentChats: recentChats || [],
+      chatPatterns,
+      totalMeals: mealHistory?.length || 0
+    };
+  } catch (error) {
+    console.error('[Enhanced Context] Error:', error);
+    return null;
+  }
+}
+
+// Analyze meal patterns and generate insights
+function analyzeMealTrends(meals: any[]) {
+  if (meals.length === 0) return null;
+
+  const totalCalories = meals.reduce((sum, meal) => sum + (meal.calories || 0), 0);
+  const avgCalories = Math.round(totalCalories / meals.length);
+  
+  // Extract macronutrient trends
+  const macroTrends = meals.reduce((acc, meal) => {
+    const macros = meal.macronutrients || meal.analysis?.macronutrients || [];
+    macros.forEach((macro: any) => {
+      if (!acc[macro.name]) acc[macro.name] = [];
+      acc[macro.name].push(macro.amount || 0);
+    });
+    return acc;
+  }, {} as Record<string, number[]>);
+
+  // Calculate averages and trends
+  const macroAverages = Object.entries(macroTrends).reduce((acc, [name, values]) => {
+    const numericValues = values as number[];
+    acc[name] = {
+      avg: Math.round(numericValues.reduce((sum: number, val: number) => sum + val, 0) / numericValues.length),
+      trend: numericValues.length > 5 ? calculateTrend(numericValues) : 'stable'
+    };
+    return acc;
+  }, {} as Record<string, any>);
+
+  // Identify nutrition gaps and strengths
+  const nutritionInsights = identifyNutritionPatterns(meals);
+  
+  return {
+    avgCalories,
+    totalMeals: meals.length,
+    macroAverages,
+    nutritionInsights,
+    lastMealTime: meals[0]?.created_at,
+    mealFrequency: calculateMealFrequency(meals)
+  };
+}
+
+// Analyze chat conversation patterns
+function analyzeChatPatterns(chats: any[]) {
+  if (chats.length === 0) return null;
+
+  const commonTopics = extractCommonTopics(chats);
+  const questionTypes = categorizeQuestions(chats);
+  const responsePreferences = analyzeResponsePreferences(chats);
+
+  return {
+    commonTopics,
+    questionTypes,
+    responsePreferences,
+    chatFrequency: chats.length
+  };
+}
+
+// Helper functions for trend analysis
+function calculateTrend(values: number[]): 'increasing' | 'decreasing' | 'stable' {
+  if (values.length < 3) return 'stable';
+  
+  const recent = values.slice(0, Math.floor(values.length / 2));
+  const older = values.slice(Math.floor(values.length / 2));
+  
+  const recentAvg = recent.reduce((sum, val) => sum + val, 0) / recent.length;
+  const olderAvg = older.reduce((sum, val) => sum + val, 0) / older.length;
+  
+  const percentChange = ((recentAvg - olderAvg) / olderAvg) * 100;
+  
+  if (percentChange > 10) return 'increasing';
+  if (percentChange < -10) return 'decreasing';
+  return 'stable';
+}
+
+function identifyNutritionPatterns(meals: any[]) {
+  const insights = [];
+  
+  // Check protein consistency
+  const proteinValues = meals.map(meal => {
+    const macros = meal.macronutrients || meal.analysis?.macronutrients || [];
+    const protein = macros.find((m: any) => m.name.toLowerCase().includes('protein'));
+    return protein?.amount || 0;
+  }).filter(val => val > 0);
+  
+  if (proteinValues.length > 0) {
+    const avgProtein = proteinValues.reduce((sum, val) => sum + val, 0) / proteinValues.length;
+    if (avgProtein < 20) insights.push('Low protein intake pattern detected');
+    if (avgProtein > 40) insights.push('High protein intake - good for muscle maintenance');
+  }
+  
+  // Check meal timing patterns
+  const mealTimes = meals.map(meal => new Date(meal.created_at).getHours()).filter(h => !isNaN(h));
+  if (mealTimes.length > 3) {
+    const lateMeals = mealTimes.filter(h => h > 20).length;
+    if (lateMeals > mealTimes.length * 0.3) {
+      insights.push('Frequent late evening meals detected');
+    }
+  }
+  
+  return insights;
+}
+
+function extractCommonTopics(chats: any[]): string[] {
+  const topics = new Map<string, number>();
+  
+  chats.forEach(chat => {
+    const content = chat.content?.toLowerCase() || '';
+    
+    // Check for common nutrition topics
+    if (content.includes('protein')) topics.set('protein', (topics.get('protein') || 0) + 1);
+    if (content.includes('carb') || content.includes('carbohydrate')) topics.set('carbohydrates', (topics.get('carbohydrates') || 0) + 1);
+    if (content.includes('fat') || content.includes('fatty')) topics.set('fats', (topics.get('fats') || 0) + 1);
+    if (content.includes('calorie')) topics.set('calories', (topics.get('calories') || 0) + 1);
+    if (content.includes('vitamin') || content.includes('mineral')) topics.set('micronutrients', (topics.get('micronutrients') || 0) + 1);
+    if (content.includes('weight') || content.includes('lose') || content.includes('gain')) topics.set('weight_management', (topics.get('weight_management') || 0) + 1);
+  });
+  
+  return Array.from(topics.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([topic]) => topic);
+}
+
+function categorizeQuestions(chats: any[]): Record<string, number> {
+  const categories = {
+    'seeking_simple_answers': 0,
+    'wanting_detailed_analysis': 0,
+    'asking_comparisons': 0,
+    'seeking_recommendations': 0
+  };
+  
+  chats.forEach(chat => {
+    const content = chat.content?.toLowerCase() || '';
+    
+    if (content.includes('simple') || content.includes('brief') || content.includes('quick')) {
+      categories.seeking_simple_answers++;
+    }
+    if (content.includes('detail') || content.includes('explain') || content.includes('analyze')) {
+      categories.wanting_detailed_analysis++;
+    }
+    if (content.includes('vs') || content.includes('better') || content.includes('compare')) {
+      categories.asking_comparisons++;
+    }
+    if (content.includes('should') || content.includes('recommend') || content.includes('suggest')) {
+      categories.seeking_recommendations++;
+    }
+  });
+  
+  return categories;
+}
+
+function analyzeResponsePreferences(chats: any[]): 'concise' | 'detailed' | 'mixed' {
+  // This would analyze user feedback and response patterns
+  // For now, default to mixed but could be enhanced with user feedback
+  return 'mixed';
+}
+
+function calculateMealFrequency(meals: any[]): string {
+  if (meals.length === 0) return 'no_data';
+  
+  const daysSinceFirst = Math.max(1, Math.ceil(
+    (Date.now() - new Date(meals[meals.length - 1].created_at).getTime()) / (1000 * 60 * 60 * 24)
+  ));
+  
+  const mealsPerDay = meals.length / daysSinceFirst;
+  
+  if (mealsPerDay >= 3) return 'high';
+  if (mealsPerDay >= 2) return 'moderate';
+  if (mealsPerDay >= 1) return 'low';
+  return 'very_low';
+}
+
+// Enhanced system prompt with human-like conversational style
+function createEnhancedSystemPrompt(userProfile: any, enhancedContext: any) {
+  const basePrompt = `You're a friendly, knowledgeable nutrition coach who loves helping people reach their health goals. Think of yourself as that supportive friend who happens to know a lot about nutrition.
+
+ABOUT THE USER:
+- ${userProfile?.age || 'unknown'} year old ${userProfile?.gender || 'person'}
+- ${userProfile?.weight || 'unknown'} lbs, ${userProfile?.height || 'unknown'}" tall
+- ${userProfile?.activityLevel || 'unknown'} lifestyle
+- Working on: ${userProfile?.defaultGoal || 'better health'}`;
+
+  let contextPrompt = '';
+  
+  if (enhancedContext?.mealAnalysis) {
+    const analysis = enhancedContext.mealAnalysis;
+    contextPrompt += `
+
+I'VE BEEN TRACKING THEIR PROGRESS (${analysis.totalMeals} meals so far!):
+- They're eating about ${analysis.avgCalories} calories/day
+- ${analysis.mealFrequency === 'high' ? 'Great consistency with meals!' : analysis.mealFrequency === 'moderate' ? 'Pretty good meal tracking' : 'Could use more consistent tracking'}
+- Last logged: ${analysis.lastMealTime ? new Date(analysis.lastMealTime).toLocaleDateString() : 'been a while'}
+
+WHAT I'VE NOTICED:`;
+    
+    if (analysis.macroAverages) {
+      Object.entries(analysis.macroAverages).forEach(([macro, data]: [string, any]) => {
+        const trendText = data.trend === 'increasing' ? '↗️ going up' : data.trend === 'decreasing' ? '↘️ trending down' : '→ staying steady';
+        contextPrompt += `\n- ${macro}: averaging ${data.avg}g (${trendText})`;
+      });
+    }
+    
+    if (analysis.nutritionInsights && analysis.nutritionInsights.length > 0) {
+      contextPrompt += `\n\nPATTERNS I'VE SPOTTED:\n${analysis.nutritionInsights.map((insight: string) => `- ${insight}`).join('\n')}`;
+    }
+  }
+
+  if (enhancedContext?.chatPatterns) {
+    const patterns = enhancedContext.chatPatterns;
+    if (patterns.commonTopics && patterns.commonTopics.length > 0) {
+      contextPrompt += `\n\nTHEY USUALLY ASK ABOUT: ${patterns.commonTopics.join(', ')}`;
+    }
+    
+    // Determine preferred response style
+    const preferences = patterns.questionTypes;
+    if (preferences) {
+      const prefersSimple = preferences.seeking_simple_answers > preferences.wanting_detailed_analysis;
+      contextPrompt += `\n\nTHEY PREFER: ${prefersSimple ? 'Quick, straight-to-the-point answers' : 'Detailed explanations with the "why" behind it'}`;
+    }
+  }
+
+  const responseGuidelines = `
+
+HOW TO RESPOND:
+1. **TALK LIKE A HUMAN**: Use casual, friendly language like you're texting a friend
+2. **KEEP IT SHORT**: 1-2 sentences max unless they specifically ask for more details
+3. **BE PERSONAL**: Reference their actual meals and patterns when relevant 
+4. **ONE ACTION**: End with one specific thing they can try
+5. **STAY POSITIVE**: Celebrate wins, frame improvements as opportunities
+
+CONVERSATION STYLE:
+- Sound like you're genuinely excited to help them
+- Use "you" and "your" to make it personal
+- Throw in emojis naturally (but don't overdo it) 
+- Use contractions - you're, don't, can't, won't
+- No formal nutrition-speak - keep it real
+- If they want simple answers, give bullet points
+- NO paragraph walls ever!
+
+EXAMPLE TONE:
+"You're crushing the protein game! 40g is perfect for your athletic goals. Try adding some berries for antioxidants 🫐"
+
+"Your sodium's a bit high today (1200mg), but no worries! Just drink extra water and you'll be fine 💧"
+
+"I noticed you've been consistent with meals this week - that's awesome! Your average looks great."`;
+
+  return basePrompt + contextPrompt + responseGuidelines;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     console.log('[Chat Messages API] Received POST request:', body);
-    const { conversation_id, user_id, content, meal_id } = body;
+    let { conversation_id, user_id, content, meal_id, context_data } = body;
 
-    if (!conversation_id || !user_id || !content) {
-      console.log('[Chat Messages API] Missing required fields:', { conversation_id, user_id, content });
+    if (!user_id || !content) {
+      console.log('[Chat Messages API] Missing required fields:', { user_id, content });
       return NextResponse.json({ 
-        error: 'Conversation ID, User ID, and content are required' 
+        error: 'User ID and content are required' 
       }, { status: 400 });
     }
 
-    // Get conversation context
-    const { data: conversation } = await supabase
-      .from('chat_conversations')
-      .select('*')
-      .eq('id', conversation_id)
-      .single();
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
 
+    // Auto-create conversation if not provided
+    let conversation = null;
+    if (conversation_id) {
+      const { data: existingConversation } = await supabase
+        .from('chat_conversations')
+        .select('*')
+        .eq('id', conversation_id)
+        .single();
+      conversation = existingConversation;
+    }
+    
     if (!conversation) {
-      return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
+      console.log('[Chat Messages API] Creating new conversation...');
+      const { data: newConversation } = await supabase
+        .from('chat_conversations')
+        .insert({
+          user_id,
+          meal_id,
+          title: meal_id ? 'Meal Analysis Chat' : 'Nutrition Chat',
+          context_data: context_data || {}
+        })
+        .select()
+        .single();
+      conversation = newConversation;
+      conversation_id = conversation?.id;
+      console.log('[Chat Messages API] Created conversation:', conversation_id);
     }
 
     // Get recent messages for context (increased to 20 for better memory)
@@ -262,119 +572,27 @@ export async function POST(request: NextRequest) {
     console.log('[Chat Messages API] Missing profile fields:', missingProfileFields);
     console.log('[Chat Messages API] Full combined profile for AI:', combinedProfile);
 
-    const systemPrompt = `You are an expert personalized AI nutrition coach for Snap2Health. You know this user deeply and provide tailored advice based on their complete profile and history.
+    // Get enhanced user context
+    const enhancedContext = await getEnhancedUserContext(user_id, supabase);
+    console.log('[Chat Messages API] Enhanced context analysis:', {
+      totalMeals: enhancedContext?.mealAnalysis?.totalMeals || 0,
+      avgCalories: enhancedContext?.mealAnalysis?.avgCalories || 0,
+      commonTopics: enhancedContext?.chatPatterns?.commonTopics || []
+    });
 
-USER PERSONAL PROFILE (ALWAYS reference specific details from this in your responses):
-${combinedProfile ? `
-- Name: ${combinedProfile.name || 'User'}
-- Email: ${combinedProfile.email || 'Unknown'}
-- Age: ${combinedProfile.age || 'Unknown'} years old
-- Weight: ${combinedProfile.weight || 'Unknown'}
-- Height: ${combinedProfile.height || 'Unknown'}
-- Gender: ${combinedProfile.gender || 'Unknown'}
-- Activity Level: ${combinedProfile.activity_level || 'Unknown'}
-- Primary Goal: ${combinedProfile.primary_goal || 'Unknown'}
-- Dietary Restrictions: ${combinedProfile.dietary_restrictions || 'None specified'}
-- Health Conditions: ${combinedProfile.health_conditions || 'None specified'}
-
-PROFILE COMPLETENESS: ${missingProfileFields.length === 0 ? 'Complete profile available' : `Missing: ${missingProfileFields.join(', ')}`}
-
-FULL PROFILE DATA: ${JSON.stringify(combinedProfile, null, 2)}
-` : 'Profile information not available - ask user to complete their profile'}
-
-${missingProfileFields.length > 0 ? `
-IMPORTANT: This user is missing key profile information (${missingProfileFields.join(', ')}). When appropriate, ask for this information to provide better personalized advice. For example: "To give you more personalized protein recommendations, could you tell me your ${missingProfileFields[0]}?"
-` : ''}
-
-USER LEARNING & PREFERENCES:
-${learningProfile ? `
-- Dietary Preferences: ${JSON.stringify(learningProfile.dietary_preferences || {})}
-- Health Goals: ${JSON.stringify(learningProfile.health_goals || {})}
-- Food Sensitivities: ${JSON.stringify(learningProfile.food_sensitivities || {})}
-- Past Insights: ${JSON.stringify(learningProfile.past_insights || {})}
-- Learning Data: ${JSON.stringify(learningProfile.learning_data || {})}
-` : 'Learning profile being built - ask questions to learn more about the user'}
-
-CURRENT MEAL BEING DISCUSSED:
-${currentMealData ? `
-- Meal: ${currentMealData.meal_name}
-- Calories: ${currentMealData.calories}
-- Macros: ${currentMealData.protein}g protein, ${currentMealData.carbs}g carbs, ${currentMealData.fat}g fat
-- Fiber: ${currentMealData.fiber}g, Sodium: ${currentMealData.sodium}mg
-- Ingredients: ${currentMealData.ingredients?.join(', ') || 'Not specified'}
-- Benefits: ${currentMealData.benefits?.join(', ') || 'None identified'}
-- Concerns: ${currentMealData.concerns?.join(', ') || 'None identified'}
-- Detailed Analysis: ${currentMealData.personalized_insights || 'Basic analysis completed'}
-` : 'No specific meal being discussed - general nutrition conversation'}
-
-USER'S EATING PATTERNS & HISTORY:
-${nutritionPatterns ? `
-- Total meals analyzed: ${nutritionPatterns.totalMealsAnalyzed}
-- Average daily intake: ${nutritionPatterns.avgCalories} calories, ${nutritionPatterns.avgProtein}g protein, ${nutritionPatterns.avgCarbs}g carbs, ${nutritionPatterns.avgFat}g fat
-- Common nutritional benefits in their diet: ${nutritionPatterns.commonBenefits.join(', ') || 'Still learning'}
-- Areas of concern in their diet: ${nutritionPatterns.commonConcerns.join(', ') || 'None identified'}
-- Recent meals: ${recentMeals?.slice(0, 5).map(meal => meal.meal_name).join(', ') || 'No recent meals'}
-` : 'No meal history available yet - this might be their first meal analysis'}
-
-LEARNING INSIGHTS FROM THIS MESSAGE:
-${JSON.stringify(learningInsights)}
-
-RESPONSE STYLE REQUESTED: ${responseStyle}
-
-RESPONSE GUIDELINES:
-${responseStyle === 'simple' ? `
-- Keep responses concise (2-3 sentences max)
-- Focus on the most important point
-- Use bullet points for multiple items
-- Avoid lengthy explanations
-- End with "Want more detail? Just ask!"
-` : responseStyle === 'detailed' ? `
-- Provide comprehensive explanations
-- Include background information and reasoning
-- Give specific examples and actionable steps
-- Explain the "why" behind recommendations
-- Include relevant scientific context when helpful
-` : `
-- Provide balanced responses (4-6 sentences)
-- Include key information without overwhelming
-- Give 1-2 actionable recommendations
-- Mention if more detail is available
-- Default to this style when user preference is unclear
-`}
-
-CONVERSATION INSTRUCTIONS:
-1. **Be Personal**: Use their name, reference their goals, remember their preferences
-2. **Reference History**: Mention patterns from their previous meals and conversations
-3. **Context Aware**: If discussing a specific meal, reference its details and how it fits their goals
-4. **Educational**: Explain WHY your advice matters for their specific situation
-5. **Actionable**: Give specific, personalized recommendations they can implement
-6. **Progressive**: Build on previous conversations and help them improve over time
-7. **Encouraging**: Celebrate their progress and motivate continued improvement
-8. **Adaptive**: Learn from their questions and update your understanding of their needs
-9. **Learning Focused**: Pay attention to lifestyle mentions (smoking, exercise, stress) and remember them
-10. **Detail Responsive**: Adjust response length based on user's stated preference
-
-RESPONSE STYLE:
-- Warm and encouraging, like a knowledgeable friend
-- Reference specific details from their profile and meal history
-- Connect current questions to their long-term goals
-- Provide actionable, specific advice
-- Ask follow-up questions to learn more about them
-- Celebrate their progress and acknowledge their efforts
-- Always offer to expand on topics ("Want me to elaborate on [topic]?")
-
-Remember: You are their personal nutrition coach who knows their journey, goals, and preferences intimately. Learn from every interaction to provide increasingly personalized advice.`;
+    // Create enhanced system prompt
+    const systemPrompt = createEnhancedSystemPrompt(combinedProfile, enhancedContext);
 
     // Get AI response with enhanced context
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
         ...contextMessages,
         { role: 'user', content }
       ],
       temperature: 0.7,
-      max_tokens: responseStyle === 'simple' ? 200 : responseStyle === 'detailed' ? 1500 : 800
+      max_tokens: 200, // Super concise responses
     });
 
     const aiResponse = completion.choices[0]?.message?.content || 'I apologize, but I could not process your request at this time.';

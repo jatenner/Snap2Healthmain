@@ -263,4 +263,279 @@ function getPerformanceBenefit(nutrientName: string): string {
   if (name.includes('zinc')) return 'testosterone production and immune function';
   
   return 'overall athletic performance';
+}
+
+// Enhanced concise insights generation
+export function generateConcisePersonalizedInsights(
+  mealData: any,
+  userProfile: any,
+  mealHistory?: any[]
+): string {
+  console.log('[Enhanced Insights] Generating concise insights for:', {
+    meal: mealData?.meal_name,
+    user: userProfile?.name,
+    historyCount: mealHistory?.length || 0
+  });
+
+  try {
+    const insights = [];
+    
+    // Quick macro assessment
+    const macroInsight = generateMacroInsight(mealData, userProfile);
+    if (macroInsight) insights.push(macroInsight);
+    
+    // Calorie context with history
+    const calorieInsight = generateCalorieInsight(mealData, userProfile, mealHistory);
+    if (calorieInsight) insights.push(calorieInsight);
+    
+    // Key nutritional highlights (max 2)
+    const nutritionHighlights = generateNutritionHighlights(mealData);
+    insights.push(...nutritionHighlights.slice(0, 2));
+    
+    // Goal-specific actionable advice
+    const goalInsight = generateGoalSpecificInsight(mealData, userProfile);
+    if (goalInsight) insights.push(goalInsight);
+    
+    // Historical pattern insight (if available)
+    if (mealHistory && mealHistory.length > 3) {
+      const patternInsight = generatePatternInsight(mealData, mealHistory);
+      if (patternInsight) insights.push(patternInsight);
+    }
+    
+    // Combine into concise format (max 3-4 bullet points)
+    const finalInsights = insights.slice(0, 4);
+    
+    return finalInsights.length > 0 
+      ? `**Quick Analysis:**\n${finalInsights.map(insight => `• ${insight}`).join('\n')}`
+      : generateFallbackInsight(mealData, userProfile);
+      
+  } catch (error) {
+    console.error('[Enhanced Insights] Error:', error);
+    return generateFallbackInsight(mealData, userProfile);
+  }
+}
+
+function generateMacroInsight(mealData: any, userProfile: any): string | null {
+  const macros = extractMacronutrients(mealData);
+  if (!macros.protein && !macros.carbs && !macros.fat) return null;
+  
+  const goal = userProfile?.defaultGoal?.toLowerCase() || userProfile?.goal?.toLowerCase() || '';
+  const weight = parseFloat(userProfile?.weight) || 70; // kg equivalent
+  
+  // Quick protein assessment for athletic goals
+  if (goal.includes('athletic') || goal.includes('muscle') || goal.includes('performance')) {
+    const proteinPerKg = (macros.protein || 0) / (weight * 0.453592); // Convert lbs to kg
+    if (proteinPerKg < 1.2) {
+      return `More protein needed for your ${goal} goal (aim for 30-40g per meal)`;
+    } else if (proteinPerKg > 2.0) {
+      return `Excellent protein content (${Math.round(macros.protein)}g) for muscle building 💪`;
+    }
+  }
+  
+  // Quick carb assessment for energy goals
+  if (goal.includes('energy') || goal.includes('endurance')) {
+    if ((macros.carbs || 0) > 50) {
+      return `Great carb content (${Math.round(macros.carbs)}g) for sustained energy ⚡`;
+    }
+  }
+  
+  // Weight management focus
+  if (goal.includes('weight loss') || goal.includes('lose')) {
+    const calories = mealData?.calories || calculateCaloriesFromMacros(macros);
+    if (calories > 600) {
+      return `High-calorie meal (${calories}cal) - balance with lighter meals today`;
+    } else if (calories < 300) {
+      return `Light meal (${calories}cal) - perfect for weight management goals`;
+    }
+  }
+  
+  return null;
+}
+
+function generateCalorieInsight(mealData: any, userProfile: any, mealHistory?: any[]): string | null {
+  const calories = mealData?.calories || 0;
+  if (calories === 0) return null;
+  
+  // Compare to recent meal average if history available
+  if (mealHistory && mealHistory.length > 5) {
+    const avgCalories = mealHistory.reduce((sum, meal) => sum + (meal.calories || 0), 0) / mealHistory.length;
+    const difference = calories - avgCalories;
+    
+    if (Math.abs(difference) > 150) {
+      const comparison = difference > 0 ? 'higher' : 'lower';
+      return `${Math.abs(Math.round(difference))}cal ${comparison} than your recent average (${Math.round(avgCalories)}cal)`;
+    }
+  }
+  
+  // Activity-based calorie context
+  const activityLevel = userProfile?.activityLevel?.toLowerCase() || '';
+  if (activityLevel.includes('active') && calories < 400) {
+    return `Light meal for an active lifestyle - consider a post-workout snack`;
+  }
+  
+  return null;
+}
+
+function generateNutritionHighlights(mealData: any): string[] {
+  const highlights = [];
+  
+  // Check for standout nutrients
+  const micros = extractMicronutrients(mealData);
+  const standoutNutrients = Object.entries(micros)
+    .filter(([name, amount]) => (amount as number) > 20) // Good amount
+    .slice(0, 2);
+    
+  if (standoutNutrients.length > 0) {
+    standoutNutrients.forEach(([nutrient, amount]) => {
+      highlights.push(`Rich in ${nutrient} (${Math.round(amount as number)}% DV)`);
+    });
+  }
+  
+  // Check for fiber
+  const fiber = extractSpecificNutrient(mealData, 'fiber');
+  if (fiber && fiber > 8) {
+    highlights.push(`High fiber content (${Math.round(fiber)}g) supports digestive health`);
+  }
+  
+  // Check for sodium
+  const sodium = extractSpecificNutrient(mealData, 'sodium');
+  if (sodium && sodium > 800) {
+    highlights.push(`Watch sodium intake (${Math.round(sodium)}mg) - drink extra water`);
+  }
+  
+  // Check for healthy fats
+  const omega3 = extractSpecificNutrient(mealData, 'omega-3');
+  const unsaturatedFat = extractSpecificNutrient(mealData, 'unsaturated fat');
+  if (omega3 && omega3 > 0.5) {
+    highlights.push(`Good omega-3 fatty acids for brain health 🧠`);
+  } else if (unsaturatedFat && unsaturatedFat > 10) {
+    highlights.push(`Healthy fats support nutrient absorption`);
+  }
+  
+  return highlights;
+}
+
+function generateGoalSpecificInsight(mealData: any, userProfile: any): string | null {
+  const goal = userProfile?.defaultGoal?.toLowerCase() || userProfile?.goal?.toLowerCase() || '';
+  const mealName = mealData?.meal_name || '';
+  
+  if (goal.includes('athletic') || goal.includes('performance')) {
+    const protein = extractSpecificNutrient(mealData, 'protein');
+    const carbs = extractSpecificNutrient(mealData, 'carbohydrates');
+    
+    if (protein && protein > 25 && carbs && carbs > 30) {
+      return `Perfect post-workout combination of protein & carbs for recovery`;
+    } else if (protein && protein < 15) {
+      return `Add a protein source to better support your athletic goals`;
+    }
+  }
+  
+  if (goal.includes('weight loss')) {
+    const calories = mealData?.calories || 0;
+    const protein = extractSpecificNutrient(mealData, 'protein');
+    
+    if (protein && protein > 20 && calories < 500) {
+      return `Great balance for weight loss - high protein, controlled calories`;
+    }
+  }
+  
+  if (goal.includes('muscle') || goal.includes('gain')) {
+    const protein = extractSpecificNutrient(mealData, 'protein');
+    const calories = mealData?.calories || 0;
+    
+    if (calories > 600 && protein && protein > 25) {
+      return `Solid muscle-building meal with adequate calories and protein`;
+    }
+  }
+  
+  return null;
+}
+
+function generatePatternInsight(currentMeal: any, mealHistory: any[]): string | null {
+  if (mealHistory.length < 3) return null;
+  
+  // Check protein consistency
+  const recentProtein = mealHistory.slice(0, 5).map(meal => extractSpecificNutrient(meal, 'protein') || 0);
+  const avgProtein = recentProtein.reduce((sum, val) => sum + val, 0) / recentProtein.length;
+  const currentProtein = extractSpecificNutrient(currentMeal, 'protein') || 0;
+  
+  if (currentProtein > avgProtein * 1.5) {
+    return `Protein boost! 50% higher than your recent average`;
+  } else if (currentProtein < avgProtein * 0.5 && avgProtein > 15) {
+    return `Lower protein than usual - consider adding a protein source`;
+  }
+  
+  // Check meal timing patterns
+  const mealTimes = mealHistory.map(meal => new Date(meal.created_at).getHours()).filter(h => !isNaN(h));
+  const currentHour = new Date().getHours();
+  
+  if (mealTimes.length > 3) {
+    const avgMealTime = mealTimes.reduce((sum, time) => sum + time, 0) / mealTimes.length;
+    if (Math.abs(currentHour - avgMealTime) > 3) {
+      const timing = currentHour > avgMealTime ? 'later' : 'earlier';
+      return `Eating ${timing} than usual - adjust portions if needed`;
+    }
+  }
+  
+  return null;
+}
+
+function generateFallbackInsight(mealData: any, userProfile: any): string {
+  const mealName = mealData?.meal_name || 'this meal';
+  const calories = mealData?.calories || 0;
+  
+  if (calories > 0) {
+    return `**${mealName}** provides ${calories} calories. Track your daily total to stay aligned with your ${userProfile?.defaultGoal || 'health'} goals.`;
+  }
+  
+  return `Good choice with **${mealName}**! Continue building healthy eating habits to support your wellness journey.`;
+}
+
+// Helper functions for nutrient extraction
+function extractMacronutrients(mealData: any) {
+  const macros = mealData?.macronutrients || mealData?.analysis?.macronutrients || [];
+  const result = { protein: 0, carbs: 0, fat: 0 };
+  
+  macros.forEach((macro: any) => {
+    const name = macro.name?.toLowerCase() || '';
+    const amount = parseFloat(macro.amount) || 0;
+    
+    if (name.includes('protein')) result.protein = amount;
+    if (name.includes('carb')) result.carbs = amount;
+    if (name.includes('fat') && !name.includes('trans')) result.fat = amount;
+  });
+  
+  return result;
+}
+
+function extractMicronutrients(mealData: any): Record<string, number> {
+  const micros = mealData?.micronutrients || mealData?.analysis?.micronutrients || [];
+  const result: Record<string, number> = {};
+  
+  micros.forEach((micro: any) => {
+    if (micro.name && micro.percentDailyValue) {
+      result[micro.name] = parseFloat(micro.percentDailyValue) || 0;
+    }
+  });
+  
+  return result;
+}
+
+function extractSpecificNutrient(mealData: any, targetNutrient: string): number | null {
+  const allNutrients = [
+    ...(mealData?.macronutrients || []),
+    ...(mealData?.micronutrients || []),
+    ...(mealData?.analysis?.macronutrients || []),
+    ...(mealData?.analysis?.micronutrients || [])
+  ];
+  
+  const nutrient = allNutrients.find((n: any) => 
+    n.name?.toLowerCase().includes(targetNutrient.toLowerCase())
+  );
+  
+  return nutrient ? parseFloat(nutrient.amount) || 0 : null;
+}
+
+function calculateCaloriesFromMacros(macros: any): number {
+  return (macros.protein * 4) + (macros.carbs * 4) + (macros.fat * 9);
 } 
