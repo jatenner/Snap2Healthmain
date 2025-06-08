@@ -472,30 +472,21 @@ export function calculatePersonalizedDV(nutrient: any, profile: UserProfile | nu
 
   switch (nutrientName) {
     case 'protein':
-      // Protein calculation based on weight and activity level
-      let proteinRDAFactor = 0.8; // g per kg body weight (baseline RDA)
+      // FIXED: Use 1g protein per lb body weight (popular fitness formula)
+      const weightInLbs = weight_unit === 'kg' ? weight * 2.20462 : weight;
+      rda = weightInLbs * 1.0; // 1g per lb baseline
       
-      if (activity_level) {
-        const activity = activity_level.toLowerCase();
-        if (activity.includes('very active') || activity.includes('athlete')) {
-          proteinRDAFactor = 1.8; // Very active/athletes (1.6-2.2g/kg range)
-        } else if (activity.includes('active')) {
-          proteinRDAFactor = 1.4; // Active (1.2-1.7g/kg range)
-        } else if (activity.includes('moderate')) {
-          proteinRDAFactor = 1.2; // Moderately active
-        }
-      }
-      
+      // Optional: Slight adjustments for specific goals (but keep close to 1g/lb)
       if (goal) {
         const goalLower = goal.toLowerCase();
         if (goalLower.includes('muscle') || goalLower.includes('strength')) {
-          proteinRDAFactor = Math.max(proteinRDAFactor, 1.8); // Muscle building goals (1.6-2.2g/kg)
+          rda = weightInLbs * 1.2; // Slightly higher for muscle building
         } else if (goalLower.includes('weight loss') || goalLower.includes('lose')) {
-          proteinRDAFactor = Math.max(proteinRDAFactor, 1.6); // Weight loss goals (helps preserve muscle)
+          rda = weightInLbs * 1.1; // Slightly higher for weight loss
         }
       }
       
-      rda = weightInKg * proteinRDAFactor;
+      console.log(`[DV% PROTEIN DEBUG] Weight: ${weight} ${weight_unit} = ${weightInLbs} lbs, Target: ${rda}g, Goal: ${goal}`);
       break;
 
     case 'carbohydrates':

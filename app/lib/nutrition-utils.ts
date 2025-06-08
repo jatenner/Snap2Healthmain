@@ -163,21 +163,30 @@ export function calculatePersonalizedDV(nutrient: Nutrient, profile?: UserProfil
     }
   });
   
-  // Protein personalization
+  // Protein personalization - FIXED FOR 1g PER LB BODY WEIGHT
   if (name.includes('protein')) {
-    let proteinMultiplier = 0.8; // RDA baseline (0.8g per kg)
+    // Use the simple 1g protein per lb body weight rule
+    const weightInLbs = weightUnit === 'kg' ? weight * 2.20462 : weight;
+    let dailyProteinNeed = weightInLbs * 1.0; // 1g per lb baseline
     
-    // Adjust based on activity and goals
+    // Optional: Slight adjustments for specific goals (but keep close to 1g/lb)
     if (goal.includes('muscle') || goal.includes('strength')) {
-      proteinMultiplier = 1.8; // Higher for muscle building
+      dailyProteinNeed = weightInLbs * 1.2; // Slightly higher for muscle building
     } else if (goal.includes('weight loss') || goal.includes('lose weight')) {
-      proteinMultiplier = 1.6; // Higher for weight loss to preserve muscle
-    } else if (activityLevel.includes('active') || activityLevel.includes('athlete')) {
-      proteinMultiplier = 1.4; // Higher for active people
+      dailyProteinNeed = weightInLbs * 1.1; // Slightly higher for weight loss
     }
     
-    const dailyProteinNeed = weightInKg * proteinMultiplier;
     const percentOfDaily = (nutrient.amount / dailyProteinNeed) * 100;
+    
+    console.log(`[DV% DEBUG] Protein calculation:`, {
+      nutrientAmount: nutrient.amount,
+      weightInLbs,
+      dailyProteinNeed,
+      percentOfDaily: Math.round(percentOfDaily),
+      goal,
+      activityLevel
+    });
+    
     return Math.round(percentOfDaily);
   }
   
