@@ -148,17 +148,30 @@ const GlobalAIChat = () => {
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to send message');
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+      }
 
       const data = await response.json();
+      console.log('Chat API Response:', data);
+      
+      // Handle the response format correctly
+      let assistantContent = 'Sorry, I encountered an error.';
+      if (data.assistantMessage?.content) {
+        assistantContent = data.assistantMessage.content;
+      } else if (data.response) {
+        assistantContent = data.response;
+      } else if (data.message) {
+        assistantContent = data.message;
+      }
       
       const aiMessage: Message = {
-        id: data.messageId || Date.now().toString(),
+        id: data.assistantMessage?.id || Date.now().toString(),
         role: 'assistant',
-        content: data.response || 'Sorry, I encountered an error.',
+        content: assistantContent,
         timestamp: new Date(),
         metadata: {
-          response_type: data.response_type,
+          response_type: data.assistantMessage?.message_metadata?.response_style || data.response_type,
           insights_used: data.insights_used,
           historical_context: data.historical_context
         }
@@ -166,7 +179,10 @@ const GlobalAIChat = () => {
 
       setMessages(prev => [...prev, aiMessage]);
       
-      if (data.conversationId && !conversationId) {
+      // Handle conversation ID from response
+      if (data.userMessage?.conversation_id && !conversationId) {
+        setConversationId(data.userMessage.conversation_id);
+      } else if (data.conversationId && !conversationId) {
         setConversationId(data.conversationId);
       }
 
