@@ -918,10 +918,12 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
   // Helper functions to extract data
   const getMacronutrients = (): Nutrient[] => {
     const macros = analysisData?.macronutrients || analysisData?.analysis?.macronutrients || [];
-    return macros.map(nutrient => ({
+    const nutrientsWithDescription = macros.map(nutrient => ({
       ...nutrient,
       description: nutrient.description || getNutrientDescription(nutrient.name)
     }));
+    // Filter out nutrients with zero or near-zero values - only show what's actually present
+    return filterRelevantNutrients(nutrientsWithDescription);
   };
   
   // Helper function to filter out nutrients with zero or near-zero values

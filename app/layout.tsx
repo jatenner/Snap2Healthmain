@@ -39,8 +39,8 @@ export default function RootLayout({
             <div className="min-h-screen bg-slate-900">
               <NavBarWithAuth />
               
-              {/* Main Content */}
-              <main>
+              {/* Main Content with proper padding for fixed header */}
+              <main className="pt-16">
                 {children}
               </main>
               

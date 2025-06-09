@@ -4,8 +4,7 @@ import React, { useState, FormEvent, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../components/client/ClientAuthProvider';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
+import { createClient } from '../lib/supabase/client';
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -49,12 +48,31 @@ export default function SignUpPage() {
     }
     
     try {
-      // For development with mock auth, automatically "register" user
-      console.log('Development sign up for:', email);
-      setSuccess(true);
-      setTimeout(() => {
-        router.push('/login');
-      }, 2000);
+      // Real Supabase authentication for production
+      const supabase = createClient();
+      
+      const { data, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name: name,
+            full_name: name,
+          }
+        }
+      });
+
+      if (authError) {
+        setError(authError.message);
+      } else if (data.user) {
+        console.log('Account created successfully:', data.user.email);
+        setSuccess(true);
+        setTimeout(() => {
+          router.push('/login');
+        }, 2000);
+      } else {
+        setError('Account creation failed. Please try again.');
+      }
     } catch (err: any) {
       console.error('Sign up error:', err);
       setError('An unexpected error occurred. Please try again.');
@@ -78,8 +96,14 @@ export default function SignUpPage() {
           <div className="text-green-400 text-6xl mb-4">✓</div>
           <h1 className="text-2xl font-bold text-white">Account Created!</h1>
           <p className="text-gray-400">
-            Your account has been created successfully. Redirecting to login...
+            Your account has been created successfully. Please check your email to verify your account, then sign in.
           </p>
+          <Link 
+            href="/login"
+            className="inline-block mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Go to Sign In
+          </Link>
         </div>
       </div>
     );
