@@ -492,16 +492,16 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
 
   if (!user) {
     return (
-      <div className="fixed bottom-8 right-8 z-50">
+      <div className="fixed bottom-6 right-6 z-50">
         <div className="relative">
           <button 
-            className="w-16 h-16 bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white rounded-full shadow-xl flex items-center justify-center transition-all duration-300 transform hover:scale-105"
+            className="w-20 h-20 bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 transform hover:scale-110 ring-4 ring-gray-300/30"
             title="Sign in to chat with AI"
           >
-            <span className="text-2xl">💬</span>
+            <span className="text-3xl">💬</span>
           </button>
-          <div className="absolute -top-2 -left-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">
-            <span className="text-xs text-white font-bold">!</span>
+          <div className="absolute -top-2 -left-2 w-8 h-8 bg-red-500 rounded-full flex items-center justify-center animate-pulse">
+            <span className="text-sm text-white font-bold">!</span>
           </div>
         </div>
       </div>
@@ -510,50 +510,79 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
 
   return (
     <>
-      {/* Enhanced floating chat button with better visibility */}
-      <div className="fixed bottom-8 right-8 z-50">
+      {/* Super obvious floating chat button with enhanced visibility */}
+      <div className="fixed bottom-6 right-6 z-50">
         <div className="relative">
+          {/* Animated background rings for extra attention */}
+          <div className="absolute inset-0 rounded-full">
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-indigo-500 rounded-full animate-pulse opacity-20"></div>
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full animate-ping opacity-10" style={{ animationDuration: '2s' }}></div>
+          </div>
+          
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className={`w-16 h-16 ${
+            className={`relative w-20 h-20 ${
               getCurrentMealId() 
-                ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700' 
-                : 'bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800'
-            } rounded-full shadow-2xl transition-all duration-300 transform hover:scale-110 active:scale-95 ring-4 ring-white/20`}
+                ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/30' 
+                : 'bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 shadow-blue-500/30'
+            } rounded-full shadow-2xl transition-all duration-300 transform hover:scale-110 active:scale-95 ring-4 ring-white/30 hover:ring-6 hover:ring-white/40`}
             aria-label="Open AI Nutrition Coach"
           >
             <div className="w-full h-full flex items-center justify-center text-white relative">
               {isLoading ? (
-                <div className="animate-spin text-2xl">⚡</div>
+                <div className="animate-spin text-3xl">⚡</div>
               ) : (
                 <>
-                  <span className="text-2xl">🤖</span>
-                  {/* Enhanced context indicators */}
+                  <span className="text-3xl animate-bounce" style={{ animationDuration: '2s' }}>🤖</span>
+                  {/* Enhanced context indicators with better visibility */}
                   {getCurrentMealId() && (
-                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-yellow-400 rounded-full flex items-center justify-center text-xs animate-pulse">
+                    <div className="absolute -top-2 -right-2 w-7 h-7 bg-yellow-400 border-2 border-white rounded-full flex items-center justify-center text-sm animate-bounce shadow-lg">
                       🍽️
                     </div>
                   )}
                   {userInsights?.totalMeals > 0 && !getCurrentMealId() && (
-                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-purple-400 rounded-full flex items-center justify-center text-xs">
+                    <div className="absolute -top-2 -right-2 w-7 h-7 bg-purple-400 border-2 border-white rounded-full flex items-center justify-center text-sm animate-pulse shadow-lg">
                       📊
                     </div>
                   )}
                 </>
               )}
             </div>
+            
+            {/* Floating label hint */}
+            {!isOpen && (
+              <div className="absolute -left-32 top-1/2 transform -translate-y-1/2 bg-gray-800 text-white px-3 py-2 rounded-lg text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none whitespace-nowrap shadow-lg">
+                💬 Ask me about nutrition!
+                <div className="absolute right-0 top-1/2 transform translate-x-1 -translate-y-1/2 w-0 h-0 border-l-4 border-l-gray-800 border-t-4 border-t-transparent border-b-4 border-b-transparent"></div>
+              </div>
+            )}
           </button>
           
-          {/* Pulsing ring animation when active */}
+          {/* Enhanced pulsing ring animation when active */}
           {isOpen && (
-            <div className="absolute inset-0 rounded-full border-2 border-blue-400 animate-ping"></div>
+            <>
+              <div className="absolute inset-0 rounded-full border-4 border-blue-400 animate-ping"></div>
+              <div className="absolute inset-0 rounded-full border-2 border-blue-300 animate-pulse"></div>
+            </>
+          )}
+          
+          {/* Attention-grabbing notification dot when user has data */}
+          {userInsights?.totalMeals > 0 && !isOpen && (
+            <div className="absolute -top-1 -left-1 w-4 h-4 bg-red-500 rounded-full animate-pulse border-2 border-white shadow-lg"></div>
           )}
         </div>
+        
+        {/* Add a subtle floating text hint */}
+        {!isOpen && (
+          <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-white/90 backdrop-blur-sm text-gray-800 px-3 py-1 rounded-lg text-xs font-medium shadow-lg border border-gray-200 animate-bounce opacity-0 hover:opacity-100 transition-all duration-300">
+            Click to chat! 💬
+          </div>
+        )}
       </div>
 
       {/* Enhanced chat panel with modern design */}
       {isOpen && (
-        <div className={`fixed bottom-28 right-8 bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 transition-all duration-300 transform ${
+        <div className={`fixed bottom-28 right-6 bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 transition-all duration-300 transform ${
           typeof window !== 'undefined' && window.innerWidth < 640 
             ? 'w-[calc(100vw-2rem)] h-[75vh] left-4 right-4' 
             : 'w-96 h-[500px]'
@@ -561,7 +590,7 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
           {/* Enhanced header with gradient and better typography */}
           <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-t-2xl">
             <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+              <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center animate-pulse">
                 <span className="text-lg">🤖</span>
               </div>
               <div>
@@ -594,7 +623,7 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
                 <div className="space-y-2">
                   <p className="font-medium text-gray-800">{getContextualHelperText()}</p>
                   {getCurrentMealId() && (
-                    <div className="bg-green-100 border border-green-200 text-green-700 rounded-xl p-3 text-sm">
+                    <div className="bg-green-100 border border-green-200 text-green-700 rounded-xl p-3 text-sm animate-pulse">
                       <div className="flex items-center space-x-2">
                         <span className="text-lg">🍽️</span>
                         <span>Analyzing current meal - ask specific questions!</span>
