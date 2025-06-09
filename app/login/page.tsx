@@ -145,6 +145,37 @@ export default function LoginPage() {
               {isSubmitting ? 'Signing In...' : 'Sign In'}
             </button>
           </div>
+
+          {!useMockAuth && (
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!email) {
+                    setError('Enter your email address first');
+                    return;
+                  }
+                  try {
+                    const supabase = createClient();
+                    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                      redirectTo: `${window.location.origin}/reset-password`
+                    });
+                    if (error) {
+                      setError(error.message);
+                    } else {
+                      setError('');
+                      alert('Password reset email sent! Check your inbox.');
+                    }
+                  } catch (err) {
+                    setError('Failed to send reset email. Please try again.');
+                  }
+                }}
+                className="text-sm text-blue-400 hover:text-blue-300 underline"
+              >
+                Forgot your password?
+              </button>
+            </div>
+          )}
         </form>
 
         <p className="mt-8 text-center text-sm text-gray-400">
