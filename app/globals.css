@@ -24,6 +24,7 @@ body {
       rgb(var(--background-end-rgb))
     )
     rgb(var(--background-start-rgb));
+  -webkit-text-size-adjust: 100%; /* Prevent iOS text scaling */
 }
 
 /* Gradient animations */
@@ -63,10 +64,12 @@ body {
 .touch-target {
   min-height: 44px;
   min-width: 44px;
+  touch-action: manipulation; /* Disable double-tap zoom */
 }
 
-/* Smooth scrolling for mobile */
+/* Enhanced mobile styles */
 @media (max-width: 768px) {
+  /* Smooth scrolling for mobile */
   .mobile-scroll {
     scroll-behavior: smooth;
     -webkit-overflow-scrolling: touch;
@@ -76,6 +79,8 @@ body {
   .mobile-text {
     line-height: 1.6;
     font-size: 16px; /* Prevents zoom on iOS */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
   
   /* Better mobile spacing */
@@ -85,5 +90,84 @@ body {
   
   .mobile-gap {
     gap: 0.5rem;
+  }
+  
+  /* Enhanced mobile buttons */
+  button, .button, input[type="submit"], input[type="button"] {
+    min-height: 44px;
+    font-size: 16px; /* Prevents zoom */
+    touch-action: manipulation;
+  }
+  
+  /* Better mobile inputs */
+  input, textarea, select {
+    font-size: 16px; /* Prevents zoom on iOS */
+    padding: 12px 16px;
+    border-radius: 8px;
+  }
+  
+  /* Mobile-specific navigation adjustments */
+  .mobile-nav {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+  
+  /* Better mobile image handling */
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+  
+  /* Improved mobile dropzone */
+  .mobile-dropzone {
+    min-height: 200px;
+    padding: 24px 16px;
+  }
+  
+  /* Better mobile error messages */
+  .mobile-error {
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    line-height: 1.4;
+  }
+}
+
+/* Landscape mobile adjustments */
+@media (max-width: 768px) and (orientation: landscape) {
+  .mobile-landscape-adjust {
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+  
+  .mobile-nav {
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+}
+
+/* Prevent text selection on buttons and navigation */
+button, .nav-item, .touch-target {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Improve focus visibility for accessibility */
+button:focus, 
+input:focus, 
+textarea:focus, 
+select:focus,
+a:focus {
+  outline: 2px solid #38B2AC;
+  outline-offset: 2px;
+}
+
+/* Better mobile hover states (disable on touch devices) */
+@media (hover: hover) and (pointer: fine) {
+  .hover-effect:hover {
+    transform: translateY(-1px);
+    transition: transform 0.2s ease;
   }
 }

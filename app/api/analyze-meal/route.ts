@@ -317,19 +317,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      return NextResponse.json(
-        { error: 'File must be an image' },
-        { status: 400 }
-      );
-    }
 
     // Validate file size (5MB limit)
-    const maxFileSize = 5 * 1024 * 1024; // 5MB
+    const maxFileSize = 10 * 1024 * 1024; // 10MB
     if (file.size > maxFileSize) {
       return NextResponse.json(
-        { error: 'File size must be less than 5MB' },
+        { error: 'Your image is too large. Please try a smaller image (under 10MB)' },
         { status: 400 }
       );
     }
@@ -665,4 +658,4 @@ export async function POST(request: NextRequest) {
       details: process.env.NODE_ENV === 'development' ? error : undefined
     }, { status: 500 });
   }
-} 
+}

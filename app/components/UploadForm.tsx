@@ -134,9 +134,9 @@ export default function UploadForm() {
     }
     
     // Validate file type
-    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'image/bmp', 'image/tiff', 'image/tif', 'image/gif', 'image/avif'];
     if (!validTypes.includes(selectedFile.type)) {
-      setError('Please select a valid image file (JPEG, PNG, WEBP, HEIC)');
+      setError(`Please select a valid image file. Supported: JPEG, PNG, WEBP, HEIC, BMP, TIFF, GIF, AVIF. Your file type: ${selectedFile.type || 'unknown'}`);
       setFile(null);
       setPreviewUrl(null);
       return;
@@ -308,7 +308,7 @@ export default function UploadForm() {
       {/* Authentication status banner - show confirmation of login, not warning */}
       {authStatus === 'authenticated' && (
         <div className="bg-green-900/20 text-green-200 border-green-800 p-4 rounded-lg">
-          <p className="flex items-center">
+          <p className="flex items-start mobile-text">
             <div className="h-2 w-2 bg-green-500 rounded-full mr-2"></div>
             Logged in successfully. Your meal will be saved to your history.
           </p>
@@ -349,7 +349,7 @@ export default function UploadForm() {
               type="file"
               ref={fileInputRef}
               onChange={handleFileChange}
-              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+              accept="image/jpeg,image/jpg,image/png,image/webp,image/heic,image/heif,image/bmp,image/tiff,image/tif,image/gif,image/avif"
               className="hidden"
               disabled={isSubmitting}
             />
@@ -369,7 +369,7 @@ export default function UploadForm() {
                 <ImageIcon className="h-12 w-12 text-gray-400 mb-2" />
                 <p className="text-gray-300 font-medium">Click to select an image</p>
                 <p className="text-sm text-gray-500 mt-1">
-                  JPEG, PNG, WEBP, HEIC up to 10MB
+                  JPEG, PNG, WEBP, HEIC, BMP, TIFF, GIF, AVIF up to 10MB
                 </p>
               </div>
             )}
@@ -377,17 +377,17 @@ export default function UploadForm() {
         </div>
         
         {error && (
-          <div className="bg-red-900/20 text-red-200 border-red-800 p-4 rounded-lg">
-            <p className="flex items-center">
-              <AlertCircle className="h-4 w-4 mr-2" />
-              {error}
+          <div className="bg-red-900/20 text-red-200 border-red-800 p-4 rounded-lg mobile-error">
+            <p className="flex items-start mobile-text">
+              <AlertCircle className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" /><span>
+              {error}</span>
             </p>
           </div>
         )}
         
         {uploadSuccess && (
           <div className="bg-green-900/20 text-green-200 border-green-800 p-4 rounded-lg">
-            <p className="flex items-center">
+            <p className="flex items-start mobile-text">
               <div className="h-2 w-2 bg-green-500 rounded-full mr-2"></div>
               Image uploaded successfully! Redirecting to analysis...
             </p>

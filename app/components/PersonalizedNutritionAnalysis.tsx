@@ -925,7 +925,7 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
     // Filter out nutrients with zero or near-zero values - only show what's actually present
     return filterRelevantNutrients(nutrientsWithDescription);
   };
-  
+
   // Helper function to filter out nutrients with zero or near-zero values
   const filterRelevantNutrients = (nutrients: Nutrient[] = []): Nutrient[] => {
     return nutrients.filter(nutrient => {

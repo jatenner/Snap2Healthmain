@@ -85,7 +85,7 @@ const FoodUpload: React.FC<FoodUploadProps> = ({ onUpload, isLoading = false, pr
       handleFileChange(acceptedFiles);
     } else {
       console.log("No valid files found in drop");
-      setUploadError("No valid image files detected. Please try again with JPG, PNG, or WebP images.");
+      setUploadError("Please upload a valid image file (JPEG, PNG, WebP, HEIC, BMP, TIFF, GIF, or AVIF format)");
     }
   }, [handleFileChange]);
   
@@ -355,8 +355,8 @@ const FoodUpload: React.FC<FoodUploadProps> = ({ onUpload, isLoading = false, pr
       
       console.log(`Starting to upload meal image (${file.size} bytes, ${file.type}) with goal: ${selectedGoal}`);
       
-      // Send the file to the server
-      const response = await fetch('/api/analyze-meal', {
+      // Send the file to the SPEED-OPTIMIZED server endpoint
+      const response = await fetch('/api/analyze-meal-speed-optimized', {
         method: 'POST',
         body: formData,
       });
@@ -427,7 +427,7 @@ const FoodUpload: React.FC<FoodUploadProps> = ({ onUpload, isLoading = false, pr
       handleAnalysisResponse(data);
     } catch (error) {
       console.error('Error uploading meal:', error);
-      setUploadError(error.message || 'Failed to upload and analyze image');
+      let userMessage = 'Something went wrong while analyzing your meal. Please try again.'; if (error.message) { if (error.message.includes('rate limit') || error.message.includes('429')) { userMessage = 'Too many requests. Please wait a moment and try again.'; } else if (error.message.includes('network') || error.message.includes('fetch')) { userMessage = 'Network connection issue. Please check your internet and try again.'; } else if (error.message.includes('file') || error.message.includes('image')) { userMessage = 'Please check your image file and try uploading again.'; } else if (error.message.includes('size') || error.message.includes('large')) { userMessage = 'Your image file is too large. Please try a smaller image.'; } } setUploadError(userMessage);
     } finally {
       setIsUploading(false);
     }
@@ -539,7 +539,7 @@ const FoodUpload: React.FC<FoodUploadProps> = ({ onUpload, isLoading = false, pr
               </div>
             </div>
             <p className="text-xs text-blue-100/50 mt-2">
-              Supported formats: JPG, PNG, WebP
+              Supported formats: JPEG, PNG, WebP, HEIC, BMP, TIFF, GIF, AVIF
             </p>
             
             {/* Error message */}
