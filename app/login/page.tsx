@@ -95,7 +95,23 @@ export default function LoginPage() {
 
         {error && (
           <div className="p-3 bg-red-900/50 border border-red-700 rounded-md text-red-300 text-sm">
-            {error}
+            <p className="mb-2">{error}</p>
+            {error.includes('Invalid login credentials') && (
+              <div className="mt-3 pt-3 border-t border-red-700">
+                <p className="text-red-200 text-xs mb-2">This error can mean:</p>
+                <ul className="text-red-200 text-xs space-y-1 list-disc list-inside">
+                  <li>Wrong password</li>
+                  <li>Email not verified yet</li>
+                  <li>Account doesn't exist</li>
+                </ul>
+                <Link 
+                  href={`/debug-auth?email=${encodeURIComponent(email)}`}
+                  className="inline-block mt-2 text-xs text-blue-400 hover:text-blue-300 underline"
+                >
+                  🔍 Diagnose this issue
+                </Link>
+              </div>
+            )}
           </div>
         )}
 
