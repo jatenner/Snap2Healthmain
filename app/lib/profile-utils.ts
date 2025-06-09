@@ -56,7 +56,7 @@ const DEFAULT_PROFILE = {
   weight: 65,
   weight_unit: 'kg' as 'kg',
   activity_level: 'Moderate',
-  goal: 'General Health'
+  goal: 'Athletic Performance'
 };
 
 // Add FDA reference daily values map after the interfaces and before existing functions
@@ -357,7 +357,7 @@ export const getDefaultProfile = () => {
     weight: 170, // pounds
     weight_unit: 'lb',
     activity_level: 'Moderate',
-    goal: 'General Health'
+    goal: 'Athletic Performance'
   });
 };
 

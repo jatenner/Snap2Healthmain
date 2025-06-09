@@ -27,7 +27,7 @@ type AuthStatus = 'checking' | 'authenticated' | 'anonymous' | 'error';
 
 export default function UploadForm() {
   const [file, setFile] = useState<File | null>(null);
-  const [goal, setGoal] = useState<string>('General Wellness');
+  const [goal, setGoal] = useState<string>('Athletic Performance');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -134,7 +134,19 @@ export default function UploadForm() {
     }
     
     // Validate file type
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'image/bmp', 'image/tiff', 'image/tif', 'image/gif', 'image/avif'];
+    const validTypes = [
+      'image/jpeg', 
+      'image/jpg',
+      'image/png', 
+      'image/webp', 
+      'image/heic', 
+      'image/heif',
+      'image/bmp',
+      'image/tiff',
+      'image/tif',
+      'image/gif',
+      'image/avif'
+    ];
     if (!validTypes.includes(selectedFile.type)) {
       setError(`Please select a valid image file. Supported: JPEG, PNG, WEBP, HEIC, BMP, TIFF, GIF, AVIF. Your file type: ${selectedFile.type || 'unknown'}`);
       setFile(null);
