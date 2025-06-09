@@ -139,6 +139,51 @@ const GlobalAIChat = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Effect to add auto-greeting when chat is first opened
+  useEffect(() => {
+    if (isOpen && messages.length === 0 && user) {
+      const context = getPageContext();
+      let greetingMessage = "👋 Hi there! I'm your AI nutrition coach. ";
+      
+      switch (context.type) {
+        case 'upload':
+          greetingMessage += "I see you're about to upload a meal! Once you take or upload a photo, I can analyze its nutrition, suggest improvements, and explain how it fits your goals.";
+          break;
+        case 'analysis':
+        case 'meal_analysis':
+          greetingMessage += `I can see you're viewing a nutrition analysis${context.mealName ? ` for "${context.mealName}"` : ''}. Ask me about the nutrients, health benefits, or how to optimize this meal!`;
+          break;
+        case 'history':
+        case 'meal_history':
+          greetingMessage += "Looking at your meal history? I can help you spot patterns, identify your healthiest meals, or suggest what to eat next based on your trends.";
+          break;
+        case 'profile':
+          greetingMessage += "Great to see you checking your profile! I can help you optimize your nutrition goals, adjust your targets, or explain how to reach your health objectives.";
+          break;
+        default:
+          greetingMessage += "I'm here to help with all your nutrition questions! Upload a meal photo, review your history, or ask about nutrition strategies.";
+      }
+      
+      // Add quick suggestions
+      if (contextualSuggestions.length > 0) {
+        greetingMessage += `\n\n💡 Try asking:\n${contextualSuggestions.slice(0, 3).map(s => `• ${s}`).join('\n')}`;
+      }
+      
+      // Auto-add greeting message
+      const autoGreeting: Message = {
+        id: `greeting-${Date.now()}`,
+        role: 'assistant',
+        content: greetingMessage,
+        timestamp: new Date(),
+        metadata: {
+          response_type: 'auto_greeting',
+        }
+      };
+      
+      setMessages([autoGreeting]);
+    }
+  }, [isOpen, user, contextualSuggestions]);
+
   const getCurrentPageContext = () => {
     if (typeof window === 'undefined') return 'unknown';
     const pathname = window.location.pathname;
@@ -581,54 +626,71 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
 
   return (
     <>
-      {/* Super obvious floating chat button with enhanced visibility */}
+      {/* Enhanced floating chat button with multiple attention-grabbing features */}
       <div className="fixed bottom-6 right-6 z-50">
         <div className="relative">
-          {/* Animated background rings for extra attention */}
-          <div className="absolute inset-0 rounded-full">
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-indigo-500 rounded-full animate-pulse opacity-20"></div>
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full animate-ping opacity-10" style={{ animationDuration: '2s' }}></div>
-          </div>
-          
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className={`relative w-20 h-20 ${
-              getCurrentMealId() 
-                ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/30' 
-                : 'bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 shadow-blue-500/30'
-            } rounded-full shadow-2xl transition-all duration-300 transform hover:scale-110 active:scale-95 ring-4 ring-white/30 hover:ring-6 hover:ring-white/40`}
-            aria-label="Open AI Nutrition Coach"
-          >
-            <div className="w-full h-full flex items-center justify-center text-white relative">
-              {isLoading ? (
-                <div className="animate-spin text-3xl">⚡</div>
-              ) : (
-                <>
-                  <span className="text-3xl animate-bounce" style={{ animationDuration: '2s' }}>🤖</span>
-                  {/* Enhanced context indicators with better visibility */}
-                  {getCurrentMealId() && (
-                    <div className="absolute -top-2 -right-2 w-7 h-7 bg-yellow-400 border-2 border-white rounded-full flex items-center justify-center text-sm animate-bounce shadow-lg">
-                      🍽️
-                    </div>
-                  )}
-                  {userInsights?.totalMeals > 0 && !getCurrentMealId() && (
-                    <div className="absolute -top-2 -right-2 w-7 h-7 bg-purple-400 border-2 border-white rounded-full flex items-center justify-center text-sm animate-pulse shadow-lg">
-                      📊
-                    </div>
-                  )}
-                </>
-              )}
+          {/* Welcome pulse overlay - only shows for first 10 seconds */}
+          {showWelcomePulse && (
+            <div className="absolute -inset-4 z-10">
+              <div className="w-28 h-28 bg-gradient-to-r from-purple-400 via-pink-500 to-red-500 rounded-full animate-ping opacity-30"></div>
+              <div className="absolute inset-0 w-28 h-28 bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 rounded-full animate-pulse opacity-40"></div>
             </div>
+          )}
+
+          {/* Main chat button with enhanced design */}
+          <button 
+            onClick={toggleChat}
+            className="relative w-20 h-20 bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-700 hover:from-blue-700 hover:via-purple-700 hover:to-indigo-800 text-white rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 transform hover:scale-110 ring-4 ring-blue-300/30 hover:ring-blue-400/50 group"
+            title={getContextualHelperText()}
+          >
+            {/* Robot emoji with bounce animation */}
+            <span className="text-3xl animate-bounce group-hover:animate-pulse">🤖</span>
             
-            {/* Floating label hint */}
-            {!isOpen && (
-              <div className="absolute -left-32 top-1/2 transform -translate-y-1/2 bg-gray-800 text-white px-3 py-2 rounded-lg text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none whitespace-nowrap shadow-lg">
-                💬 Ask me about nutrition!
-                <div className="absolute right-0 top-1/2 transform translate-x-1 -translate-y-1/2 w-0 h-0 border-l-4 border-l-gray-800 border-t-4 border-t-transparent border-b-4 border-b-transparent"></div>
+            {/* Context indicator badges */}
+            {getPageContext().nutrients && getPageContext().nutrients!.length > 0 && (
+              <div className="absolute -top-1 -right-1 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center border-2 border-white shadow-lg">
+                <span className="text-xs text-white font-bold">📊</span>
+              </div>
+            )}
+            
+            {userInsights && typeof userInsights === 'object' && userInsights.totalMeals && userInsights.totalMeals > 0 && (
+              <div className="absolute -bottom-1 -left-1 w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center border-2 border-white shadow-lg">
+                <span className="text-xs text-white font-bold">{userInsights.totalMeals}</span>
               </div>
             )}
           </button>
-          
+
+          {/* Floating tooltip with contextual information */}
+          {!isOpen && (
+            <div className="absolute bottom-full right-0 mb-4 w-72 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-xl shadow-xl p-4 transform transition-all duration-300 hover:scale-105">
+              <div className="text-sm text-gray-700 font-medium mb-2">
+                {getContextualHelperText()}
+              </div>
+              
+              {/* Show contextual suggestions */}
+              {contextualSuggestions.length > 0 && (
+                <div className="space-y-1">
+                  <div className="text-xs text-gray-500 uppercase font-semibold">Quick Questions:</div>
+                  {contextualSuggestions.slice(0, 2).map((suggestion, index) => (
+                    <button
+                      key={index}
+                      onClick={() => {
+                        setIsOpen(true);
+                        setInputValue(suggestion);
+                      }}
+                      className="block w-full text-left text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded transition-colors"
+                    >
+                      • {suggestion}
+                    </button>
+                  ))}
+                </div>
+              )}
+              
+              {/* Arrow pointing to button */}
+              <div className="absolute top-full right-8 w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-blue-200"></div>
+            </div>
+          )}
+
           {/* Enhanced pulsing ring animation when active */}
           {isOpen && (
             <>
@@ -636,19 +698,7 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
               <div className="absolute inset-0 rounded-full border-2 border-blue-300 animate-pulse"></div>
             </>
           )}
-          
-          {/* Attention-grabbing notification dot when user has data */}
-          {userInsights?.totalMeals > 0 && !isOpen && (
-            <div className="absolute -top-1 -left-1 w-4 h-4 bg-red-500 rounded-full animate-pulse border-2 border-white shadow-lg"></div>
-          )}
         </div>
-        
-        {/* Add a subtle floating text hint */}
-        {!isOpen && (
-          <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-white/90 backdrop-blur-sm text-gray-800 px-3 py-1 rounded-lg text-xs font-medium shadow-lg border border-gray-200 animate-bounce opacity-0 hover:opacity-100 transition-all duration-300">
-            Click to chat! 💬
-          </div>
-        )}
       </div>
 
       {/* Enhanced chat panel with modern design */}
