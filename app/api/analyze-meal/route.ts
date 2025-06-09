@@ -132,11 +132,11 @@ Consider pairing with adequate hydration and timing this meal 2-3 hours before i
 // Background insights generation with simplified logic
 async function generateInsightsInBackground(mealId: string, mealData: any, userProfile: any, goal: string, supabaseAdmin: any) {
   try {
-    // Generate insights with 90-second timeout for comprehensive analysis
+    // Generate insights with 30-second timeout for optimal speed
     const insights = await Promise.race([
       generatePersonalizedInsights(mealData, userProfile, goal),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Insights timeout after 90 seconds')), 90000)
+        setTimeout(() => reject(new Error('Insights timeout after 30 seconds')), 30000)
       )
     ]) as string;
     
@@ -400,7 +400,7 @@ export async function POST(request: NextRequest) {
         userProfile
         ),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('OpenAI analysis timeout after 120 seconds')), 120000)
+          setTimeout(() => reject(new Error('OpenAI analysis timeout after 30 seconds')), 30000)
         )
       ]);
       
