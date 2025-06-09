@@ -17,7 +17,7 @@ interface Message {
 }
 
 interface PageContext {
-  type: 'upload' | 'analysis' | 'history' | 'profile' | 'home';
+  type: 'upload' | 'analysis' | 'history' | 'profile' | 'home' | 'meal_analysis' | 'meal_history';
   data?: any;
   nutrients?: any[];
   mealName?: string;
@@ -259,178 +259,132 @@ const GlobalAIChat = () => {
 
   // Enhanced system prompt with deep context awareness
   const buildSystemPrompt = (context: PageContext): string => {
-    const basePrompt = `You are Snap2Health's AI nutrition assistant - an expert companion who sees exactly what the user is viewing and provides personalized, contextual guidance. Act like you're looking over their shoulder and can see their screen.`;
+    const currentMealId = getCurrentMealId();
+    const isAnalyzingMeal = !!currentMealId;
     
-    let contextualPrompt = '';
-    
-    switch (context.type) {
-      case 'upload':
-        contextualPrompt = `The user is on the upload page${context.data?.canSeeUploadForm ? ', ready to upload a meal photo' : ''}${context.data?.hasImage ? ' and I can see they have selected an image' : ''}. 
-        
-You should help them:
-- Take better photos for analysis (lighting, angles, portion visibility)
-- Understand what the AI can detect and analyze
-- Get excited about their nutrition journey
-- Troubleshoot any upload issues
+    let systemPrompt = `You are a knowledgeable nutrition expert and wellness coach integrated into Snap2Health, a meal analysis app. You provide personalized, encouraging nutrition advice.
 
-Be encouraging and practical. If they have an image selected, acknowledge it and guide them through the analysis process.`;
-        break;
-        
-      case 'analysis':
-        const nutrientsList = context.nutrients?.map(n => `${n.name}${n.amount ? ` (${n.amount}${n.unit || ''})` : ''}${n.dailyValue ? ` - ${n.dailyValue}% DV` : ''}`).join(', ') || 'nutrition data';
-        
-        contextualPrompt = `The user is viewing a detailed meal analysis for "${context.mealName || 'their meal'}"${context.data?.activeTab ? ` on the ${context.data.activeTab} tab` : ''}. 
+CURRENT CONTEXT:
+- Page: ${context.type}
+- User has meal data available: ${(context.nutrients?.length || 0) > 0 ? 'Yes' : 'No'}
+- Currently analyzing meal: ${isAnalyzingMeal ? 'Yes' : 'No'}
+- User insights available: ${userInsights ? 'Yes' : 'No'}
 
-I can see these nutrients on their screen: ${nutrientsList}
+NUTRITION DATA AVAILABLE:
+${context.nutrients && context.nutrients.length > 0 ? 
+  `Current meal nutrients: ${context.nutrients.map(n => `${n.name}${n.amount ? ` (${n.amount}${n.unit || ''})` : ''}`).join(', ')}` :
+  'No specific nutrient data visible'
+}
 
-You should:
-- Reference specific nutrients they're looking at
-- Explain the significance of the values they see
-- Compare to their goals and daily needs  
-- Suggest improvements or highlight strengths
-- Feel like you're analyzing the same data they're viewing
+${userInsights ? `USER HISTORY: ${userInsights.totalMeals} meals analyzed, patterns available for comparison` : ''}
 
-Be specific about what you see on their screen. Don't give generic advice - tailor it to the exact nutrients and values visible.`;
-        break;
-        
-      case 'history':
-        contextualPrompt = `The user is browsing their meal history${context.data?.totalMeals ? ` and I can see ${context.data.totalMeals} meal entries` : ''}${!context.data?.hasHistory ? ' but they don\'t have any meals yet' : ''}.
-
-You should help them:
-- Identify patterns in their eating habits
-- Spot nutritional trends and improvements
-- Find their best and worst meals
-- Set goals based on their history
-- Understand progress over time
-
-${context.data?.hasHistory ? 'Reference their meal history specifically and help them understand their nutrition journey.' : 'Encourage them to start tracking meals and explain the benefits.'}`;
-        break;
-        
-      case 'profile':
-        contextualPrompt = `The user is on their profile page${context.data?.hasProfileData ? ' and I can see they have some profile information filled out' : ' setting up their account'}.
-
-You should help them:
-- Optimize their nutrition goals
-- Understand how their personal data affects recommendations
-- Set realistic and achievable targets
-- Customize their Snap2Health experience
-
-Be personal and reference their profile settings when relevant.`;
-        break;
-        
-      case 'home':
-        contextualPrompt = `The user is on the home page${context.data?.isLoggedIn ? ', logged in and ready to explore' : ' getting started with Snap2Health'}.
-
-You should:
-- Welcome them and explain key features
-- Guide them to their next best action
-- Help them understand Snap2Health's capabilities
-- Get them excited about nutrition tracking
-
-Be welcoming and help them navigate to the most useful features for their needs.`;
-        break;
-    }
-    
-    return `${basePrompt}
-
-CURRENT CONTEXT: ${contextualPrompt}
-
-RESPONSE STYLE:
-- Be conversational and supportive
-- Reference specific things you can "see" on their screen
+RESPONSE GUIDELINES:
+- Be conversational, encouraging, and specific
+- Use the visible nutrition data when relevant
 - Provide actionable, personalized advice
-- Ask follow-up questions to keep them engaged
-- Use emojis sparingly but effectively
-- Keep responses focused and relevant to their current view
+- Keep responses concise but informative (2-4 sentences typically)
+- Use emojis occasionally for engagement
+- Reference the user's patterns/history when available
+- If asked about meal analysis, focus on the current meal context
 
-Remember: You can see their screen and should act like an expert nutritionist sitting beside them, helping them understand exactly what they're looking at.`;
+CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
+
+    return systemPrompt;
   };
 
-  const sendMessage = async (content: string) => {
-    if (!content.trim() || !user || isLoading) return;
+  const loadUserInsights = async () => {
+    if (!user || contextLoading) return;
+    
+    try {
+      setContextLoading(true);
+      const response = await fetch('/api/chat/insights', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.ok) {
+        const insights = await response.json();
+        setUserInsights(insights);
+      }
+    } catch (error) {
+      console.warn('Could not load user insights:', error);
+    } finally {
+      setContextLoading(false);
+    }
+  };
 
-    setIsLoading(true);
-    const newMessage: Message = {
+  useEffect(() => {
+    if (user && isOpen && !userInsights) {
+      loadUserInsights();
+    }
+  }, [user, isOpen]);
+
+  const sendMessage = async (content: string) => {
+    if (!content.trim() || isLoading) return;
+
+    const userMessage: Message = {
       id: Date.now().toString(),
-      content: content.trim(),
       role: 'user',
+      content: content.trim(),
       timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, newMessage]);
+    setMessages(prev => [...prev, userMessage]);
     setInputValue('');
-    setShowQuickActions(false);
+    setIsLoading(true);
 
     try {
       const context = getPageContext();
-
-      // Enhanced context data
-      const contextData = {
-        page: getCurrentMealId() ? 'meal_analysis' : 'general',
-        current_meal_id: getCurrentMealId(),
-        timestamp: new Date().toISOString(),
-        user_insights: userInsights,
-        // Add request type detection
-        request_type: detectRequestType(content)
+      const systemPrompt = buildSystemPrompt(context);
+      const requestType = detectRequestType(content);
+      
+      const requestBody = {
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...messages.map(m => ({ role: m.role, content: m.content })),
+          { role: 'user', content }
+        ],
+        context: {
+          ...context,
+          userInsights,
+          currentMeal: getCurrentMealId(),
+          requestType
+        },
+        conversationId,
+        max_tokens: requestType === 'simple' ? 150 : 
+                   requestType === 'detailed' ? 800 : 400,
       };
 
       const response = await fetch('/api/chat/messages', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          conversation_id: conversationId,
-          user_id: user.id,
-          content: content.trim(),
-          meal_id: getCurrentMealId(),
-          context_data: contextData,
-          context: context,
-          systemPrompt: buildSystemPrompt(context)
-        }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
-        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
-      console.log('Chat API Response:', data);
       
-      // Handle the response format correctly
-      let assistantContent = 'Sorry, I encountered an error.';
-      if (data.assistantMessage?.content) {
-        assistantContent = data.assistantMessage.content;
-      } else if (data.response) {
-        assistantContent = data.response;
-      } else if (data.message) {
-        assistantContent = data.message;
-      }
-      
-      const aiMessage: Message = {
-        id: data.assistantMessage?.id || Date.now().toString(),
+      const assistantMessage: Message = {
+        id: Date.now().toString(),
         role: 'assistant',
-        content: assistantContent,
+        content: data.message || 'Sorry, I encountered an error processing your request.',
         timestamp: new Date(),
-        metadata: {
-          response_type: data.assistantMessage?.message_metadata?.response_style || data.response_type,
-          insights_used: data.insights_used,
-          historical_context: data.historical_context
-        }
+        metadata: data.metadata,
       };
 
-      setMessages(prev => [...prev, aiMessage]);
+      setMessages(prev => [...prev, assistantMessage]);
       
-      // Handle conversation ID from response
-      if (data.userMessage?.conversation_id && !conversationId) {
-        setConversationId(data.userMessage.conversation_id);
-      } else if (data.conversationId && !conversationId) {
+      if (data.conversationId && !conversationId) {
         setConversationId(data.conversationId);
       }
-
-      // Update user insights if provided
-      if (data.updated_insights) {
-        setUserInsights(data.updated_insights);
-      }
-
+      
     } catch (error) {
       console.error('Error sending message:', error);
       const errorMessage: Message = {
@@ -445,27 +399,15 @@ Remember: You can see their screen and should act like an expert nutritionist si
     }
   };
 
-  // Helper function to detect request type for better processing
   const detectRequestType = (content: string): string => {
     const lower = content.toLowerCase();
-    
     if (lower.includes('simple') || lower.includes('brief') || lower.includes('quick')) {
       return 'simple';
     }
-    if (lower.includes('detail') || lower.includes('explain') || lower.includes('why')) {
+    if (lower.includes('detailed') || lower.includes('explain') || lower.includes('how') || lower.includes('why')) {
       return 'detailed';
     }
-    if (lower.includes('compare') || lower.includes('vs') || lower.includes('difference')) {
-      return 'comparison';
-    }
-    if (lower.includes('pattern') || lower.includes('history') || lower.includes('progress')) {
-      return 'historical';
-    }
-    if (lower.includes('goal') || lower.includes('should i') || lower.includes('recommend')) {
-      return 'goal_related';
-    }
-    
-    return 'general';
+    return 'balanced';
   };
 
   const handleQuickAction = (action: string) => {
@@ -474,75 +416,39 @@ Remember: You can see their screen and should act like an expert nutritionist si
 
   const toggleChat = () => {
     setIsOpen(!isOpen);
-    if (!isOpen && messages.length === 0) {
-      const currentMealId = getCurrentMealId();
-      const welcomeContent = currentMealId 
-        ? `Hi! I'm your personalized AI nutrition coach. I can see you're analyzing a meal right now. 
-
-**Quick options:**
-• Simple summary of this meal
-• Detailed nutritional analysis  
-• How it fits your health goals
-• Suggestions for improvement
-
-I learn from our conversations to give you increasingly personalized advice. What would you like to know?
-
-*Tip: Ask for "simple" or "detailed" responses anytime!*`
-        : `Hi! I'm your AI nutrition coach. I learn about your preferences and goals to provide personalized guidance.
-
-**I can help with:**
-• Meal analysis and nutrition questions
-• Understanding your eating patterns
-• Tips for reaching your health goals
-• Simple or detailed explanations
-
-What would you like to know? 
-
-*Tip: Say "simple answer" or "give me more detail" to control response length!*`;
-
-      const welcomeMessage: Message = {
-        id: '0',
-        role: 'assistant',
-        content: welcomeContent,
-        timestamp: new Date()
-      };
-      setMessages([welcomeMessage]);
-    }
   };
 
   // Add context-aware quick actions
   const getContextualQuickActions = (context: PageContext): string[] => {
-    const baseActions = ["What should I eat today?", "Help me understand my nutrition"];
-    
+    const baseActions = [
+      "Tell me about protein in this meal",
+      "How can I improve this meal?",
+      "What nutrients am I missing?",
+      "Is this amount healthy for me?"
+    ];
+
     switch (context.type) {
-      case 'upload':
+      case 'analysis':
+      case 'meal_analysis':
         return [
-          "How do I take a good food photo?",
-          "What can you analyze from my meal?",
-          "Tips for better analysis?"
+          "Tell me about this meal's protein",
+          "How does this fit my goals?",
+          "What could make this healthier?",
+          "Compare to my usual meals"
         ];
       
-      case 'analysis':
-        if (context.nutrients && context.nutrients.length > 0) {
-          // Create nutrient-specific questions based on what's visible
-          const nutrients = context.nutrients.slice(0, 3); // Top 3 nutrients
-          return [
-            `Tell me about ${nutrients[0]?.name || 'this nutrient'}`,
-            "How can I improve this meal?",
-            "Is this amount healthy for me?",
-            "What nutrients am I missing?"
-          ];
-        }
+      case 'upload':
         return [
-          "Explain my nutrition breakdown",
-          "How can I improve this meal?",
-          "What nutrients am I missing?",
-          "Is this healthy for my goals?"
+          "What should I look for in a meal?",
+          "Tips for healthier choices",
+          "How to read nutrition labels",
+          "What makes a balanced meal?"
         ];
       
       case 'history':
+      case 'meal_history':
         return [
-          "What patterns do you see in my meals?",
+          "Show me my nutrition trends",
           "How has my nutrition changed?",
           "Which meal was my healthiest?",
           "What should I focus on?"
@@ -567,7 +473,7 @@ What would you like to know?
     const contextualActions = getContextualQuickActions(context);
     
     return (
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="mb-3 flex flex-wrap gap-2">
         {contextualActions.map((action, index) => (
           <button
             key={index}
@@ -575,7 +481,7 @@ What would you like to know?
               setInputValue(action);
               sendMessage(action);
             }}
-            className="px-3 py-1.5 text-xs bg-darkBlue-accent/50 text-cyan-accent rounded-full hover:bg-darkBlue-accent/70 transition-colors"
+            className="px-3 py-1.5 text-xs bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 text-blue-700 border border-blue-200 rounded-full transition-all duration-200 hover:shadow-sm"
           >
             {action}
           </button>
@@ -586,92 +492,117 @@ What would you like to know?
 
   if (!user) {
     return (
-      <div className="fixed bottom-6 right-6 z-50">
-        <button 
-          className="w-14 h-14 bg-gray-600 hover:bg-gray-700 text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-200"
-          title="Sign in to chat with AI"
-        >
-          💬
-        </button>
+      <div className="fixed bottom-8 right-8 z-50">
+        <div className="relative">
+          <button 
+            className="w-16 h-16 bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white rounded-full shadow-xl flex items-center justify-center transition-all duration-300 transform hover:scale-105"
+            title="Sign in to chat with AI"
+          >
+            <span className="text-2xl">💬</span>
+          </button>
+          <div className="absolute -top-2 -left-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">
+            <span className="text-xs text-white font-bold">!</span>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
     <>
-      {/* Enhanced chat button with context indicator */}
-      <div className="fixed bottom-6 right-6 z-50">
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className={`w-14 h-14 ${
-            getCurrentMealId() ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700'
-          } rounded-full shadow-lg transition-all duration-300 transform hover:scale-110 active:scale-95`}
-          aria-label="Open AI Chat"
-        >
-          <div className="w-full h-full flex items-center justify-center text-white relative">
-            {isLoading ? (
-              <div className="animate-spin">⚡</div>
-            ) : (
-              <>
-                💬
-                {/* Context indicator */}
-                {getCurrentMealId() && (
-                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-400 rounded-full flex items-center justify-center text-xs">
-                    🍽️
-                  </div>
-                )}
-                {userInsights?.totalMeals > 0 && !getCurrentMealId() && (
-                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-400 rounded-full flex items-center justify-center text-xs">
-                    📊
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </button>
+      {/* Enhanced floating chat button with better visibility */}
+      <div className="fixed bottom-8 right-8 z-50">
+        <div className="relative">
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className={`w-16 h-16 ${
+              getCurrentMealId() 
+                ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700' 
+                : 'bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800'
+            } rounded-full shadow-2xl transition-all duration-300 transform hover:scale-110 active:scale-95 ring-4 ring-white/20`}
+            aria-label="Open AI Nutrition Coach"
+          >
+            <div className="w-full h-full flex items-center justify-center text-white relative">
+              {isLoading ? (
+                <div className="animate-spin text-2xl">⚡</div>
+              ) : (
+                <>
+                  <span className="text-2xl">🤖</span>
+                  {/* Enhanced context indicators */}
+                  {getCurrentMealId() && (
+                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-yellow-400 rounded-full flex items-center justify-center text-xs animate-pulse">
+                      🍽️
+                    </div>
+                  )}
+                  {userInsights?.totalMeals > 0 && !getCurrentMealId() && (
+                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-purple-400 rounded-full flex items-center justify-center text-xs">
+                      📊
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </button>
+          
+          {/* Pulsing ring animation when active */}
+          {isOpen && (
+            <div className="absolute inset-0 rounded-full border-2 border-blue-400 animate-ping"></div>
+          )}
+        </div>
       </div>
 
-      {/* Enhanced chat panel */}
+      {/* Enhanced chat panel with modern design */}
       {isOpen && (
-        <div className={`fixed bottom-24 right-6 bg-white rounded-lg shadow-2xl border z-50 transition-all duration-300 ${
+        <div className={`fixed bottom-28 right-8 bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 transition-all duration-300 transform ${
           typeof window !== 'undefined' && window.innerWidth < 640 
-            ? 'w-[calc(100vw-2rem)] h-[70vh]' 
-            : 'w-80 h-96'
+            ? 'w-[calc(100vw-2rem)] h-[75vh] left-4 right-4' 
+            : 'w-96 h-[500px]'
         }`}>
-          {/* Enhanced header with context info */}
-          <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-t-lg">
-            <div>
-              <h3 className="font-semibold">AI Nutrition Coach</h3>
-              {userInsights?.totalMeals > 0 && (
-                <p className="text-xs opacity-90">
-                  📊 {userInsights.totalMeals} meals analyzed
-                </p>
-              )}
+          {/* Enhanced header with gradient and better typography */}
+          <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-t-2xl">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                <span className="text-lg">🤖</span>
+              </div>
+              <div>
+                <h3 className="font-semibold text-lg">AI Nutrition Coach</h3>
+                {userInsights?.totalMeals > 0 && (
+                  <p className="text-xs text-blue-100">
+                    📊 {userInsights.totalMeals} meals analyzed
+                  </p>
+                )}
+              </div>
             </div>
             <button 
               onClick={() => setIsOpen(false)}
-              className="text-white hover:text-gray-200 text-xl font-bold"
+              className="text-white hover:text-gray-200 text-2xl font-light transition-colors hover:bg-white/10 rounded-full w-8 h-8 flex items-center justify-center"
             >
               ×
             </button>
           </div>
 
-          {/* Enhanced quick actions with context */}
-          <div className="px-4 py-2 border-b bg-gray-50">
+          {/* Enhanced quick actions with better styling */}
+          <div className="px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-blue-50">
             {renderQuickActions()}
           </div>
 
-          {/* Enhanced messages area */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 h-48">
+          {/* Enhanced messages area with better spacing and typography */}
+          <div className="flex-1 overflow-y-auto p-5 space-y-4 h-64 bg-gradient-to-b from-white to-gray-50">
             {messages.length === 0 ? (
-              <div className="text-center text-gray-500 text-sm space-y-2">
-                <div className="text-lg">🤖</div>
-                <p>{getContextualHelperText()}</p>
-                {getCurrentMealId() && (
-                  <p className="text-xs bg-green-100 text-green-700 rounded p-2">
-                    🍽️ Analyzing current meal - ask specific questions!
-                  </p>
-                )}
+              <div className="text-center text-gray-600 space-y-4 py-8">
+                <div className="text-4xl animate-bounce">🤖</div>
+                <div className="space-y-2">
+                  <p className="font-medium text-gray-800">{getContextualHelperText()}</p>
+                  {getCurrentMealId() && (
+                    <div className="bg-green-100 border border-green-200 text-green-700 rounded-xl p-3 text-sm">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-lg">🍽️</span>
+                        <span>Analyzing current meal - ask specific questions!</span>
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-sm text-gray-500">Try asking about nutrition, goals, or meal patterns</p>
+                </div>
               </div>
             ) : (
               messages.map((message) => (
@@ -680,24 +611,26 @@ What would you like to know?
                   className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-[80%] px-3 py-2 rounded-lg text-sm ${
+                    className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
                       message.role === 'user'
-                        ? 'bg-purple-600 text-white rounded-br-none'
-                        : 'bg-gray-100 text-gray-800 rounded-bl-none'
+                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-br-md shadow-lg'
+                        : 'bg-white border border-gray-200 text-gray-800 rounded-bl-md shadow-sm'
                     }`}
                   >
-                    {message.content}
+                    <div className="whitespace-pre-wrap">{message.content}</div>
                     {/* Enhanced metadata display */}
                     {message.metadata && message.role !== 'user' && (
-                      <div className="text-xs opacity-70 mt-1">
+                      <div className="text-xs text-gray-500 mt-2 pt-2 border-t border-gray-100">
                         {message.metadata.response_type && (
-                          <span className="inline-block mr-2">
-                            📝 {message.metadata.response_type}
+                          <span className="inline-flex items-center bg-gray-100 px-2 py-1 rounded-full mr-2">
+                            <span className="w-2 h-2 bg-blue-400 rounded-full mr-1"></span>
+                            {message.metadata.response_type}
                           </span>
                         )}
                         {message.metadata.insights_used && (
-                          <span className="inline-block">
-                            💡 insights used
+                          <span className="inline-flex items-center bg-purple-100 px-2 py-1 rounded-full">
+                            <span className="w-2 h-2 bg-purple-400 rounded-full mr-1"></span>
+                            insights used
                           </span>
                         )}
                       </div>
@@ -708,16 +641,24 @@ What would you like to know?
             )}
             {isLoading && (
               <div className="flex justify-start">
-                <div className="bg-gray-100 px-3 py-2 rounded-lg text-sm animate-pulse">
-                  Thinking... 🤔
+                <div className="bg-gray-100 border border-gray-200 px-4 py-3 rounded-2xl rounded-bl-md text-sm animate-pulse">
+                  <div className="flex items-center space-x-2">
+                    <div className="flex space-x-1">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                    </div>
+                    <span className="text-gray-600">Thinking...</span>
+                  </div>
                 </div>
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
 
-          {/* Enhanced input area */}
-          <div className="p-3 border-t bg-gray-50">
-            <div className="flex gap-2">
+          {/* Enhanced input area with modern styling */}
+          <div className="p-5 border-t border-gray-100 bg-white rounded-b-2xl">
+            <div className="flex gap-3">
               <input
                 type="text"
                 value={inputValue}
@@ -725,14 +666,17 @@ What would you like to know?
                 onKeyPress={(e) => e.key === 'Enter' && sendMessage(inputValue)}
                 placeholder="Ask about nutrition, goals, or patterns..."
                 disabled={isLoading}
-                className="flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
+                className="flex-1 px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:bg-gray-50 transition-all duration-200"
               />
               <button
                 onClick={() => sendMessage(inputValue)}
                 disabled={isLoading || !inputValue.trim()}
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-sm font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 active:scale-95 shadow-lg"
               >
-                Send
+                <span className="flex items-center space-x-1">
+                  <span>Send</span>
+                  <span className="text-lg">📤</span>
+                </span>
               </button>
             </div>
           </div>
