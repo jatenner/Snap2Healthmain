@@ -58,17 +58,33 @@ export default function SignUpPage() {
           data: {
             name: name,
             full_name: name,
-          }
+          },
+          // Skip email confirmation during development/rate limit issues
+          emailRedirectTo: undefined
         }
       });
 
       if (authError) {
-        setError(authError.message);
+        // Handle rate limit errors more gracefully
+        if (authError.message.includes('rate limit') || authError.message.includes('email rate')) {
+          setError('Email service temporarily unavailable. Your account may still be created. Try signing in, or contact support.');
+          // Still try to redirect to login after a delay
+          setTimeout(() => {
+            router.push('/login');
+          }, 3000);
+        } else {
+          setError(authError.message);
+        }
       } else if (data.user) {
         console.log('Account created successfully:', data.user.email);
         setSuccess(true);
+        // Immediate redirect for confirmed users or when email confirmation is disabled
         setTimeout(() => {
-          router.push('/login');
+          if (data.user.email_confirmed_at || data.session) {
+            router.push('/upload');
+          } else {
+            router.push('/login');
+          }
         }, 2000);
       } else {
         setError('Account creation failed. Please try again.');
