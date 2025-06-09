@@ -288,11 +288,13 @@ function generateUserPrompt(userProfile: UserProfile): string {
   return `${personalizedContext}MISSION: Analyze this meal like you're creating a performance nutrition protocol for this specific individual. I need insights that will actually move the needle on their results.
 
 ANALYSIS REQUIREMENTS:
-1. Identify the EXACT metabolic impact this meal will have on THIS person's physiology
-2. Spot the hidden opportunities and blind spots others would miss
-3. Provide tactical adjustments with specific timing and quantities
-4. Reference cutting-edge research that explains WHY each recommendation works
-5. Connect every insight directly to their athletic performance goals
+1. **PORTION SIZE ACCURACY**: Carefully analyze the visual portion sizes in the image. Consider plate size, serving utensils, food density, and compare to standard portion references. Estimate portions based on visual cues like the size relative to hands, plates, or common objects.
+2. **PRECISE NUTRIENT CALCULATIONS**: Base all nutrient amounts on the ACTUAL portions visible, not standard serving sizes. Only include nutrients that are meaningfully present in significant amounts.
+3. Identify the EXACT metabolic impact this meal will have on THIS person's physiology
+4. Spot the hidden opportunities and blind spots others would miss
+5. Provide tactical adjustments with specific timing and quantities
+6. Reference cutting-edge research that explains WHY each recommendation works
+7. Connect every insight directly to their athletic performance goals
 
 OUTPUT FORMAT (JSON):
 {
@@ -313,7 +315,7 @@ OUTPUT FORMAT (JSON):
     {"name": "Saturated Fat", "amount": X, "unit": "g", "percentDailyValue": X},
     {"name": "Sodium", "amount": X, "unit": "mg", "percentDailyValue": X}
   ],
-  "micronutrients": [complete micronutrient array with accurate values],
+  "micronutrients": [ONLY include micronutrients that are meaningfully present. Set amount to 0 for nutrients not significantly present in the meal. Focus on nutrients the meal actually provides based on visible ingredients],
   "personalizedHealthInsights": "CRITICAL ANALYSIS: For a [age]-year-old [weight]lb male focused on [specific goal], this meal creates [specific metabolic response]. The [X]g protein will [exact mechanism] while the [X]g carbs will [specific glycemic response]. Key performance impact: [measurable outcome]. Missing: [specific gaps] which limits [exact performance area].",
   "metabolicInsights": "METABOLIC BLUEPRINT: Within 30 minutes: [specific physiological response]. 60-90 minutes: [peak metabolic state]. 2-3 hours: [transition phase]. For your training schedule, this means [actionable timing]. The [specific nutrient ratios] will [exact metabolic pathway] resulting in [measurable performance outcome]. Research shows [specific study] that [exact mechanism].",
   "mealStory": "PERFORMANCE TIMELINE: Your digestive fire starts with [specific breakdown]. The [nutrient] hits your bloodstream at [timeframe], triggering [hormonal response]. For your [body size/composition], this creates [metabolic advantage/disadvantage]. Peak nutrient availability occurs [specific timing] - optimal window for [specific activity]. Energy sustainability: [duration and quality].",

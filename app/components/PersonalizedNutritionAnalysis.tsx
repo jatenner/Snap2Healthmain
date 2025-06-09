@@ -1022,25 +1022,25 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
   }
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Meal Header */}
+    <div className="space-y-4 sm:space-y-6 max-w-7xl mx-auto px-2 sm:px-0">
+      {/* Meal Header - Mobile Optimized */}
       {getImageUrl() && (
-        <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-6 shadow-xl">
-          <div className="grid lg:grid-cols-2 gap-8 items-center">
-            <div className="aspect-square relative rounded-xl overflow-hidden shadow-2xl">
+        <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-xl">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 items-center">
+            <div className="aspect-square relative rounded-lg sm:rounded-xl overflow-hidden shadow-2xl max-w-xs mx-auto lg:max-w-none lg:mx-0">
               <img
                 src={getImageUrl()}
                 alt={getMealName()}
                 className="w-full h-full object-cover"
               />
             </div>
-            <div className="space-y-4">
-              <h2 className="text-4xl font-bold text-white leading-tight">{getMealName()}</h2>
-              <div className="text-5xl font-bold text-blue-400 mb-4">
-                {getCalories()} <span className="text-xl font-normal text-gray-400">calories</span>
+            <div className="space-y-3 sm:space-y-4 text-center lg:text-left">
+              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white leading-tight">{getMealName()}</h2>
+              <div className="text-3xl sm:text-4xl lg:text-5xl font-bold text-blue-400 mb-4">
+                {getCalories()} <span className="text-lg sm:text-xl font-normal text-gray-400">calories</span>
               </div>
               {analysisData.created_at && (
-                <p className="text-gray-400 text-lg">
+                <p className="text-gray-400 text-base sm:text-lg">
                   Analyzed on {new Date(analysisData.created_at).toLocaleDateString()}
             </p>
           )}
@@ -1104,13 +1104,13 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
                 </h3>
                 
                 {getMacronutrients().length > 0 ? (
-                  <div className="grid lg:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                     {getMacronutrients().map((nutrient, index) => (
-                      <div key={index} className="bg-gradient-to-br from-gray-700 to-gray-800 rounded-xl p-6 shadow-lg">
-                        <div className="flex justify-between items-start mb-4">
+                      <div key={index} className="bg-gradient-to-br from-gray-700 to-gray-800 rounded-lg sm:rounded-xl p-4 sm:p-6 shadow-lg">
+                        <div className="flex justify-between items-start mb-3 sm:mb-4">
                           <div>
-                            <h4 className="text-2xl font-semibold text-white mb-2">{nutrient.name}</h4>
-                            <p className="text-3xl font-bold text-blue-400">
+                            <h4 className="text-lg sm:text-xl lg:text-2xl font-semibold text-white mb-2">{nutrient.name}</h4>
+                            <p className="text-2xl sm:text-3xl font-bold text-blue-400">
                               {nutrient.amount} {nutrient.unit}
                             </p>
                           </div>
