@@ -926,13 +926,6 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
     return filterRelevantNutrients(nutrientsWithDescription);
   };
 
-  // Helper function to filter out nutrients with zero or near-zero values
-  const filterRelevantNutrients = (nutrients: Nutrient[] = []): Nutrient[] => {
-    return nutrients.filter(nutrient => {
-      // Keep nutrient if it has a meaningful amount
-      return nutrient.amount > 0 && nutrient.amount > 0.01; // Filter out trace amounts
-    });
-  };
 
   const getMicronutrients = (): Nutrient[] => {
     const micros = analysisData?.micronutrients || analysisData?.analysis?.micronutrients || [];

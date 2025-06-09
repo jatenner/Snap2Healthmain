@@ -16,6 +16,14 @@ interface Message {
   };
 }
 
+interface PageContext {
+  type: 'upload' | 'analysis' | 'history' | 'profile' | 'home';
+  data?: any;
+  nutrients?: any[];
+  mealName?: string;
+  currentPage?: string;
+}
+
 // Enhanced quick action buttons with historical context
 const enhancedQuickActions = [
   { 
@@ -110,6 +118,117 @@ const GlobalAIChat = () => {
     return "💬 Ask me about nutrition, your meals, or get personalized health advice!";
   };
 
+  const getPageContext = (): PageContext => {
+    if (typeof window === 'undefined') return { type: 'home' };
+    
+    const pathname = window.location.pathname;
+    const searchParams = new URLSearchParams(window.location.search);
+    
+    // Extract context from URL
+    if (pathname.includes('/upload')) {
+      return { 
+        type: 'upload',
+        currentPage: 'Upload Page - Ready to analyze your meal photos'
+      };
+    }
+    
+    if (pathname.includes('/analysis')) {
+      // Try to get meal data from the page
+      const mealId = pathname.split('/').pop();
+      return { 
+        type: 'analysis',
+        currentPage: `Meal Analysis Page - Viewing detailed nutrition breakdown`,
+        data: { mealId },
+        // Try to extract visible nutrients from DOM (simplified)
+        nutrients: extractVisibleNutrients()
+      };
+    }
+    
+    if (pathname.includes('/meal-history')) {
+      return { 
+        type: 'history',
+        currentPage: 'Meal History - Browse your past meal analyses'
+      };
+    }
+    
+    if (pathname.includes('/profile')) {
+      return { 
+        type: 'profile',
+        currentPage: 'Profile Settings - Customize your nutrition goals'
+      };
+    }
+    
+    return { 
+      type: 'home',
+      currentPage: 'Home Page - Welcome to Snap2Health'
+    };
+  };
+
+  // Simple function to extract visible nutrition data
+  const extractVisibleNutrients = () => {
+    try {
+      // Look for nutrient displays on the page
+      const nutrientElements = document.querySelectorAll('[data-nutrient], .nutrient-item, [class*="nutrient"]');
+      const nutrients: string[] = [];
+      
+      nutrientElements.forEach(el => {
+        const text = el.textContent?.trim();
+        if (text && text.length < 100) { // Reasonable length check
+          nutrients.push(text);
+        }
+      });
+      
+      return nutrients.slice(0, 10); // Limit to first 10 for context
+    } catch (error) {
+      return [];
+    }
+  };
+
+  // Update the buildSystemPrompt function to include context
+  const buildSystemPrompt = (context: PageContext): string => {
+    const basePrompt = `You are Snap2Health's AI nutrition assistant. You provide helpful, accurate, and personalized nutrition advice.`;
+    
+    const contextualPrompt = {
+      upload: `The user is on the upload page, ready to analyze a meal photo. Help them understand:
+- How to take good photos for analysis
+- What they can expect from the analysis
+- Answer questions about food photography tips`,
+      
+      analysis: `The user is viewing a detailed meal analysis. You can see they're looking at nutrition data. Help them:
+- Understand specific nutrients they're viewing
+- Explain health benefits of nutrients
+- Provide context about daily values
+- Suggest improvements for their meal
+Current page: ${context.currentPage}
+${context.nutrients?.length ? `Visible nutrients: ${context.nutrients.join(', ')}` : ''}`,
+      
+      history: `The user is browsing their meal history. Help them:
+- Compare different meals
+- Identify nutrition patterns
+- Set nutrition goals based on their history`,
+      
+      profile: `The user is updating their profile settings. Help them:
+- Choose appropriate nutrition goals
+- Understand activity level impact
+- Set realistic targets`,
+      
+      home: `The user is on the home page. Provide general nutrition guidance and help them get started with Snap2Health.`
+    };
+    
+    return `${basePrompt}
+    
+CURRENT CONTEXT: ${contextualPrompt[context.type]}
+
+RESPONSE STYLE:
+- Keep responses concise but helpful (2-3 sentences for simple questions)
+- Use bullet points for lists or multiple suggestions  
+- Mention specific nutrients by name when relevant
+- Be encouraging and positive
+- If they ask about something visible on their current page, reference it directly
+
+Remember: You can see what page they're on and what nutrition data they're viewing, so make your responses contextually relevant.`;
+  };
+
   const sendMessage = async (content: string) => {
     if (!content.trim() || !user || isLoading) return;
 
@@ -126,6 +245,8 @@ const GlobalAIChat = () => {
     setShowQuickActions(false);
 
     try {
+      const context = getPageContext();
+
       // Enhanced context data
       const contextData = {
         page: getCurrentMealId() ? 'meal_analysis' : 'general',
@@ -144,7 +265,9 @@ const GlobalAIChat = () => {
           user_id: user.id,
           content: content.trim(),
           meal_id: getCurrentMealId(),
-          context_data: contextData
+          context_data: contextData,
+          context: context,
+          systemPrompt: buildSystemPrompt(context)
         }),
       });
 
@@ -270,6 +393,80 @@ What would you like to know?
     }
   };
 
+  // Add context-aware quick actions
+  const getContextualQuickActions = (context: PageContext): string[] => {
+    const baseActions = ["What should I eat today?", "Help me understand my nutrition"];
+    
+    switch (context.type) {
+      case 'upload':
+        return [
+          "How do I take a good food photo?",
+          "What can you analyze from my meal?",
+          "Tips for better analysis?"
+        ];
+      
+      case 'analysis':
+        if (context.nutrients && context.nutrients.length > 0) {
+          // Create nutrient-specific questions based on what's visible
+          const nutrients = context.nutrients.slice(0, 3); // Top 3 nutrients
+          return [
+            `Tell me about ${nutrients[0]?.split(' ')[0] || 'this nutrient'}`,
+            "How can I improve this meal?",
+            "Is this amount healthy for me?",
+            "What nutrients am I missing?"
+          ];
+        }
+        return [
+          "Explain my nutrition breakdown",
+          "How can I improve this meal?",
+          "What nutrients am I missing?",
+          "Is this healthy for my goals?"
+        ];
+      
+      case 'history':
+        return [
+          "What patterns do you see in my meals?",
+          "How has my nutrition changed?",
+          "Which meal was my healthiest?",
+          "What should I focus on?"
+        ];
+      
+      case 'profile':
+        return [
+          "Help me set better nutrition goals",
+          "What activity level should I choose?",
+          "How many calories should I eat?",
+          "What's best for my goals?"
+        ];
+      
+      default:
+        return baseActions;
+    }
+  };
+
+  // Update the renderQuickActions to use context
+  const renderQuickActions = () => {
+    const context = getPageContext();
+    const contextualActions = getContextualQuickActions(context);
+    
+    return (
+      <div className="mb-4 flex flex-wrap gap-2">
+        {contextualActions.map((action, index) => (
+          <button
+            key={index}
+            onClick={() => {
+              setInputValue(action);
+              sendMessage(action);
+            }}
+            className="px-3 py-1.5 text-xs bg-darkBlue-accent/50 text-cyan-accent rounded-full hover:bg-darkBlue-accent/70 transition-colors"
+          >
+            {action}
+          </button>
+        ))}
+      </div>
+    );
+  };
+
   if (!user) {
     return (
       <div className="fixed bottom-6 right-6 z-50">
@@ -344,32 +541,7 @@ What would you like to know?
 
           {/* Enhanced quick actions with context */}
           <div className="px-4 py-2 border-b bg-gray-50">
-            <div className="grid grid-cols-2 gap-1 text-xs">
-              {enhancedQuickActions.slice(0, 4).map((action, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleQuickAction(action.action)}
-                  disabled={isLoading}
-                  className="px-2 py-1 bg-white border rounded text-gray-600 hover:bg-purple-50 hover:border-purple-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {action.label}
-                </button>
-              ))}
-            </div>
-            
-            {/* Response style toggles */}
-            <div className="flex gap-1 mt-2">
-              {enhancedQuickActions.slice(4, 6).map((action, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleQuickAction(action.action)}
-                  disabled={isLoading}
-                  className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors disabled:opacity-50"
-                >
-                  {action.label}
-                </button>
-              ))}
-            </div>
+            {renderQuickActions()}
           </div>
 
           {/* Enhanced messages area */}

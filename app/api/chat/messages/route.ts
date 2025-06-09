@@ -355,7 +355,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     console.log('[Chat Messages API] Received POST request:', body);
-    let { conversation_id, user_id, content, meal_id, context_data } = body;
+    let { conversation_id, user_id, content, meal_id, context_data, context, systemPrompt } = body;
 
     if (!user_id || !content) {
       console.log('[Chat Messages API] Missing required fields:', { user_id, content });
@@ -388,7 +388,7 @@ export async function POST(request: NextRequest) {
           user_id,
           meal_id,
           title: meal_id ? 'Meal Analysis Chat' : 'Nutrition Chat',
-          context_data: context_data || {}
+          context_data: { ...context_data, pageContext: context }
         })
         .select()
         .single();
@@ -581,14 +581,14 @@ export async function POST(request: NextRequest) {
       commonTopics: enhancedContext?.chatPatterns?.commonTopics || []
     });
 
-    // Create enhanced system prompt
-    const systemPrompt = createEnhancedSystemPrompt(combinedProfile, enhancedContext);
+    // Use custom system prompt if provided (for contextual awareness), otherwise use enhanced prompt
+    const selectedSystemPrompt = systemPrompt || createEnhancedSystemPrompt(combinedProfile, enhancedContext);
 
     // Get AI response with enhanced context
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
-        { role: 'system', content: systemPrompt },
+        { role: 'system', content: selectedSystemPrompt },
         ...contextMessages,
         { role: 'user', content }
       ],
