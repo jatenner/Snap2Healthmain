@@ -123,49 +123,58 @@ const fattyAcidNames = [
 // Helper function to get detailed descriptions for nutrients
 const getNutrientDescription = (name: string): string => {
   const descriptions: Record<string, string> = {
-    // Macronutrients
-    'protein': 'Builds and repairs your muscles, keeps you feeling full longer, and helps your body recover after workouts. Great for maintaining a strong, lean physique.',
-    'carbohydrates': 'Primary fuel for brain function and high-intensity exercise. Glucose is the preferred substrate for neurons, with glycogen stores critical for sustained cognitive and physical performance.',
-    'fat': 'Essential for hormone production, fat-soluble vitamin absorption, and cellular membrane integrity. Omega-3 fatty acids modulate inflammation and support neuroplasticity.',
-    'fiber': 'Critical for microbiome health and metabolic regulation. Soluble fiber feeds beneficial bacteria, producing short-chain fatty acids that reduce inflammation and improve insulin sensitivity.',
-    'sugar': 'Rapidly absorbed glucose that can cause insulin spikes. While providing quick energy, excess consumption can lead to glycation, oxidative stress, and metabolic dysfunction.',
-    'sodium': 'Essential electrolyte for nerve conduction and fluid balance. However, excess intake can disrupt the renin-angiotensin system and increase cardiovascular stress.',
-    'saturated fat': 'Can raise LDL cholesterol in some individuals. However, quality matters - medium-chain triglycerides from coconut oil may have different metabolic effects than palmitic acid.',
-    'trans fat': 'Industrial trans fats severely disrupt cellular membrane function and increase systemic inflammation. Even small amounts can negatively impact cardiovascular health.',
-    'unsaturated fat': 'Monounsaturated and polyunsaturated fats support cardiovascular health and reduce inflammation. Olive oil polyphenols activate longevity pathways.',
-    'omega-3': 'EPA and DHA are crucial for brain health, reducing neuroinflammation, and supporting cognitive function. They also modulate the inflammatory response and may extend healthspan.',
-    'omega-6': 'While essential, excessive omega-6 intake can promote inflammation when not balanced with omega-3s. The ideal ratio is closer to 4:1 or 2:1 omega-6 to omega-3.',
-    'cholesterol': 'Precursor to steroid hormones including testosterone, estrogen, and cortisol. Dietary cholesterol has minimal impact on blood cholesterol for most people.',
-    'calories': 'Units of energy that fuel cellular processes. Caloric restriction can activate sirtuins and other longevity pathways, while excess calories accelerate aging.',
+    // Macronutrients - Human-friendly descriptions
+    'protein': 'Essential for building and repairing muscles, keeping you satisfied longer, and maintaining a strong body. Think of it as your body\'s construction material.',
+    'carbohydrates': 'Your body\'s main energy source, like premium fuel for your brain and muscles. Helps you feel energized and mentally sharp.',
+    'fat': 'Necessary for absorbing vitamins, producing hormones, and keeping your skin healthy. Quality fats support brain function and reduce inflammation.',
+    'fiber': 'Keeps your digestive system running smoothly, helps you feel full, and feeds the good bacteria in your gut for better overall health.',
+    'sugar': 'Quick energy source that can give you a rapid boost, but too much can lead to energy crashes and health issues over time.',
+    'sodium': 'Helps maintain fluid balance and nerve function, but excess amounts can increase blood pressure and strain your cardiovascular system.',
+    'saturated fat': 'Found in animal products and some oils. Small amounts are fine, but too much may raise cholesterol levels in some people.',
+    'trans fat': 'Artificial fats that should be avoided - they increase inflammation and heart disease risk even in small amounts.',
+    'unsaturated fat': 'The "good fats" found in olive oil, nuts, and fish that support heart health and reduce inflammation throughout your body.',
+    'omega-3': 'Brain-boosting fats that fight inflammation, support memory, and may help prevent heart disease. Found in fish, walnuts, and flax seeds.',
+    'omega-6': 'Essential fats your body needs, but balance is key - too much compared to omega-3s can promote inflammation.',
+    'cholesterol': 'Your body makes most of what it needs. Dietary cholesterol has less impact on blood levels than once thought for most people.',
+    'calories': 'Units of energy your body uses for everything from breathing to exercising. Balance is key for maintaining healthy weight.',
     
-    // Vitamins - Scientific descriptions
-    'vitamin a': 'Critical for rhodopsin regeneration in the retina and immune function. Retinol supports T-cell differentiation and epithelial barrier function.',
-    'vitamin c': 'Powerful antioxidant and cofactor for collagen synthesis. Essential for neutrophil function and may reduce exercise-induced oxidative stress.',
-    'vitamin d': 'Steroid hormone that regulates over 1000 genes. Critical for calcium homeostasis, immune modulation, and potentially longevity. Most people are deficient.',
-    'vitamin e': 'Fat-soluble antioxidant that protects cellular membranes from lipid peroxidation. Alpha-tocopherol is the most bioactive form.',
-    'vitamin k': 'Essential cofactor for gamma-carboxylation of proteins involved in blood clotting and bone mineralization. K2 (MK-7) may support cardiovascular health.',
-    'vitamin b1': 'Thiamine is crucial for glucose metabolism and nerve function. Deficiency can impair cognitive performance and energy production.',
-    'vitamin b2': 'Riboflavin is essential for the electron transport chain and antioxidant enzyme function. Critical for mitochondrial energy production.',
-    'vitamin b3': 'Niacin is a precursor to NAD+, crucial for cellular energy production and DNA repair. May support longevity through sirtuin activation.',
-    'vitamin b5': 'Pantothenic acid is essential for CoA synthesis, critical for fatty acid metabolism and neurotransmitter production.',
-    'vitamin b6': 'Pyridoxine is crucial for amino acid metabolism and neurotransmitter synthesis including serotonin and dopamine.',
-    'vitamin b7': 'Biotin is essential for fatty acid synthesis and gluconeogenesis. Critical for gene regulation and cellular metabolism.',
-    'vitamin b9': 'Folate is crucial for DNA methylation and one-carbon metabolism. Essential for neuroplasticity and cognitive function.',
-    'vitamin b12': 'Cobalamin is essential for myelin synthesis and DNA methylation. Deficiency can cause irreversible neurological damage.',
+    // Vitamins - Simple, relatable descriptions
+    'vitamin a': 'Keeps your eyes healthy for good vision, especially at night. Also supports immune function and skin health.',
+    'vitamin c': 'Powerful immune system booster that helps fight off colds and infections. Also helps your body absorb iron and heal wounds.',
+    'vitamin d': 'The "sunshine vitamin" that keeps bones strong, supports immune function, and may boost mood. Most people don\'t get enough.',
+    'vitamin e': 'Protects your cells from damage and supports healthy skin. Acts like a bodyguard for your cell membranes.',
+    'vitamin k': 'Essential for blood clotting when you get a cut, and helps keep your bones strong as you age.',
+    'vitamin b1': 'Helps convert food into energy and supports proper nerve function. Important for brain health and energy levels.',
+    'vitamin b2': 'Crucial for energy production and helps your body process other vitamins. Supports healthy eyes and skin.',
+    'vitamin b3': 'Supports energy production, brain function, and healthy cholesterol levels. May help protect against cognitive decline.',
+    'vitamin b5': 'Helps your body make energy from food and produces important hormones. Supports healthy skin and hair.',
+    'vitamin b6': 'Important for brain development and function, helps make neurotransmitters that regulate mood and sleep.',
+    'vitamin b7': 'Supports healthy hair, skin, and nails. Also important for processing fats and carbohydrates for energy.',
+    'vitamin b9': 'Critical for cell division and DNA repair. Especially important for pregnant women to prevent birth defects.',
+    'vitamin b12': 'Essential for nerve function, energy production, and making red blood cells. Deficiency can cause permanent nerve damage.',
+    'biotin': 'Supports healthy hair, skin, and nails while helping your body process fats and carbohydrates for energy.',
+    'folate': 'Works with B12 to make healthy red blood cells and support brain function. Important for cell growth and repair.',
+    'thiamine': 'Helps your body convert food into energy and supports proper nerve, muscle, and heart function.',
+    'riboflavin': 'Essential for energy production and helps your body process other nutrients. Supports healthy vision.',
+    'niacin': 'Supports brain function, healthy cholesterol levels, and helps convert food into usable energy.',
+    'pantothenic acid': 'Helps your body make energy from food and produces important hormones for stress response.',
     
-    // Minerals - Scientific descriptions
-    'calcium': 'Essential for muscle contraction, nerve signaling, and bone mineralization. Also crucial for cellular signaling and enzyme function.',
-    'iron': 'Central component of hemoglobin and cytochromes. Essential for oxygen transport and mitochondrial energy production.',
-    'potassium': 'Critical electrolyte for maintaining membrane potential and muscle function. May help counteract sodium\'s effects on blood pressure.',
-    'magnesium': 'Cofactor for over 300 enzymes including those involved in ATP synthesis. Essential for muscle relaxation and nervous system function.',
-    'zinc': 'Essential for immune function, protein synthesis, and wound healing. Cofactor for antioxidant enzymes and DNA repair mechanisms.',
-    'phosphorus': 'Critical component of ATP, phospholipids, and bone mineral. Essential for cellular energy metabolism and membrane structure.',
-    'selenium': 'Essential component of glutathione peroxidase, a key antioxidant enzyme. May support thyroid function and reduce cancer risk.',
-    'iodine': 'Essential for thyroid hormone synthesis. Critical for metabolic rate regulation and brain development.',
-    'copper': 'Essential for collagen cross-linking, iron metabolism, and antioxidant enzyme function. Important for cardiovascular health.',
-    'manganese': 'Cofactor for superoxide dismutase and other antioxidant enzymes. Important for bone development and metabolism.',
-    'chromium': 'May enhance insulin sensitivity and glucose metabolism, though evidence is mixed. Potentially important for metabolic health.',
-    'molybdenum': 'Cofactor for enzymes involved in amino acid metabolism and toxin processing. Essential but needed in very small amounts.'
+    // Minerals - Practical, understandable descriptions
+    'calcium': 'Builds and maintains strong bones and teeth. Also needed for muscle contractions and nerve signaling.',
+    'iron': 'Carries oxygen in your blood to all parts of your body. Low iron leads to fatigue and weakness.',
+    'potassium': 'Helps regulate blood pressure, supports muscle function, and counteracts the effects of too much sodium.',
+    'magnesium': 'Relaxes muscles, supports heart rhythm, and helps with over 300 body processes. Many people are deficient.',
+    'zinc': 'Boosts immune function, helps wounds heal faster, and supports taste and smell. Important for growth and development.',
+    'phosphorus': 'Works with calcium to build strong bones and teeth. Also important for energy storage and use.',
+    'selenium': 'Powerful antioxidant that protects cells from damage and supports thyroid function and immune health.',
+    'iodine': 'Essential for proper thyroid function, which controls metabolism, energy levels, and body temperature.',
+    'copper': 'Helps your body use iron properly, supports immune function, and is needed for healthy blood vessels.',
+    'manganese': 'Supports bone development, blood clotting, and helps protect cells from damage.',
+    'chromium': 'May help your body use insulin more effectively to control blood sugar levels.',
+    'molybdenum': 'Helps your body process proteins and remove toxins. Needed in very small amounts.',
+    'fluoride': 'Helps prevent tooth decay and may support bone health when consumed in appropriate amounts.',
+    'chloride': 'Works with sodium to maintain fluid balance and is needed for proper digestion.',
+    'sulfur': 'Important component of proteins and helps with detoxification processes in the liver.'
   };
   
   const exactMatch = descriptions[name.toLowerCase()];
@@ -915,12 +924,22 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
     }));
   };
   
+  // Helper function to filter out nutrients with zero or near-zero values
+  const filterRelevantNutrients = (nutrients: Nutrient[] = []): Nutrient[] => {
+    return nutrients.filter(nutrient => {
+      // Keep nutrient if it has a meaningful amount
+      return nutrient.amount > 0 && nutrient.amount > 0.01; // Filter out trace amounts
+    });
+  };
+
   const getMicronutrients = (): Nutrient[] => {
     const micros = analysisData?.micronutrients || analysisData?.analysis?.micronutrients || [];
-    return micros.map(nutrient => ({
+    const nutrientsWithDescription = micros.map(nutrient => ({
       ...nutrient,
       description: nutrient.description || getNutrientDescription(nutrient.name)
     }));
+    // Filter out nutrients with zero or near-zero values - only show what's actually present
+    return filterRelevantNutrients(nutrientsWithDescription);
   };
 
   const getCalories = (): number => {
