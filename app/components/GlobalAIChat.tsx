@@ -118,115 +118,232 @@ const GlobalAIChat = () => {
     return "💬 Ask me about nutrition, your meals, or get personalized health advice!";
   };
 
+  // Enhanced function to extract visible nutrition data from the page
+  const extractVisibleNutrients = () => {
+    try {
+      // Look for nutrient displays with data attributes first
+      const nutrientElements = document.querySelectorAll('[data-nutrient]');
+      const nutrients: any[] = [];
+      
+      nutrientElements.forEach(el => {
+        const nutrientName = el.getAttribute('data-nutrient');
+        const amount = el.getAttribute('data-nutrient-amount');
+        const unit = el.getAttribute('data-nutrient-unit');
+        const dv = el.getAttribute('data-nutrient-dv');
+        const type = el.getAttribute('data-nutrient-type');
+        
+        if (nutrientName) {
+          nutrients.push({
+            name: nutrientName,
+            amount: amount,
+            unit: unit,
+            dailyValue: dv,
+            type: type,
+            visible: true
+          });
+        }
+      });
+      
+      // If no data attributes found, try to extract from text content
+      if (nutrients.length === 0) {
+        const textElements = document.querySelectorAll('h4, h5, .nutrient-name, [class*="nutrient"], [class*="macro"]');
+        textElements.forEach(el => {
+          const text = el.textContent?.trim();
+          if (text && text.length < 50 && (
+            text.toLowerCase().includes('protein') ||
+            text.toLowerCase().includes('carb') ||
+            text.toLowerCase().includes('fat') ||
+            text.toLowerCase().includes('vitamin') ||
+            text.toLowerCase().includes('mineral') ||
+            text.toLowerCase().includes('calcium') ||
+            text.toLowerCase().includes('iron') ||
+            text.toLowerCase().includes('fiber')
+          )) {
+            nutrients.push({
+              name: text,
+              visible: true,
+              extracted: true
+            });
+          }
+        });
+      }
+      
+      // Look for calorie information
+      const calorieElements = document.querySelectorAll('[class*="calorie"], [class*="energy"]');
+      calorieElements.forEach(el => {
+        const text = el.textContent?.trim();
+        if (text && text.includes('calor')) {
+          nutrients.push({
+            name: 'Calories',
+            amount: text.match(/\d+/)?.[0],
+            unit: 'cal',
+            visible: true,
+            type: 'energy'
+          });
+        }
+      });
+      
+      return nutrients.slice(0, 15); // Return up to 15 nutrients for context
+    } catch (error) {
+      console.warn('Error extracting nutrients:', error);
+      return [];
+    }
+  };
+
+  // Enhanced page context detection
   const getPageContext = (): PageContext => {
     if (typeof window === 'undefined') return { type: 'home' };
     
     const pathname = window.location.pathname;
-    const searchParams = new URLSearchParams(window.location.search);
+    const visibleNutrients = extractVisibleNutrients();
     
-    // Extract context from URL
     if (pathname.includes('/upload')) {
       return { 
         type: 'upload',
-        currentPage: 'Upload Page - Ready to analyze your meal photos'
+        currentPage: 'Upload Page - Ready to analyze meal photos',
+        data: {
+          canSeeUploadForm: document.querySelector('input[type="file"]') !== null,
+          hasImage: document.querySelector('img[src*="blob:"]') !== null
+        }
       };
     }
     
     if (pathname.includes('/analysis')) {
-      // Try to get meal data from the page
       const mealId = pathname.split('/').pop();
+      const mealTitle = document.querySelector('h1, h2, [class*="meal-name"], [class*="title"]')?.textContent?.trim();
+      
       return { 
         type: 'analysis',
-        currentPage: `Meal Analysis Page - Viewing detailed nutrition breakdown`,
-        data: { mealId },
-        // Try to extract visible nutrients from DOM (simplified)
-        nutrients: extractVisibleNutrients()
+        currentPage: `Meal Analysis Page - Viewing "${mealTitle || 'your meal'}" nutrition breakdown`,
+        data: { 
+          mealId,
+          mealTitle,
+          hasNutrientData: visibleNutrients.length > 0,
+          activeTab: document.querySelector('.border-b-4')?.textContent?.trim() || 'nutrients'
+        },
+        nutrients: visibleNutrients,
+        mealName: mealTitle
       };
     }
     
     if (pathname.includes('/meal-history')) {
+      const mealCards = document.querySelectorAll('[class*="meal"], [class*="card"]').length;
       return { 
         type: 'history',
-        currentPage: 'Meal History - Browse your past meal analyses'
+        currentPage: `Meal History - Browsing ${mealCards} past meal analyses`,
+        data: {
+          totalMeals: mealCards,
+          hasHistory: mealCards > 0
+        }
       };
     }
     
     if (pathname.includes('/profile')) {
       return { 
         type: 'profile',
-        currentPage: 'Profile Settings - Customize your nutrition goals'
+        currentPage: 'Profile Settings - Customize nutrition goals and preferences',
+        data: {
+          hasProfileData: document.querySelector('input[value], select option:checked') !== null
+        }
       };
     }
     
     return { 
       type: 'home',
-      currentPage: 'Home Page - Welcome to Snap2Health'
+      currentPage: 'Home Page - Welcome to Snap2Health',
+      data: {
+        isLoggedIn: !!user
+      }
     };
   };
 
-  // Simple function to extract visible nutrition data
-  const extractVisibleNutrients = () => {
-    try {
-      // Look for nutrient displays on the page
-      const nutrientElements = document.querySelectorAll('[data-nutrient], .nutrient-item, [class*="nutrient"]');
-      const nutrients: string[] = [];
-      
-      nutrientElements.forEach(el => {
-        const text = el.textContent?.trim();
-        if (text && text.length < 100) { // Reasonable length check
-          nutrients.push(text);
-        }
-      });
-      
-      return nutrients.slice(0, 10); // Limit to first 10 for context
-    } catch (error) {
-      return [];
-    }
-  };
-
-  // Update the buildSystemPrompt function to include context
+  // Enhanced system prompt with deep context awareness
   const buildSystemPrompt = (context: PageContext): string => {
-    const basePrompt = `You are Snap2Health's AI nutrition assistant. You provide helpful, accurate, and personalized nutrition advice.`;
+    const basePrompt = `You are Snap2Health's AI nutrition assistant - an expert companion who sees exactly what the user is viewing and provides personalized, contextual guidance. Act like you're looking over their shoulder and can see their screen.`;
     
-    const contextualPrompt = {
-      upload: `The user is on the upload page, ready to analyze a meal photo. Help them understand:
-- How to take good photos for analysis
-- What they can expect from the analysis
-- Answer questions about food photography tips`,
-      
-      analysis: `The user is viewing a detailed meal analysis. You can see they're looking at nutrition data. Help them:
-- Understand specific nutrients they're viewing
-- Explain health benefits of nutrients
-- Provide context about daily values
-- Suggest improvements for their meal
-Current page: ${context.currentPage}
-${context.nutrients?.length ? `Visible nutrients: ${context.nutrients.join(', ')}` : ''}`,
-      
-      history: `The user is browsing their meal history. Help them:
-- Compare different meals
-- Identify nutrition patterns
-- Set nutrition goals based on their history`,
-      
-      profile: `The user is updating their profile settings. Help them:
-- Choose appropriate nutrition goals
-- Understand activity level impact
-- Set realistic targets`,
-      
-      home: `The user is on the home page. Provide general nutrition guidance and help them get started with Snap2Health.`
-    };
+    let contextualPrompt = '';
+    
+    switch (context.type) {
+      case 'upload':
+        contextualPrompt = `The user is on the upload page${context.data?.canSeeUploadForm ? ', ready to upload a meal photo' : ''}${context.data?.hasImage ? ' and I can see they have selected an image' : ''}. 
+        
+You should help them:
+- Take better photos for analysis (lighting, angles, portion visibility)
+- Understand what the AI can detect and analyze
+- Get excited about their nutrition journey
+- Troubleshoot any upload issues
+
+Be encouraging and practical. If they have an image selected, acknowledge it and guide them through the analysis process.`;
+        break;
+        
+      case 'analysis':
+        const nutrientsList = context.nutrients?.map(n => `${n.name}${n.amount ? ` (${n.amount}${n.unit || ''})` : ''}${n.dailyValue ? ` - ${n.dailyValue}% DV` : ''}`).join(', ') || 'nutrition data';
+        
+        contextualPrompt = `The user is viewing a detailed meal analysis for "${context.mealName || 'their meal'}"${context.data?.activeTab ? ` on the ${context.data.activeTab} tab` : ''}. 
+
+I can see these nutrients on their screen: ${nutrientsList}
+
+You should:
+- Reference specific nutrients they're looking at
+- Explain the significance of the values they see
+- Compare to their goals and daily needs  
+- Suggest improvements or highlight strengths
+- Feel like you're analyzing the same data they're viewing
+
+Be specific about what you see on their screen. Don't give generic advice - tailor it to the exact nutrients and values visible.`;
+        break;
+        
+      case 'history':
+        contextualPrompt = `The user is browsing their meal history${context.data?.totalMeals ? ` and I can see ${context.data.totalMeals} meal entries` : ''}${!context.data?.hasHistory ? ' but they don\'t have any meals yet' : ''}.
+
+You should help them:
+- Identify patterns in their eating habits
+- Spot nutritional trends and improvements
+- Find their best and worst meals
+- Set goals based on their history
+- Understand progress over time
+
+${context.data?.hasHistory ? 'Reference their meal history specifically and help them understand their nutrition journey.' : 'Encourage them to start tracking meals and explain the benefits.'}`;
+        break;
+        
+      case 'profile':
+        contextualPrompt = `The user is on their profile page${context.data?.hasProfileData ? ' and I can see they have some profile information filled out' : ' setting up their account'}.
+
+You should help them:
+- Optimize their nutrition goals
+- Understand how their personal data affects recommendations
+- Set realistic and achievable targets
+- Customize their Snap2Health experience
+
+Be personal and reference their profile settings when relevant.`;
+        break;
+        
+      case 'home':
+        contextualPrompt = `The user is on the home page${context.data?.isLoggedIn ? ', logged in and ready to explore' : ' getting started with Snap2Health'}.
+
+You should:
+- Welcome them and explain key features
+- Guide them to their next best action
+- Help them understand Snap2Health's capabilities
+- Get them excited about nutrition tracking
+
+Be welcoming and help them navigate to the most useful features for their needs.`;
+        break;
+    }
     
     return `${basePrompt}
-    
-CURRENT CONTEXT: ${contextualPrompt[context.type]}
+
+CURRENT CONTEXT: ${contextualPrompt}
 
 RESPONSE STYLE:
-- Keep responses concise but helpful (2-3 sentences for simple questions)
-- Use bullet points for lists or multiple suggestions  
-- Mention specific nutrients by name when relevant
-- Be encouraging and positive
-- If they ask about something visible on their current page, reference it directly
+- Be conversational and supportive
+- Reference specific things you can "see" on their screen
+- Provide actionable, personalized advice
+- Ask follow-up questions to keep them engaged
+- Use emojis sparingly but effectively
+- Keep responses focused and relevant to their current view
 
-Remember: You can see what page they're on and what nutrition data they're viewing, so make your responses contextually relevant.`;
+Remember: You can see their screen and should act like an expert nutritionist sitting beside them, helping them understand exactly what they're looking at.`;
   };
 
   const sendMessage = async (content: string) => {
@@ -410,7 +527,7 @@ What would you like to know?
           // Create nutrient-specific questions based on what's visible
           const nutrients = context.nutrients.slice(0, 3); // Top 3 nutrients
           return [
-            `Tell me about ${nutrients[0]?.split(' ')[0] || 'this nutrient'}`,
+            `Tell me about ${nutrients[0]?.name || 'this nutrient'}`,
             "How can I improve this meal?",
             "Is this amount healthy for me?",
             "What nutrients am I missing?"

@@ -165,8 +165,8 @@ const getNutrientDescription = (name: string): string => {
     'potassium': 'Helps regulate blood pressure, supports muscle function, and counteracts the effects of too much sodium.',
     'magnesium': 'Relaxes muscles, supports heart rhythm, and helps with over 300 body processes. Many people are deficient.',
     'zinc': 'Boosts immune function, helps wounds heal faster, and supports taste and smell. Important for growth and development.',
-    'phosphorus': 'Works with calcium to build strong bones and teeth. Also important for energy storage and use.',
-    'selenium': 'Powerful antioxidant that protects cells from damage and supports thyroid function and immune health.',
+    'phosphorus': 'Critical for ATP energy production in every cell and works with calcium to build unbreakable bones and teeth. Essential for muscle contraction and recovery after intense training.',
+    'selenium': 'Master antioxidant that protects your thyroid, boosts immune defense, and helps your body recover from oxidative stress caused by intense exercise and daily life.',
     'iodine': 'Essential for proper thyroid function, which controls metabolism, energy levels, and body temperature.',
     'copper': 'Helps your body use iron properly, supports immune function, and is needed for healthy blood vessels.',
     'manganese': 'Supports bone development, blood clotting, and helps protect cells from damage.',
@@ -923,7 +923,7 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
       description: nutrient.description || getNutrientDescription(nutrient.name)
     }));
     // Filter out nutrients with zero or near-zero values - only show what's actually present
-    return nutrientsWithDescription.filter(nutrient => (nutrient.amount || 0) > 0);
+    return nutrientsWithDescription;
   };
 
 
@@ -934,7 +934,7 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
       description: nutrient.description || getNutrientDescription(nutrient.name)
     }));
     // Filter out nutrients with zero or near-zero values - only show what's actually present
-    return nutrientsWithDescription.filter(nutrient => (nutrient.amount || 0) > 0);
+    return nutrientsWithDescription;
   };
 
   const getCalories = (): number => {
@@ -1067,36 +1067,38 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
       <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl overflow-hidden shadow-xl">
         {/* Tab Navigation */}
         <div className="border-b border-gray-700">
-          <nav className="flex">
+          <nav className="flex flex-col sm:flex-row">
             <button 
               onClick={() => setActiveTab('nutrients')}
-              className={`flex-1 py-6 px-8 text-center font-semibold transition-all ${
+              className={`flex-1 py-4 sm:py-6 px-3 sm:px-8 text-center font-semibold transition-all touch-target ${
                 activeTab === 'nutrients' 
                   ? 'bg-blue-600 text-white border-b-4 border-blue-400' 
                   : 'text-gray-400 hover:text-white hover:bg-gray-700'
               }`}
             >
-              <span className="flex items-center justify-center text-lg">
-                <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <span className="flex items-center justify-center text-sm sm:text-lg flex-col sm:flex-row">
+                <svg className="w-5 h-5 sm:w-6 sm:h-6 mb-1 sm:mb-0 sm:mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
-                Nutritional Analysis
+                <span className="hidden sm:inline">Nutritional Analysis</span>
+                <span className="sm:hidden">Nutrients</span>
               </span>
             </button>
             
             <button 
               onClick={() => setActiveTab('ai-insights')}
-              className={`flex-1 py-6 px-8 text-center font-semibold transition-all ${
+              className={`flex-1 py-4 sm:py-6 px-3 sm:px-8 text-center font-semibold transition-all touch-target ${
                 activeTab === 'ai-insights' 
                   ? 'bg-blue-600 text-white border-b-4 border-blue-400' 
                   : 'text-gray-400 hover:text-white hover:bg-gray-700'
               }`}
             >
-              <span className="flex items-center justify-center text-lg">
-                <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <span className="flex items-center justify-center text-sm sm:text-lg flex-col sm:flex-row">
+                <svg className="w-5 h-5 sm:w-6 sm:h-6 mb-1 sm:mb-0 sm:mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                 </svg>
-                AI Health Insights
+                <span className="hidden sm:inline">AI Health Insights</span>
+                <span className="sm:hidden">AI Insights</span>
               </span>
             </button>
           </nav>
@@ -1120,7 +1122,7 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
                 {getMacronutrients().length > 0 ? (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                     {getMacronutrients().map((nutrient, index) => (
-                      <div key={index} className="bg-gradient-to-br from-gray-700 to-gray-800 rounded-lg sm:rounded-xl p-4 sm:p-6 shadow-lg">
+                      <div key={index} className="bg-gradient-to-br from-gray-700 to-gray-800 rounded-lg sm:rounded-xl p-4 sm:p-6 shadow-lg" data-nutrient={nutrient.name} data-nutrient-amount={nutrient.amount} data-nutrient-unit={nutrient.unit} data-nutrient-dv={nutrient.percentDailyValue || 0} data-nutrient-type="macronutrient">
                         <div className="flex justify-between items-start mb-3 sm:mb-4">
                           <div>
                             <h4 className="text-lg sm:text-xl lg:text-2xl font-semibold text-white mb-2">{nutrient.name}</h4>

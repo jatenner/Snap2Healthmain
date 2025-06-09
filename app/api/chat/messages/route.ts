@@ -593,7 +593,7 @@ export async function POST(request: NextRequest) {
         { role: 'user', content }
       ],
       temperature: 0.7,
-      max_tokens: 200, // Super concise responses
+      max_tokens: userWantsSimple ? 150 : userWantsDetail ? 800 : 400, // Adaptive token limits
     });
 
     const aiResponse = completion.choices[0]?.message?.content || 'I apologize, but I could not process your request at this time.';
