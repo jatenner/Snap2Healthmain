@@ -60,15 +60,84 @@ const GlobalAIChat = () => {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [showQuickActions, setShowQuickActions] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  // Enhanced state for historical context
+  const [showQuickActions, setShowQuickActions] = useState(true);
   const [userInsights, setUserInsights] = useState<any>(null);
+  const [showWelcomePulse, setShowWelcomePulse] = useState(true);
+  const [contextualSuggestions, setContextualSuggestions] = useState<string[]>([]);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const [contextLoading, setContextLoading] = useState(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Effect to hide welcome pulse after 10 seconds or when chat is opened
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowWelcomePulse(false);
+    }, 10000);
+
+    if (isOpen) {
+      setShowWelcomePulse(false);
+    }
+
+    return () => clearTimeout(timer);
+  }, [isOpen]);
+
+  // Effect to generate contextual suggestions based on current page
+  useEffect(() => {
+    const generateContextualSuggestions = () => {
+      const context = getPageContext();
+      let suggestions: string[] = [];
+
+      switch (context.type) {
+        case 'upload':
+          suggestions = [
+            "What should I know about this meal?",
+            "How does this fit my goals?",
+            "Any nutrition tips for this food?"
+          ];
+          break;
+        case 'analysis':
+        case 'meal_analysis':
+          suggestions = [
+            "Explain this nutrition analysis",
+            "How can I improve this meal?",
+            "What are the health benefits?"
+          ];
+          break;
+        case 'history':
+        case 'meal_history':
+          suggestions = [
+            "Show my nutrition trends",
+            "Which meals were healthiest?",
+            "What should I eat next?"
+          ];
+          break;
+        case 'profile':
+          suggestions = [
+            "Help optimize my nutrition goals",
+            "What changes should I make?",
+            "Am I on the right track?"
+          ];
+          break;
+        default:
+          suggestions = [
+            "How can I improve my nutrition?",
+            "What should I eat today?",
+            "Analyze my recent meals"
+          ];
+      }
+
+      setContextualSuggestions(suggestions);
+    };
+
+    generateContextualSuggestions();
+    
+    // Re-generate suggestions when the page context changes
+    const interval = setInterval(generateContextualSuggestions, 3000);
+    return () => clearInterval(interval);
+  }, []);
 
   const getCurrentPageContext = () => {
     if (typeof window === 'undefined') return 'unknown';
@@ -107,11 +176,13 @@ const GlobalAIChat = () => {
 
   // Enhanced helper text with context awareness
   const getContextualHelperText = (): string => {
-    if (getCurrentMealId()) {
+    const context = getPageContext();
+    
+    if (context.type === 'analysis' && context.nutrients && context.nutrients.length > 0) {
       return "💬 Ask about this meal's nutrition, compare to your history, or get personalized tips!";
     }
     
-    if (userInsights?.totalMeals > 0) {
+    if (userInsights && typeof userInsights === 'object' && userInsights.totalMeals && userInsights.totalMeals > 0) {
       return `💬 I've analyzed ${userInsights.totalMeals} of your meals. Ask about patterns, goals, or get advice!`;
     }
     
