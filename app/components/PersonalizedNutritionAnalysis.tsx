@@ -923,7 +923,7 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
       description: nutrient.description || getNutrientDescription(nutrient.name)
     }));
     // Filter out nutrients with zero or near-zero values - only show what's actually present
-    return filterRelevantNutrients(nutrientsWithDescription);
+    return nutrientsWithDescription.filter(nutrient => (nutrient.amount || 0) > 0);
   };
 
 
@@ -934,7 +934,7 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
       description: nutrient.description || getNutrientDescription(nutrient.name)
     }));
     // Filter out nutrients with zero or near-zero values - only show what's actually present
-    return filterRelevantNutrients(nutrientsWithDescription);
+    return nutrientsWithDescription.filter(nutrient => (nutrient.amount || 0) > 0);
   };
 
   const getCalories = (): number => {
@@ -1039,8 +1039,8 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
     <div className="space-y-4 sm:space-y-6 max-w-7xl mx-auto px-2 sm:px-0">
       {/* Meal Header - Mobile Optimized */}
       {getImageUrl() && (
-        <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-xl">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 items-center">
+        <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 shadow-xl">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 lg:gap-8 items-center">
             <div className="aspect-square relative rounded-lg sm:rounded-xl overflow-hidden shadow-2xl max-w-xs mx-auto lg:max-w-none lg:mx-0">
               <img
                 src={getImageUrl()}
