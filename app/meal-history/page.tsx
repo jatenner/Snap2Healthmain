@@ -69,12 +69,31 @@ const groupMealsByDate = (meals: MealHistoryEntry[]): DayGroup[] => {
       const totalCarbs = dateMeals.reduce((sum, meal) => sum + (meal.carbs || 0), 0);
       const totalFat = dateMeals.reduce((sum, meal) => sum + (meal.fat || 0), 0);
       
-      const displayDate = new Date(date).toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
+      // Fix: Create date in local timezone instead of UTC to show correct day of week
+      const dateParts = date.split('-').map(Number);
+      const year = dateParts[0] || 2025;
+      const month = dateParts[1] || 1;
+      const day = dateParts[2] || 1;
+      const localDate = new Date(year, month - 1, day); // month is 0-indexed in Date constructor
+      
+      let displayDate: string;
+      
+      if (dateParts.length === 3 && dateParts.every(part => !isNaN(part))) {
+        displayDate = localDate.toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+      } else {
+        // Fallback to old method if date parsing fails
+        displayDate = new Date(date).toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+      }
       
       return {
         date,
