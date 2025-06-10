@@ -13,6 +13,7 @@ interface Message {
     response_type?: string;
     insights_used?: string;
     historical_context?: string;
+    user_recognized?: boolean;
   };
 }
 
@@ -79,6 +80,16 @@ const GlobalAIChat = () => {
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [contextLoading, setContextLoading] = useState(false);
+
+  // Debug user authentication
+  useEffect(() => {
+    console.log('[GlobalAIChat] User data:', {
+      user,
+      userId: user?.id,
+      userEmail: user?.email,
+      isAuthenticated: !!user
+    });
+  }, [user]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -152,30 +163,35 @@ const GlobalAIChat = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Effect to add auto-greeting when chat is first opened
+  // Effect to add personalized auto-greeting when chat is first opened
   useEffect(() => {
     if (isOpen && messages.length === 0 && user) {
       const context = getPageContext();
-      let greetingMessage = "👋 Hi! I'm your AI nutrition coach. ";
+      const userName = user?.email?.split('@')[0] || 'there';
+      
+      let greetingMessage = `👋 Hi ${userName}! I'm your AI nutrition coach. `;
       
       switch (context.type) {
         case 'upload':
-          greetingMessage += "I see you're about to upload a meal! Once you take or upload a photo, I can analyze its nutrition, suggest improvements, and explain how it fits your goals.";
+          greetingMessage += "I see you're about to upload a meal! Once you take or upload a photo, I can analyze its nutrition, suggest improvements, and explain how it fits your personal goals.";
           break;
         case 'analysis':
         case 'meal_analysis':
-          greetingMessage += `I can see you're viewing a nutrition analysis${context.mealName ? ` for "${context.mealName}"` : ''}. Ask me about the nutrients, health benefits, or how to optimize this meal!`;
+          greetingMessage += `I can see you're viewing a nutrition analysis${context.mealName ? ` for "${context.mealName}"` : ''}. Ask me about the nutrients, health benefits, or how to optimize this meal based on your history!`;
           break;
         case 'history':
         case 'meal_history':
-          greetingMessage += "Looking at your meal history? I can help you spot patterns, identify your healthiest meals, or suggest what to eat next based on your trends.";
+          greetingMessage += "Looking at your meal history? I can help you spot patterns, identify your healthiest meals, or suggest what to eat next based on your personal trends.";
           break;
         case 'profile':
           greetingMessage += "Great to see you checking your profile! I can help you optimize your nutrition goals, adjust your targets, or explain how to reach your health objectives.";
           break;
         default:
-          greetingMessage += "I'm here to help with all your nutrition questions! Upload a meal photo, review your history, or ask about nutrition strategies.";
+          greetingMessage += "I'm here to help with all your nutrition questions! I remember our past conversations and can provide personalized advice based on your meal history.";
       }
+      
+      // Add authentication confirmation
+      greetingMessage += `\n\n🔐 I recognize you as ${user.email} and can access your personal meal history and preferences.`;
       
       // Add quick suggestions
       if (contextualSuggestions.length > 0) {
@@ -190,6 +206,7 @@ const GlobalAIChat = () => {
         timestamp: new Date(),
         metadata: {
           response_type: 'auto_greeting',
+          user_recognized: true
         }
       };
       
@@ -750,7 +767,7 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
           {showWelcomePulse && (
             <div className="absolute bottom-full right-0 mb-2 bg-gray-900 text-white text-sm px-3 py-2 rounded-lg shadow-lg animate-fade-in">
               <div className="relative">
-                Ask me anything! 🤖
+                {user ? 'Ask me anything! 🤖' : 'Sign in to chat! 🔐'}
                 <div className="absolute top-full right-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
               </div>
             </div>
@@ -776,7 +793,9 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
                 </div>
                 <div>
                   <h3 className="font-semibold text-lg">AI Nutrition Coach</h3>
-                  <p className="text-blue-100 text-xs">Always ready to help! ✨</p>
+                  <p className="text-blue-100 text-xs">
+                    {user ? 'Always ready to help! ✨' : 'Sign in to get started 🔐'}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center space-x-2">
@@ -804,7 +823,7 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
             {/* Context Status */}
             {!isMinimized && (
               <div className="mt-3 text-blue-100 text-xs bg-white/10 rounded-lg px-3 py-2 backdrop-blur-sm">
-                {getContextualHelperText()}
+                {user ? getContextualHelperText() : 'Please sign in to access personalized nutrition coaching'}
               </div>
             )}
           </div>
@@ -812,108 +831,140 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
           {/* Chat Content - Only show when not minimized */}
           {!isMinimized && (
             <>
-              {/* Enhanced Messages Area */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
-                {messages.length === 0 && (
-                  <div className="text-center py-8">
-                    <div className="text-6xl mb-4 animate-bounce">🤖</div>
-                    <p className="text-gray-600 text-lg font-medium">Ready to help with your nutrition!</p>
-                    <p className="text-gray-500 text-sm mt-2">Ask me anything about your meals, goals, or health.</p>
-                  </div>
-                )}
-                
-                {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} animate-message-in`}
-                  >
-                    <div className={`max-w-[80%] rounded-2xl p-4 shadow-sm ${
-                      message.role === 'user'
-                        ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
-                        : 'bg-white text-gray-800 border border-gray-200'
-                    }`}>
-                      {message.role === 'assistant' && (
-                        <div className="flex items-center mb-2">
-                          <span className="text-lg mr-2">🤖</span>
-                          <span className="text-xs text-gray-500 font-medium">AI Coach</span>
-                        </div>
-                      )}
-                      <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
-                      <p className={`text-xs mt-2 ${
-                        message.role === 'user' ? 'text-blue-100' : 'text-gray-400'
-                      }`}>
-                        {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
+              {/* Authentication Check */}
+              {!user ? (
+                <div className="flex-1 flex items-center justify-center p-8 bg-gray-50">
+                  <div className="text-center max-w-sm">
+                    <div className="text-6xl mb-4">🔐</div>
+                    <h3 className="text-xl font-semibold text-gray-800 mb-3">Sign In Required</h3>
+                    <p className="text-gray-600 text-sm mb-6 leading-relaxed">
+                      To get personalized nutrition coaching, access your meal history, and receive tailored recommendations, please sign in to your account.
+                    </p>
+                    <div className="space-y-3">
+                      <a 
+                        href="/login" 
+                        className="block w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-105"
+                      >
+                        Sign In
+                      </a>
+                      <a 
+                        href="/signup" 
+                        className="block w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 px-6 rounded-xl transition-all duration-200"
+                      >
+                        Create Account
+                      </a>
                     </div>
+                    <p className="text-xs text-gray-500 mt-4">
+                      Your nutrition data is private and secure 🛡️
+                    </p>
                   </div>
-                ))}
-                
-                {isLoading && (
-                  <div className="flex justify-start animate-message-in">
-                    <div className="bg-white text-gray-800 border border-gray-200 rounded-2xl p-4 shadow-sm">
-                      <div className="flex items-center space-x-2">
-                        <div className="flex space-x-1">
-                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
-                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                </div>
+              ) : (
+                <>
+                  {/* Enhanced Messages Area */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+                    {messages.length === 0 && (
+                      <div className="text-center py-8">
+                        <div className="text-6xl mb-4 animate-bounce">🤖</div>
+                        <p className="text-gray-600 text-lg font-medium">Ready to help with your nutrition!</p>
+                        <p className="text-gray-500 text-sm mt-2">Ask me anything about your meals, goals, or health.</p>
+                      </div>
+                    )}
+                    
+                    {messages.map((message) => (
+                      <div
+                        key={message.id}
+                        className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} animate-message-in`}
+                      >
+                        <div className={`max-w-[80%] rounded-2xl p-4 shadow-sm ${
+                          message.role === 'user'
+                            ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
+                            : 'bg-white text-gray-800 border border-gray-200'
+                        }`}>
+                          {message.role === 'assistant' && (
+                            <div className="flex items-center mb-2">
+                              <span className="text-lg mr-2">🤖</span>
+                              <span className="text-xs text-gray-500 font-medium">AI Coach</span>
+                            </div>
+                          )}
+                          <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                          <p className={`text-xs mt-2 ${
+                            message.role === 'user' ? 'text-blue-100' : 'text-gray-400'
+                          }`}>
+                            {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
                         </div>
-                        <span className="text-sm text-gray-500">AI is thinking...</span>
+                      </div>
+                    ))}
+                    
+                    {isLoading && (
+                      <div className="flex justify-start animate-message-in">
+                        <div className="bg-white text-gray-800 border border-gray-200 rounded-2xl p-4 shadow-sm">
+                          <div className="flex items-center space-x-2">
+                            <div className="flex space-x-1">
+                              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
+                              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                            </div>
+                            <span className="text-sm text-gray-500">AI is thinking...</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    <div ref={messagesEndRef} />
+                  </div>
+
+                  {/* Enhanced Quick Actions */}
+                  {showQuickActions && messages.length <= 1 && (
+                    <div className="p-4 bg-white border-t border-gray-200">
+                      <p className="text-sm font-medium text-gray-700 mb-3">💡 Quick actions:</p>
+                      <div className="grid grid-cols-1 gap-2">
+                        {contextualSuggestions.slice(0, 3).map((suggestion, index) => (
+                          <button
+                            key={index}
+                            onClick={() => handleQuickAction(suggestion)}
+                            className="text-left text-sm p-3 bg-gradient-to-r from-gray-50 to-blue-50 hover:from-blue-50 hover:to-purple-50 rounded-xl border border-gray-200 hover:border-blue-300 transition-all duration-200 transform hover:scale-105 hover:shadow-md"
+                          >
+                            <span className="text-blue-600 font-medium">• {suggestion}</span>
+                          </button>
+                        ))}
                       </div>
                     </div>
-                  </div>
-                )}
-                <div ref={messagesEndRef} />
-              </div>
+                  )}
 
-              {/* Enhanced Quick Actions */}
-              {showQuickActions && messages.length <= 1 && (
-                <div className="p-4 bg-white border-t border-gray-200">
-                  <p className="text-sm font-medium text-gray-700 mb-3">💡 Quick actions:</p>
-                  <div className="grid grid-cols-1 gap-2">
-                    {contextualSuggestions.slice(0, 3).map((suggestion, index) => (
+                  {/* Enhanced Input Area */}
+                  <div className="p-4 bg-white border-t border-gray-200 rounded-b-2xl">
+                    <div className="flex space-x-3">
+                      <div className="flex-1 relative">
+                        <input
+                          type="text"
+                          value={inputValue}
+                          onChange={(e) => setInputValue(e.target.value)}
+                          onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage(inputValue)}
+                          placeholder="Ask about nutrition, meals, or health goals..."
+                          className="w-full p-4 pr-12 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-sm placeholder-gray-500"
+                          disabled={isLoading}
+                        />
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                          <span className="text-xs">💭</span>
+                        </div>
+                      </div>
                       <button
-                        key={index}
-                        onClick={() => handleQuickAction(suggestion)}
-                        className="text-left text-sm p-3 bg-gradient-to-r from-gray-50 to-blue-50 hover:from-blue-50 hover:to-purple-50 rounded-xl border border-gray-200 hover:border-blue-300 transition-all duration-200 transform hover:scale-105 hover:shadow-md"
+                        onClick={() => sendMessage(inputValue)}
+                        disabled={!inputValue.trim() || isLoading}
+                        className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-400 text-white px-6 py-4 rounded-xl transition-all duration-200 transform hover:scale-105 active:scale-95 disabled:scale-100 disabled:cursor-not-allowed shadow-lg"
                       >
-                        <span className="text-blue-600 font-medium">• {suggestion}</span>
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
                       </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Enhanced Input Area */}
-              <div className="p-4 bg-white border-t border-gray-200 rounded-b-2xl">
-                <div className="flex space-x-3">
-                  <div className="flex-1 relative">
-                    <input
-                      type="text"
-                      value={inputValue}
-                      onChange={(e) => setInputValue(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage(inputValue)}
-                      placeholder="Ask about nutrition, meals, or health goals..."
-                      className="w-full p-4 pr-12 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-sm placeholder-gray-500"
-                      disabled={isLoading}
-                    />
-                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-                      <span className="text-xs">💭</span>
                     </div>
+                    <p className="text-xs text-gray-500 mt-2 text-center">
+                      Press Enter to send • Powered by AI ✨
+                    </p>
                   </div>
-                  <button
-                    onClick={() => sendMessage(inputValue)}
-                    disabled={!inputValue.trim() || isLoading}
-                    className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-400 text-white px-6 py-4 rounded-xl transition-all duration-200 transform hover:scale-105 active:scale-95 disabled:scale-100 disabled:cursor-not-allowed shadow-lg"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                    </svg>
-                  </button>
-                </div>
-                <p className="text-xs text-gray-500 mt-2 text-center">
-                  Press Enter to send • Powered by AI ✨
-                </p>
-              </div>
+                </>
+              )}
             </>
           )}
         </div>

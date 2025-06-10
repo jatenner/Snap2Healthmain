@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 
 // Enhanced AI Chat API - Human-like conversational responses (v1.2.0)
 const openai = new OpenAI({
@@ -449,17 +451,59 @@ export async function POST(request: NextRequest) {
     console.log('[Chat Messages API] Received POST request:', body);
     let { conversation_id, user_id, content, meal_id, context_data, context, systemPrompt } = body;
 
-    if (!user_id || !content) {
-      console.log('[Chat Messages API] Missing required fields:', { user_id, content });
+    if (!content) {
+      console.log('[Chat Messages API] Missing content field');
       return NextResponse.json({ 
-        error: 'User ID and content are required' 
+        error: 'Content is required' 
       }, { status: 400 });
     }
 
+    // Enhanced user authentication
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
+
+    // Also create a client-side supabase for auth validation
+    const cookieStore = cookies();
+    const supabaseAuth = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value;
+          },
+        },
+      }
+    );
+
+    // Try to get authenticated user from session
+    let authenticatedUser = null;
+    try {
+      const { data: { user: sessionUser }, error: sessionError } = await supabaseAuth.auth.getUser();
+      if (sessionUser && !sessionError) {
+        authenticatedUser = sessionUser;
+        user_id = sessionUser.id; // Use authenticated user ID
+        console.log('[Chat Messages API] ✅ Authenticated user from session:', {
+          id: sessionUser.id,
+          email: sessionUser.email,
+          name: sessionUser.user_metadata?.name
+        });
+      }
+    } catch (authError) {
+      console.log('[Chat Messages API] Session auth failed:', authError);
+    }
+
+    // Fallback to provided user_id if session auth failed
+    if (!authenticatedUser && user_id) {
+      console.log('[Chat Messages API] ⚠️ Using provided user_id (no session):', user_id);
+    } else if (!authenticatedUser && !user_id) {
+      console.log('[Chat Messages API] ❌ No authentication available');
+      return NextResponse.json({ 
+        error: 'Authentication required. Please sign in to use the AI chat.' 
+      }, { status: 401 });
+    }
 
     // Auto-create conversation if not provided
     let conversation = null;
@@ -498,7 +542,7 @@ export async function POST(request: NextRequest) {
       .limit(20);
 
     // Get comprehensive user profile from multiple sources
-    console.log('[Chat Messages API] Fetching user profile for:', user_id);
+    console.log('[Chat Messages API] 🔍 Fetching user profile for:', user_id);
     
     // Try profiles table first
     const { data: userProfile, error: profileError } = await supabase
@@ -508,14 +552,18 @@ export async function POST(request: NextRequest) {
       .single();
     
     console.log('[Chat Messages API] Profile from profiles table:', userProfile);
-    console.log('[Chat Messages API] Profile error:', profileError);
+    if (profileError) console.log('[Chat Messages API] Profile error:', profileError);
 
     // Also try to get user data from auth if profiles table is empty
     let authUserData = null;
     try {
       const { data: { user: authUser }, error: authError } = await supabase.auth.admin.getUserById(user_id);
       authUserData = authUser;
-      console.log('[Chat Messages API] Auth user data:', authUserData);
+      console.log('[Chat Messages API] Auth user data:', {
+        id: authUser?.id,
+        email: authUser?.email,
+        name: authUser?.user_metadata?.name
+      });
     } catch (authError) {
       console.log('[Chat Messages API] Auth lookup error:', authError);
     }
@@ -526,13 +574,25 @@ export async function POST(request: NextRequest) {
       ...userProfile,
       // From auth user metadata
       ...(authUserData?.user_metadata || {}),
+      ...(authenticatedUser?.user_metadata || {}),
       // Fallback values
-      name: userProfile?.name || authUserData?.user_metadata?.name || authUserData?.email?.split('@')[0] || 'User',
-      email: userProfile?.email || authUserData?.email,
-      user_id: user_id
+      name: userProfile?.name || 
+            authUserData?.user_metadata?.name || 
+            authenticatedUser?.user_metadata?.name ||
+            authUserData?.email?.split('@')[0] || 
+            authenticatedUser?.email?.split('@')[0] || 
+            'User',
+      email: userProfile?.email || authUserData?.email || authenticatedUser?.email,
+      user_id: user_id,
+      is_authenticated: !!authenticatedUser
     };
 
-    console.log('[Chat Messages API] Combined profile:', combinedProfile);
+    console.log('[Chat Messages API] 👤 Combined profile:', {
+      name: combinedProfile.name,
+      email: combinedProfile.email,
+      is_authenticated: combinedProfile.is_authenticated,
+      has_profile: !!userProfile
+    });
 
     // Get user learning profile
     const { data: learningProfile, error: learningError } = await supabase
@@ -541,8 +601,8 @@ export async function POST(request: NextRequest) {
       .eq('user_id', user_id)
       .single();
     
-    console.log('[Chat Messages API] Learning profile:', learningProfile);
-    console.log('[Chat Messages API] Learning profile error:', learningError);
+    console.log('[Chat Messages API] 🧠 Learning profile:', learningProfile ? 'Found' : 'Not found');
+    if (learningError) console.log('[Chat Messages API] Learning profile error:', learningError);
 
     // Create learning profile if it doesn't exist
     if (!learningProfile && !learningError) {
@@ -562,7 +622,7 @@ export async function POST(request: NextRequest) {
         })
         .select()
         .single();
-      console.log('[Chat Messages API] Created learning profile:', newLearningProfile);
+      console.log('[Chat Messages API] ✅ Created learning profile:', !!newLearningProfile);
     }
 
     // Get current meal data with full details
@@ -589,8 +649,10 @@ export async function POST(request: NextRequest) {
           personalized_insights
         `)
         .eq('id', meal_id || conversation.meal_id)
+        .eq('user_id', user_id) // Ensure meal belongs to authenticated user
         .single();
       currentMealData = data;
+      console.log('[Chat Messages API] 🍽️ Current meal data:', currentMealData ? 'Found' : 'Not found');
     }
 
     // Get user's recent meal history (last 10 meals for patterns)
@@ -609,6 +671,8 @@ export async function POST(request: NextRequest) {
       .eq('user_id', user_id)
       .order('created_at', { ascending: false })
       .limit(10);
+
+    console.log('[Chat Messages API] 📊 Recent meals found:', recentMeals?.length || 0);
 
     // Calculate user's nutrition patterns
     const nutritionPatterns = recentMeals ? {
@@ -640,7 +704,8 @@ export async function POST(request: NextRequest) {
           meal_context: currentMealData ? currentMealData.id : null,
           wants_detail: userWantsDetail,
           wants_simple: userWantsSimple,
-          learning_insights: learningInsights
+          learning_insights: learningInsights,
+          user_authenticated: !!authenticatedUser
         }
       })
       .select()
