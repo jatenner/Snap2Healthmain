@@ -513,6 +513,7 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Include cookies for authentication
         body: JSON.stringify(requestBody),
       });
 
@@ -865,9 +866,9 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
                   <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
                     {messages.length === 0 && (
                       <div className="text-center py-8">
-                        <div className="text-6xl mb-4 animate-bounce">🤖</div>
-                        <p className="text-gray-600 text-lg font-medium">Ready to help with your nutrition!</p>
-                        <p className="text-gray-500 text-sm mt-2">Ask me anything about your meals, goals, or health.</p>
+                        <div className="text-6xl mb-4 animate-bounce">👋</div>
+                        <p className="text-gray-600 text-lg font-medium">Hey {user?.user_metadata?.name || user?.email?.split('@')[0] || 'there'}! Great to see you! 🌟</p>
+                        <p className="text-gray-500 text-sm mt-2">I'm here to help you on your nutrition journey. What would you like to chat about today?</p>
                       </div>
                     )}
                     
