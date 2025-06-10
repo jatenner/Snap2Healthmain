@@ -25,6 +25,7 @@ import {
   Zap,
   RefreshCw
 } from 'lucide-react';
+import { formatTimeEST, getRelativeDateEST, formatDateEST } from '../lib/utils';
 
 interface MealHistoryEntry {
   id: string;
@@ -110,21 +111,12 @@ const groupMealsByDate = (meals: MealHistoryEntry[]): DayGroup[] => {
 
 // Optimized time formatting
 const formatTime = (timestamp: string) => {
-  return new Date(timestamp).toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
-  });
+  return formatTimeEST(timestamp);
 };
 
 // Optimized relative date calculation
 const getRelativeDate = (date: string) => {
-  const today = new Date().toISOString().split('T')[0];
-  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-  
-  if (date === today) return 'Today';
-  if (date === yesterday) return 'Yesterday';
-  return null;
+  return getRelativeDateEST(date);
 };
 
 // Create optimized Supabase client with safe fallback

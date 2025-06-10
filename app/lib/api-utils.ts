@@ -296,8 +296,8 @@ export function formatMealForStorage(
       micronutrients,
       foods
     },
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
+    // Let database handle timestamps with proper EST timezone
+    // created_at and updated_at will be set by database DEFAULT NOW()
   };
 }
 
@@ -435,7 +435,7 @@ export function createMealAnalysisSchema(data: any): any {
     insights: mealData.insights || '',
     goal: mealData.goal || 'General Health',
     raw_analysis: JSON.stringify(data),
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
+    // Let database handle timestamps with proper EST timezone
+    // created_at and updated_at will be set by database DEFAULT NOW()
   };
 }

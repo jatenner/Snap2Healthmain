@@ -118,10 +118,20 @@ export function safeJsonParse<T>(json: string, fallback: T): T {
   }
 }
 
-export function formatDate(date: Date | string): string {
+/**
+ * Timezone and date utilities for EST/EDT handling
+ */
+
+// Eastern timezone helper functions
+export function getEasternTime(): Date {
+  return new Date(new Date().toLocaleString("en-US", {timeZone: "America/New_York"}));
+}
+
+export function formatDateEST(date: Date | string): string {
   try {
     const d = typeof date === 'string' ? new Date(date) : date;
     return d.toLocaleDateString('en-US', {
+      timeZone: 'America/New_York',
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -132,17 +142,87 @@ export function formatDate(date: Date | string): string {
   }
 }
 
-export function formatTime(date: Date | string): string {
+export function formatTimeEST(date: Date | string): string {
   try {
     const d = typeof date === 'string' ? new Date(date) : date;
     return d.toLocaleTimeString('en-US', {
+      timeZone: 'America/New_York',
       hour: 'numeric',
       minute: '2-digit',
+      hour12: true
     });
   } catch (e) {
     console.error('Error formatting time:', e);
     return 'Invalid time';
   }
+}
+
+export function formatDateTimeEST(date: Date | string): string {
+  try {
+    const d = typeof date === 'string' ? new Date(date) : date;
+    return d.toLocaleString('en-US', {
+      timeZone: 'America/New_York',
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+  } catch (e) {
+    console.error('Error formatting datetime:', e);
+    return 'Invalid datetime';
+  }
+}
+
+export function getRelativeDateEST(date: string | Date): string {
+  try {
+    const inputDate = typeof date === 'string' ? new Date(date) : date;
+    const now = getEasternTime();
+    
+    // Get dates in EST for comparison
+    const todayEST = now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD format
+    const yesterdayEST = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+      .toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    const inputDateEST = inputDate.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    
+    if (inputDateEST === todayEST) return 'Today';
+    if (inputDateEST === yesterdayEST) return 'Yesterday';
+    
+    return formatDateEST(inputDate);
+  } catch (e) {
+    console.error('Error getting relative date:', e);
+    return formatDateEST(date);
+  }
+}
+
+// For database operations - let DB handle timezone instead of JS
+export function createDatabaseTimestamp(): undefined {
+  // Return undefined to let database handle the timestamp with NOW()
+  // This avoids timezone conversion issues
+  return undefined;
+}
+
+// Convert UTC timestamp from DB to EST for display
+export function displayTimestamp(timestamp: string): string {
+  return formatDateTimeEST(timestamp);
+}
+
+// Get current EST timestamp as ISO string (for debugging/logging)
+export function getCurrentESTISOString(): string {
+  const now = new Date();
+  return new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"})).toISOString();
+}
+
+export function formatDate(date: Date | string): string {
+  // Use EST formatting by default
+  return formatDateEST(date);
+}
+
+export function formatTime(date: Date | string): string {
+  // Use EST formatting by default
+  return formatTimeEST(date);
 }
 
 // Generate slug from string
