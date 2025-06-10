@@ -1,13 +1,10 @@
 'use client';
 
-import React, { useState, FormEvent, useEffect } from 'react';
-import Link from 'next/link';
+import React, { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '../components/client/ClientAuthProvider';
-import { createClient } from '../lib/supabase/client';
+import Link from 'next/link';
 
-export default function SignUpPage() {
-  const router = useRouter();
+export default function SignUpFixedPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -15,14 +12,7 @@ export default function SignUpPage() {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
-  
-  const { user, isLoading, isAuthenticated } = useAuth();
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      router.push('/upload');
-    }
-  }, [isAuthenticated, router]);
+  const router = useRouter();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -75,6 +65,7 @@ export default function SignUpPage() {
         } else {
           setError(result.error || 'Failed to create account');
         }
+        setIsSubmitting(false);
         return;
       }
 
@@ -96,14 +87,6 @@ export default function SignUpPage() {
     
     setIsSubmitting(false);
   };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="text-white">Loading...</div>
-      </div>
-    );
-  }
 
   if (success) {
     return (
@@ -133,7 +116,7 @@ export default function SignUpPage() {
             <span className="text-white font-bold text-2xl">S</span>
           </div>
           <h1 className="text-3xl font-bold text-white">Create Account</h1>
-          <p className="mt-2 text-gray-400">Join Snap2Health today</p>
+          <p className="mt-2 text-gray-400">Join Snap2Health today - No email verification required!</p>
         </div>
 
         {error && (
@@ -221,10 +204,16 @@ export default function SignUpPage() {
               className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-70 transition-colors"
               disabled={isSubmitting}
             >
-              {isSubmitting ? 'Creating Account...' : 'Create Account'}
+              {isSubmitting ? 'Creating Account...' : 'Create Account (No Email Verification)'}
             </button>
           </div>
         </form>
+
+        <div className="bg-green-900/20 border border-green-500 rounded-lg p-3">
+          <p className="text-green-400 text-sm text-center">
+            ✅ This signup automatically confirms your email - no verification required!
+          </p>
+        </div>
 
         <p className="mt-8 text-center text-sm text-gray-400">
           Already have an account?{' '}
