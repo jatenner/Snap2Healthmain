@@ -472,23 +472,25 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
       const requestType = detectRequestType(content);
       
       const requestBody = {
-        messages: [
-          { role: 'system', content: systemPrompt },
-          ...messages.map(m => ({ role: m.role, content: m.content })),
-          { role: 'user', content }
-        ],
-        context: {
+        user_id: user?.id,
+        content: content.trim(),
+        conversation_id: conversationId,
+        meal_id: getCurrentMealId(),
+        context_data: {
           ...context,
           userInsights,
           currentMeal: getCurrentMealId(),
-          requestType
+          requestType,
+          page: context.type,
+          nutrients: context.nutrients || []
         },
-        conversationId,
+        context: context.type,
+        systemPrompt: systemPrompt,
         max_tokens: requestType === 'simple' ? 150 : 
                    requestType === 'detailed' ? 800 : 400,
       };
 
-      console.log('[Chat] Sending request to API...');
+      console.log('[Chat] Sending request to API...', { user_id: user?.id, content: content.trim() });
       const response = await fetch('/api/chat/messages', {
         method: 'POST',
         headers: {
@@ -509,7 +511,7 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
       const assistantMessage: Message = {
         id: Date.now().toString(),
         role: 'assistant',
-        content: data.message || 'Sorry, I encountered an error processing your request.',
+        content: data.message || data.response || 'Sorry, I encountered an error processing your request.',
         timestamp: new Date(),
         metadata: data.metadata,
       };

@@ -649,9 +649,16 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({
+      message: aiResponse,
+      conversationId: conversation_id,
       userMessage,
       assistantMessage,
-      learningInsights: learningInsights
+      learningInsights: learningInsights,
+      metadata: {
+        response_style: responseStyle,
+        meal_context: currentMealData ? currentMealData.id : null,
+        user_profile_available: !!combinedProfile
+      }
     });
 
   } catch (error) {
