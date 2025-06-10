@@ -491,7 +491,7 @@ Remember: Leverage their actual meal data for personalized insights. Be specific
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    console.log('[Chat Messages API] Received POST request:', body);
+    console.log('[Chat Messages API] Received POST request:', { hasContent: !!body.content, user_id: body.user_id });
     let { conversation_id, user_id, content, meal_id, context_data, context, systemPrompt } = body;
 
     if (!content) {
@@ -501,7 +501,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Enhanced user authentication
+    // Enhanced user authentication with multiple approaches
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -512,7 +512,11 @@ export async function POST(request: NextRequest) {
     
     // Debug: Log received cookies
     const allCookies = cookieStore.getAll();
-    console.log('[Chat Messages API] 🍪 Received cookies:', allCookies.map(c => ({ name: c.name, hasValue: !!c.value })));
+    console.log('[Chat Messages API] 🍪 Received cookies:', allCookies.map(c => ({ 
+      name: c.name, 
+      hasValue: !!c.value,
+      valuePreview: c.value?.substring(0, 20) + '...'
+    })));
     
     const supabaseAuth = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -528,32 +532,117 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    // Try to get authenticated user from session
+    // Try multiple authentication approaches
     let authenticatedUser = null;
+    let authMethod = 'none';
+
+    // Method 1: Try getUser() which validates the JWT
     try {
-      const { data: { user: sessionUser }, error: sessionError } = await supabaseAuth.auth.getUser();
-      if (sessionUser && !sessionError) {
-        authenticatedUser = sessionUser;
-        user_id = sessionUser.id; // Use authenticated user ID
-        console.log('[Chat Messages API] ✅ Authenticated user from session:', {
-          id: sessionUser.id,
-          email: sessionUser.email,
-          name: sessionUser.user_metadata?.name
+      const { data: { user: validatedUser }, error: userError } = await supabaseAuth.auth.getUser();
+      if (validatedUser && !userError) {
+        authenticatedUser = validatedUser;
+        authMethod = 'validated_session';
+        user_id = validatedUser.id; // Use authenticated user ID
+        console.log('[Chat Messages API] ✅ Method 1 - Validated user from session:', {
+          id: validatedUser.id,
+          email: validatedUser.email,
+          name: validatedUser.user_metadata?.name
         });
+      } else if (userError) {
+        console.log('[Chat Messages API] ❌ Method 1 failed - getUser() error:', userError.message);
       }
     } catch (authError) {
-      console.log('[Chat Messages API] Session auth failed:', authError);
+      console.log('[Chat Messages API] ❌ Method 1 failed - getUser() exception:', authError);
     }
 
-    // Fallback to provided user_id if session auth failed
-    if (!authenticatedUser && user_id) {
-      console.log('[Chat Messages API] ⚠️ Using provided user_id (no session):', user_id);
-    } else if (!authenticatedUser && !user_id) {
-      console.log('[Chat Messages API] ❌ No authentication available');
-      return NextResponse.json({ 
-        error: 'Authentication required. Please sign in to use the AI chat.' 
-      }, { status: 401 });
+    // Method 2: Try getSession() as fallback
+    if (!authenticatedUser) {
+      try {
+        const { data: { session }, error: sessionError } = await supabaseAuth.auth.getSession();
+        if (session?.user && !sessionError) {
+          authenticatedUser = session.user;
+          authMethod = 'session_fallback';
+          user_id = session.user.id;
+          console.log('[Chat Messages API] ⚠️ Method 2 - User from session fallback:', {
+            id: session.user.id,
+            email: session.user.email,
+            name: session.user.user_metadata?.name
+          });
+        } else if (sessionError) {
+          console.log('[Chat Messages API] ❌ Method 2 failed - getSession() error:', sessionError.message);
+        }
+      } catch (authError) {
+        console.log('[Chat Messages API] ❌ Method 2 failed - getSession() exception:', authError);
+      }
     }
+
+    // Method 3: Use provided user_id if session auth completely failed
+    if (!authenticatedUser && user_id) {
+      authMethod = 'provided_user_id';
+      console.log('[Chat Messages API] ⚠️ Method 3 - Using provided user_id (no session):', user_id);
+      
+      // Try to validate the provided user_id exists
+      try {
+        const { data: { user: providedUser }, error: lookupError } = await supabase.auth.admin.getUserById(user_id);
+        if (providedUser && !lookupError) {
+          authenticatedUser = providedUser;
+          authMethod = 'validated_provided_id';
+          console.log('[Chat Messages API] ✅ Method 3 - Validated provided user_id:', {
+            id: providedUser.id,
+            email: providedUser.email
+          });
+        }
+      } catch (lookupError) {
+        console.log('[Chat Messages API] ❌ Method 3 failed - User lookup error:', lookupError);
+      }
+    }
+
+    // Final check - reject if no authentication
+    if (!authenticatedUser && !user_id) {
+      console.log('[Chat Messages API] ❌ No authentication available');
+      
+      // In development, try to use a fallback test user if completely no auth
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Chat Messages API] 🔧 Development mode: attempting fallback to your account...');
+        
+        // Try to find your account by email
+        try {
+          const { data: { users }, error: lookupError } = await supabase.auth.admin.listUsers();
+          const yourAccount = users?.find(u => u.email === 'jatenner@gmail.com' || u.email?.includes('jatenner'));
+          
+          if (yourAccount) {
+            user_id = yourAccount.id;
+            authenticatedUser = yourAccount;
+            authMethod = 'development_fallback';
+            console.log('[Chat Messages API] 🎯 Development fallback: Using your account:', {
+              id: yourAccount.id,
+              email: yourAccount.email
+            });
+          }
+        } catch (fallbackError) {
+          console.log('[Chat Messages API] ❌ Development fallback failed:', fallbackError);
+        }
+      }
+      
+      // If still no authentication after fallback
+      if (!authenticatedUser && !user_id) {
+        return NextResponse.json({ 
+          error: 'Authentication required. Please sign in to use the AI chat.',
+          debug: {
+            cookiesReceived: allCookies.length,
+            authMethod: 'none',
+            isDevelopment: process.env.NODE_ENV === 'development'
+          }
+        }, { status: 401 });
+      }
+    }
+
+    console.log('[Chat Messages API] 🔐 Final auth status:', {
+      authMethod,
+      user_id,
+      hasAuthenticatedUser: !!authenticatedUser,
+      email: authenticatedUser?.email
+    });
 
     // Auto-create conversation if not provided
     let conversation = null;
@@ -601,19 +690,15 @@ export async function POST(request: NextRequest) {
       .eq('id', user_id)
       .single();
     
-    console.log('[Chat Messages API] Profile from profiles table:', userProfile);
-    if (profileError) console.log('[Chat Messages API] Profile error:', profileError);
+    console.log('[Chat Messages API] Profile from profiles table:', userProfile ? 'Found' : 'Not found');
+    if (profileError) console.log('[Chat Messages API] Profile error:', profileError.message);
 
     // Also try to get user data from auth if profiles table is empty
     let authUserData = null;
     try {
       const { data: { user: authUser }, error: authError } = await supabase.auth.admin.getUserById(user_id);
       authUserData = authUser;
-      console.log('[Chat Messages API] Auth user data:', {
-        id: authUser?.id,
-        email: authUser?.email,
-        name: authUser?.user_metadata?.name
-      });
+      console.log('[Chat Messages API] Auth user data:', authUser ? 'Found' : 'Not found');
     } catch (authError) {
       console.log('[Chat Messages API] Auth lookup error:', authError);
     }
@@ -634,13 +719,15 @@ export async function POST(request: NextRequest) {
             'User',
       email: userProfile?.email || authUserData?.email || authenticatedUser?.email,
       user_id: user_id,
-      is_authenticated: !!authenticatedUser
+      is_authenticated: !!authenticatedUser,
+      auth_method: authMethod
     };
 
     console.log('[Chat Messages API] 👤 Combined profile:', {
       name: combinedProfile.name,
       email: combinedProfile.email,
       is_authenticated: combinedProfile.is_authenticated,
+      auth_method: combinedProfile.auth_method,
       has_profile: !!userProfile
     });
 
