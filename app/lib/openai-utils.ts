@@ -285,16 +285,16 @@ function generateUserPrompt(userProfile: UserProfile): string {
   
   personalizedContext += "\n";
 
-  return `${personalizedContext}MISSION: Analyze this meal like you're creating a performance nutrition protocol for this specific individual. I need insights that will actually move the needle on their results.
+  return `${personalizedContext}MISSION: Analyze this meal like you're creating a comprehensive nutrition report for this specific individual. I need complete, accurate nutritional insights that cover ALL nutrients present in meaningful amounts.
 
-ANALYSIS REQUIREMENTS:
-1. **PORTION SIZE ACCURACY**: Carefully analyze the visual portion sizes in the image. Consider plate size, serving utensils, food density, and compare to standard portion references. Estimate portions based on visual cues like the size relative to hands, plates, or common objects.
-2. **PRECISE NUTRIENT CALCULATIONS**: Base all nutrient amounts on the ACTUAL portions visible, not standard serving sizes. CRITICAL: For micronutrients, ONLY include those with meaningful amounts (>1% DV or >0.5mg/mcg). DO NOT include nutrients with zero or trace amounts - exclude them entirely from the response.
-3. Identify the EXACT metabolic impact this meal will have on THIS person's physiology
-4. Spot the hidden opportunities and blind spots others would miss
-5. Provide tactical adjustments with specific timing and quantities
-6. Reference cutting-edge research that explains WHY each recommendation works
-7. Connect every insight directly to their athletic performance goals
+CRITICAL ANALYSIS REQUIREMENTS:
+1. **COMPLETE NUTRIENT ANALYSIS**: Include ALL nutrients present in meaningful amounts (>1% DV or >0.5mg/mcg). Be comprehensive - aim for 20+ nutrients minimum.
+2. **PORTION SIZE ACCURACY**: Carefully analyze visual portion sizes. Consider plate size, serving utensils, food density, and compare to standard portion references.
+3. **PRECISE CALCULATIONS**: Base all nutrient amounts on ACTUAL portions visible, not standard serving sizes. Use USDA food composition data accuracy.
+4. **COMPREHENSIVE VITAMINS**: Include ALL vitamins present - A, D, E, K, C, B1, B2, B3, B5, B6, B7, B9, B12, even in smaller amounts.
+5. **COMPLETE MINERALS**: Include ALL minerals present - Calcium, Iron, Magnesium, Phosphorus, Potassium, Sodium, Zinc, Copper, Manganese, Selenium, Iodine, etc.
+6. **PHYTONUTRIENTS**: Identify antioxidants, polyphenols, and plant compounds present.
+7. **NUTRITIONAL COMPLETENESS**: Assess what nutrients are missing and how to improve the meal.
 
 OUTPUT FORMAT (JSON):
 {
@@ -313,35 +313,89 @@ OUTPUT FORMAT (JSON):
     {"name": "Dietary Fiber", "amount": X, "unit": "g", "percentDailyValue": X},
     {"name": "Total Fat", "amount": X, "unit": "g", "percentDailyValue": X},
     {"name": "Saturated Fat", "amount": X, "unit": "g", "percentDailyValue": X},
+    {"name": "Unsaturated Fat", "amount": X, "unit": "g", "percentDailyValue": X},
+    {"name": "Sugars", "amount": X, "unit": "g", "percentDailyValue": X},
     {"name": "Sodium", "amount": X, "unit": "mg", "percentDailyValue": X}
   ],
-  "micronutrients": [CRITICAL: ONLY include micronutrients that are actually present in meaningful amounts (>1% DV or >0.5mg/mcg). DO NOT include nutrients with zero or trace amounts. Only include vitamins and minerals the meal actually provides based on visible ingredients. If a nutrient is not significantly present, exclude it entirely from the array],
-  "personalizedHealthInsights": "CRITICAL ANALYSIS: For a [age]-year-old [weight]lb male focused on [specific goal], this meal creates [specific metabolic response]. The [X]g protein will [exact mechanism] while the [X]g carbs will [specific glycemic response]. Key performance impact: [measurable outcome]. Missing: [specific gaps] which limits [exact performance area].",
-  "metabolicInsights": "METABOLIC BLUEPRINT: Within 30 minutes: [specific physiological response]. 60-90 minutes: [peak metabolic state]. 2-3 hours: [transition phase]. For your training schedule, this means [actionable timing]. The [specific nutrient ratios] will [exact metabolic pathway] resulting in [measurable performance outcome]. Research shows [specific study] that [exact mechanism].",
-  "mealStory": "PERFORMANCE TIMELINE: Your digestive fire starts with [specific breakdown]. The [nutrient] hits your bloodstream at [timeframe], triggering [hormonal response]. For your [body size/composition], this creates [metabolic advantage/disadvantage]. Peak nutrient availability occurs [specific timing] - optimal window for [specific activity]. Energy sustainability: [duration and quality].",
-  "nutritionalNarrative": "TACTICAL ASSESSMENT: This meal scores [X/10] for your athletic performance goals. Strengths: [specific advantages for this person]. Critical gaps: [exact deficiencies]. The [macro ratio] supports [specific adaptation] but misses [performance opportunity]. Research from [specific study] indicates [actionable insight]. For a [body type] individual, optimal ratios would be [specific recommendation].",
-  "timeOfDayOptimization": "PRECISION TIMING: Based on your [goals] and [activity level], consume this meal [specific timing] relative to training. Morning intake amplifies [specific benefit] due to [hormonal state]. Pre-workout window: [exact timeframe] for [specific outcome]. Post-workout: adjust [specific element] to maximize [recovery metric]. Circadian impact: [specific recommendation].",
+  "micronutrients": [
+    // CRITICAL: Include ALL vitamins and minerals present in meaningful amounts (>1% DV). Be comprehensive!
+    // VITAMINS (include all that are present):
+    {"name": "Vitamin A", "amount": X, "unit": "mcg", "percentDailyValue": X},
+    {"name": "Vitamin C", "amount": X, "unit": "mg", "percentDailyValue": X},
+    {"name": "Vitamin D", "amount": X, "unit": "mcg", "percentDailyValue": X},
+    {"name": "Vitamin E", "amount": X, "unit": "mg", "percentDailyValue": X},
+    {"name": "Vitamin K", "amount": X, "unit": "mcg", "percentDailyValue": X},
+    {"name": "Thiamine (B1)", "amount": X, "unit": "mg", "percentDailyValue": X},
+    {"name": "Riboflavin (B2)", "amount": X, "unit": "mg", "percentDailyValue": X},
+    {"name": "Niacin (B3)", "amount": X, "unit": "mg", "percentDailyValue": X},
+    {"name": "Pantothenic Acid (B5)", "amount": X, "unit": "mg", "percentDailyValue": X},
+    {"name": "Pyridoxine (B6)", "amount": X, "unit": "mg", "percentDailyValue": X},
+    {"name": "Biotin (B7)", "amount": X, "unit": "mcg", "percentDailyValue": X},
+    {"name": "Folate (B9)", "amount": X, "unit": "mcg", "percentDailyValue": X},
+    {"name": "Cobalamin (B12)", "amount": X, "unit": "mcg", "percentDailyValue": X},
+    // MINERALS (include all that are present):
+    {"name": "Calcium", "amount": X, "unit": "mg", "percentDailyValue": X},
+    {"name": "Iron", "amount": X, "unit": "mg", "percentDailyValue": X},
+    {"name": "Magnesium", "amount": X, "unit": "mg", "percentDailyValue": X},
+    {"name": "Phosphorus", "amount": X, "unit": "mg", "percentDailyValue": X},
+    {"name": "Potassium", "amount": X, "unit": "mg", "percentDailyValue": X},
+    {"name": "Zinc", "amount": X, "unit": "mg", "percentDailyValue": X},
+    {"name": "Copper", "amount": X, "unit": "mg", "percentDailyValue": X},
+    {"name": "Manganese", "amount": X, "unit": "mg", "percentDailyValue": X},
+    {"name": "Selenium", "amount": X, "unit": "mcg", "percentDailyValue": X},
+    {"name": "Iodine", "amount": X, "unit": "mcg", "percentDailyValue": X}
+    // Only include nutrients actually present - but be comprehensive and include small amounts too
+  ],
+  "phytonutrients": [
+    // Include significant antioxidants and plant compounds if present
+    {"name": "Lycopene", "amount": X, "unit": "mg", "significance": "Powerful antioxidant"},
+    {"name": "Beta-Carotene", "amount": X, "unit": "mcg", "significance": "Vitamin A precursor"},
+    {"name": "Lutein", "amount": X, "unit": "mg", "significance": "Eye health support"}
+  ],
+  "personalizedHealthInsights": "COMPREHENSIVE ANALYSIS: For a [age]-year-old [weight]lb individual focused on [specific goal], this meal provides [X] total nutrients with [completeness assessment]. Nutritional strengths: [specific nutrients in good amounts]. Critical gaps: [missing nutrients]. Overall nutritional quality: [assessment]. This meal covers [X]% of daily nutritional needs.",
+  "metabolicInsights": "METABOLIC IMPACT: This meal provides [X] calories with [macro breakdown]. Energy availability: [timeframe]. Key nutrients for performance: [specific vitamins/minerals]. Nutrient synergies: [combinations that enhance absorption]. Optimal timing considerations: [recommendations].",
+  "mealStory": "NUTRITIONAL COMPLETENESS: This meal contains [X] essential nutrients out of [total needed daily]. Strong in: [nutrient categories]. Moderate in: [nutrients]. Low/missing: [specific gaps]. To make this meal nutritionally complete, add: [specific suggestions].",
+  "nutritionalNarrative": "QUALITY ASSESSMENT: Nutritional density score: [X/10]. This meal excels in providing [specific nutrients] which support [health benefits]. However, it lacks [specific nutrients] important for [health functions]. The nutrient profile suggests this is a [meal type assessment] suitable for [timing/goals].",
+  "timeOfDayOptimization": "TIMING RECOMMENDATIONS: Best consumed [time] because [nutritional reasoning]. The [specific nutrients] make this ideal for [pre/post workout/general]. Nutrient absorption optimized by: [specific timing advice].",
   "expertRecommendations": [
-    "IMMEDIATE: Add [exact amount] [specific ingredient] to increase [specific outcome] by [measurable improvement]",
-    "STRATEGIC: Replace [specific element] with [exact alternative] to optimize [performance metric] - backed by [research reference]",
-    "ADVANCED: Time this meal [specific schedule] and follow with [exact protocol] for [measurable advantage]"
+    "NUTRIENT ENHANCEMENT: Add [specific food] to provide missing [nutrients] and increase overall completeness by [X]%",
+    "ABSORPTION OPTIMIZATION: Combine with [specific food/nutrient] to enhance [nutrient] absorption by up to [X]%",
+    "BALANCE IMPROVEMENT: Include [specific addition] to better balance the [nutrient ratio] for optimal [health benefit]"
   ],
   "benefits": [
-    "Supports [specific adaptation] through [exact mechanism] - critical for your [body type/goals]",
-    "Provides [nutrient] at [optimal level] for [specific performance benefit] in [timeframe]"
+    "Excellent source of [specific nutrients] providing [X]% of daily needs",
+    "Contains [nutrients] that work together to support [specific health function]",
+    "Provides [specific nutrient] which is often lacking in typical diets"
   ],
   "concerns": [
-    "Missing [specific nutrient] limits [exact performance area] - you're leaving [measurable improvement] on the table",
-    "The [ratio/timing] creates [specific suboptimal response] for your [body composition/goals]"
+    "Limited in [specific nutrients] which are important for [health function]",
+    "Missing [specific vitamins/minerals] that would complement the existing nutrients",
+    "Could benefit from additional [nutrient category] to improve overall balance"
   ],
   "suggestions": [
-    "Add [exact amount] [specific food] consumed [timing] to increase [performance metric] by [%]",
-    "Modify [specific element] to [exact change] for [measurable improvement] in [specific area]"
+    "Add [specific food] to provide [missing nutrients] and increase nutritional completeness",
+    "Include [specific ingredient] to enhance [nutrient] content and improve [health benefit]",
+    "Pair with [specific food] to create a more nutritionally complete meal"
   ],
-  "healthRating": [1-10 rating with specific justification for this individual's goals]
+  "nutritionalCompleteness": {
+    "totalNutrients": [number of nutrients identified],
+    "vitaminsCount": [number of vitamins present],
+    "mineralsCount": [number of minerals present],
+    "completenessScore": [percentage of nutritional completeness],
+    "missingNutrients": ["[specific missing nutrients]"]
+  },
+  "healthRating": [1-10 rating based on nutritional completeness and quality]
 }
 
-CRITICAL: Every insight must be SPECIFIC to this person's physiology, goals, and the exact meal shown. No generic advice. Reference specific research when making claims. Focus on measurable performance outcomes, not feel-good generalities.`;
+CRITICAL SUCCESS FACTORS:
+- Include 20+ nutrients minimum - be comprehensive
+- Accurate portion-based calculations using USDA data
+- Identify ALL vitamins and minerals present, even smaller amounts
+- Assess nutritional completeness and gaps
+- Provide specific suggestions to improve nutritional profile
+- Use scientific accuracy - no generic advice
+
+Focus on creating a complete nutritional picture that rivals professional nutrition analysis software.`;
 }
 
 // Safe parsing of OpenAI response with NO fallback data

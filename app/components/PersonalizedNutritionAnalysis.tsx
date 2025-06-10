@@ -163,7 +163,7 @@ const getNutrientDescription = (name: string): string => {
     'calcium': 'Builds strong bones and teeth that last a lifetime. Also helps your muscles work properly - think of it as structural support for your body!',
     'iron': 'Prevents fatigue and keeps your energy levels high all day. Iron from meat is super easy for your body to absorb - way better than iron pills!',
     'potassium': 'Keeps your blood pressure healthy and prevents muscle cramps. Works like a natural salt balancer - great if you eat a lot of processed foods!',
-    'magnesium': 'Natural muscle relaxer that helps you sleep better and reduces cramps. Most people don\'t get enough - a super important mineral that\'s often missing!',
+    'magnesium': 'Natural muscle relaxer that helps you sleep better and reduces cramps. Most people do not get enough - a super important mineral that is often missing!',
     'zinc': 'Boosts immune function, helps wounds heal faster, and supports taste and smell. Important for growth and development.',
     'phosphorus': 'Critical for ATP energy production in every cell and works with calcium to build unbreakable bones and teeth. Essential for muscle contraction and recovery after intense training.',
     'selenium': 'Master antioxidant that protects your thyroid, boosts immune defense, and helps your body recover from oxidative stress caused by intense exercise and daily life.',
