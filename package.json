@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "AI-powered meal analysis and nutrition tracking app",
   "private": true,
+  "_deploy": "Force deployment after syntax fixes - all changes deployed",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
