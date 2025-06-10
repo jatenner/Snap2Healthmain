@@ -141,7 +141,7 @@ const getNutrientDescription = (name: string): string => {
     // Vitamins - Simple, relatable descriptions
     'vitamin a': 'Keeps your eyes healthy for good vision, especially at night. Also supports immune function and skin health.',
     'vitamin c': 'Powerful immune system booster that helps fight off colds and infections. Also helps your body absorb iron and heal wounds.',
-    'vitamin d': 'The "sunshine vitamin" that keeps bones strong, supports immune function, and may boost mood. Most people don\'t get enough.',
+    'vitamin d': 'The "sunshine vitamin" that keeps bones strong, supports immune function, and may boost mood. Most people do not get enough.',
     'vitamin e': 'Protects your cells from damage and supports healthy skin. Acts like a bodyguard for your cell membranes.',
     'vitamin k': 'Essential for blood clotting when you get a cut, and helps keep your bones strong as you age.',
     'vitamin b1': 'Helps convert food into energy and supports proper nerve function. Important for brain health and energy levels.',
@@ -160,10 +160,10 @@ const getNutrientDescription = (name: string): string => {
     'pantothenic acid': 'Helps your body make energy from food and produces important hormones for stress response.',
     
     // Minerals - Practical, understandable descriptions
-    'calcium': 'Builds and maintains strong bones and teeth. Also needed for muscle contractions and nerve signaling.',
-    'iron': 'Carries oxygen in your blood to all parts of your body. Low iron leads to fatigue and weakness.',
-    'potassium': 'Helps regulate blood pressure, supports muscle function, and counteracts the effects of too much sodium.',
-    'magnesium': 'Natural muscle relaxer that helps you sleep better and reduces cramps. Most people don\'t get enough - a super important mineral that\'s often missing!',
+    'calcium': 'Builds strong bones and teeth that last a lifetime. Also helps your muscles work properly - think of it as structural support for your body!',
+    'iron': 'Prevents fatigue and keeps your energy levels high all day. Iron from meat is super easy for your body to absorb - way better than iron pills!',
+    'potassium': 'Keeps your blood pressure healthy and prevents muscle cramps. Works like a natural salt balancer - great if you eat a lot of processed foods!',
+    'magnesium': 'Natural muscle relaxer that helps you sleep better and reduces cramps. Most people do not get enough - a super important mineral that is often missing!',
     'zinc': 'Boosts immune function, helps wounds heal faster, and supports taste and smell. Important for growth and development.',
     'phosphorus': 'Critical for ATP energy production in every cell and works with calcium to build unbreakable bones and teeth. Essential for muscle contraction and recovery after intense training.',
     'selenium': 'Master antioxidant that protects your thyroid, boosts immune defense, and helps your body recover from oxidative stress caused by intense exercise and daily life.',
