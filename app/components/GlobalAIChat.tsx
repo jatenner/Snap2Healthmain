@@ -723,203 +723,141 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
   }
 
   return (
-    <>
-      {/* Enhanced floating chat button with multiple attention-grabbing features */}
-      <div className="fixed bottom-6 right-6 z-50">
+    <div className="fixed bottom-4 right-4 z-50">
+      {/* Enhanced Chat Toggle Button */}
+      {!isOpen && (
         <div className="relative">
-          {/* Welcome pulse overlay - only shows for first 8 seconds */}
+          {/* Welcome Pulse Animation */}
           {showWelcomePulse && (
-            <div className="absolute -inset-4 z-10">
-              <div className="w-28 h-28 bg-gradient-to-r from-purple-400 via-pink-500 to-red-500 rounded-full animate-ping opacity-30"></div>
-              <div className="absolute inset-0 w-28 h-28 bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 rounded-full animate-pulse opacity-40"></div>
-            </div>
+            <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-75 scale-110"></div>
           )}
-
-          {/* Main chat button with enhanced design */}
-          <button 
+          <button
             onClick={toggleChat}
-            className="relative w-20 h-20 bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-700 hover:from-blue-700 hover:via-purple-700 hover:to-indigo-800 text-white rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 transform hover:scale-110 ring-4 ring-blue-300/30 hover:ring-blue-400/50 group"
-            title={getContextualHelperText()}
+            className="relative bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white p-4 rounded-full shadow-2xl transition-all duration-300 transform hover:scale-110 active:scale-95 group"
+            aria-label="Open AI Chat"
           >
-            {/* Robot emoji with bounce animation */}
-            <span className="text-3xl animate-bounce group-hover:animate-pulse">🤖</span>
-            
-            {/* Context indicator badges */}
-            {getPageContext().nutrients && getPageContext().nutrients!.length > 0 && (
-              <div className="absolute -top-1 -right-1 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center border-2 border-white shadow-lg">
-                <span className="text-xs text-white font-bold">📊</span>
-              </div>
-            )}
-            
-            {userInsights && typeof userInsights === 'object' && userInsights.totalMeals && userInsights.totalMeals > 0 && (
-              <div className="absolute -bottom-1 -left-1 w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center border-2 border-white shadow-lg">
-                <span className="text-xs text-white font-bold">{userInsights.totalMeals}</span>
-              </div>
-            )}
-          </button>
-
-          {/* Floating tooltip with contextual information */}
-          {!isOpen && (
-            <div className="absolute bottom-full right-0 mb-4 w-72 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-xl shadow-xl p-4 transform transition-all duration-300 hover:scale-105">
-              <div className="text-sm text-gray-700 font-medium mb-2">
-                {getContextualHelperText()}
-              </div>
-              
-              {/* Show contextual suggestions */}
-              {contextualSuggestions.length > 0 && (
-                <div className="space-y-1">
-                  <div className="text-xs text-gray-500 uppercase font-semibold">Quick Questions:</div>
-                  {contextualSuggestions.slice(0, 2).map((suggestion, index) => (
-                    <button
-                      key={index}
-                      onClick={() => {
-                        setIsOpen(true);
-                        setInputValue(suggestion);
-                      }}
-                      className="block w-full text-left text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded transition-colors"
-                    >
-                      • {suggestion}
-                    </button>
-                  ))}
-                </div>
-              )}
-              
-              {/* Arrow pointing to button */}
-              <div className="absolute top-full right-8 w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-blue-200"></div>
+            <div className="flex items-center justify-center">
+              <svg className="w-6 h-6 transition-transform duration-300 group-hover:rotate-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
             </div>
-          )}
-
-          {/* Enhanced pulsing ring animation when active */}
-          {isOpen && (
-            <>
-              <div className="absolute inset-0 rounded-full border-4 border-blue-400 animate-ping"></div>
-              <div className="absolute inset-0 rounded-full border-2 border-blue-300 animate-pulse"></div>
-            </>
+            {/* Chat Badge */}
+            <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold animate-bounce">
+              💬
+            </div>
+          </button>
+          {/* Floating Hint */}
+          {showWelcomePulse && (
+            <div className="absolute bottom-full right-0 mb-2 bg-gray-900 text-white text-sm px-3 py-2 rounded-lg shadow-lg animate-fade-in">
+              <div className="relative">
+                Ask me anything! 🤖
+                <div className="absolute top-full right-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+              </div>
+            </div>
           )}
         </div>
-      </div>
+      )}
 
-      {/* Enhanced chat panel with modern design */}
+      {/* Enhanced Chat Window */}
       {isOpen && (
-        <div className={`fixed bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 transition-all duration-300 transform ${
-          typeof window !== 'undefined' && window.innerWidth < 768 
-            ? 'bottom-4 left-4 right-4 top-20 w-auto h-auto' 
-            : 'bottom-28 right-6 w-[32rem] h-[650px]'
-        }`}>
-          {/* Enhanced header with gradient and better typography */}
-          <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-t-2xl">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center animate-pulse">
-                <span className="text-xl">🤖</span>
+        <div className={`bg-white rounded-2xl shadow-2xl border border-gray-200 transition-all duration-300 transform ${
+          isMinimized ? 'w-80 h-16' : 'w-96 h-[600px]'
+        } flex flex-col overflow-hidden animate-slide-up`}>
+          
+          {/* Enhanced Header */}
+          <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-t-2xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="relative">
+                  <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                    <span className="text-lg">🤖</span>
+                  </div>
+                  <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-white animate-pulse"></div>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">AI Nutrition Coach</h3>
+                  <p className="text-blue-100 text-xs">Always ready to help! ✨</p>
+                </div>
               </div>
-              <div>
-                <h3 className="font-bold text-xl">AI Nutrition Coach</h3>
-                {userInsights?.totalMeals > 0 && (
-                  <p className="text-xs text-blue-100">
-                    📊 {userInsights.totalMeals} meals analyzed • Ready to help!
-                  </p>
-                )}
-                {!userInsights?.totalMeals && (
-                  <p className="text-xs text-blue-100">
-                    💡 Your personalized nutrition assistant
-                  </p>
-                )}
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setIsMinimized(!isMinimized)}
+                  className="p-2 hover:bg-white/20 rounded-lg transition-colors duration-200"
+                  aria-label={isMinimized ? "Expand chat" : "Minimize chat"}
+                >
+                  <svg className={`w-4 h-4 transition-transform duration-300 ${isMinimized ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                <button
+                  onClick={toggleChat}
+                  className="p-2 hover:bg-white/20 rounded-lg transition-colors duration-200 group"
+                  aria-label="Close chat"
+                >
+                  <svg className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <button 
-                onClick={() => setIsMinimized(!isMinimized)}
-                className="text-white hover:text-gray-200 text-lg transition-colors hover:bg-white/10 rounded-full w-8 h-8 flex items-center justify-center"
-                title={isMinimized ? "Expand" : "Minimize"}
-              >
-                {isMinimized ? '⬆' : '⬇'}
-              </button>
-              <button 
-                onClick={() => setIsOpen(false)}
-                className="text-white hover:text-gray-200 text-2xl font-light transition-colors hover:bg-white/10 rounded-full w-8 h-8 flex items-center justify-center"
-              >
-                ×
-              </button>
-            </div>
+            
+            {/* Context Status */}
+            {!isMinimized && (
+              <div className="mt-3 text-blue-100 text-xs bg-white/10 rounded-lg px-3 py-2 backdrop-blur-sm">
+                {getContextualHelperText()}
+              </div>
+            )}
           </div>
 
+          {/* Chat Content - Only show when not minimized */}
           {!isMinimized && (
             <>
-              {/* Enhanced quick actions with better styling */}
-              <div className="px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-blue-50 max-h-48 overflow-y-auto">
-                {renderQuickActions()}
-              </div>
-
-              {/* Enhanced messages area with better spacing and typography */}
-              <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-gradient-to-b from-white to-gray-50" style={{ 
-                height: typeof window !== 'undefined' && window.innerWidth < 768 ? 'calc(100vh - 320px)' : '380px' 
-              }}>
-                {messages.length === 0 ? (
-                  <div className="text-center text-gray-600 space-y-4 py-8">
-                    <div className="text-5xl animate-bounce">🤖</div>
-                    <div className="space-y-3">
-                      <p className="font-semibold text-lg text-gray-800">{getContextualHelperText().replace('💬 ', '')}</p>
-                      {getCurrentMealId() && (
-                        <div className="bg-green-100 border border-green-200 text-green-700 rounded-xl p-4 text-sm animate-pulse">
-                          <div className="flex items-center space-x-3">
-                            <span className="text-2xl">🍽️</span>
-                            <div>
-                              <div className="font-medium">Meal detected!</div>
-                              <div className="text-xs">Ask me about this meal's nutrition, health benefits, or how to improve it.</div>
-                            </div>
-                          </div>
+              {/* Enhanced Messages Area */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+                {messages.length === 0 && (
+                  <div className="text-center py-8">
+                    <div className="text-6xl mb-4 animate-bounce">🤖</div>
+                    <p className="text-gray-600 text-lg font-medium">Ready to help with your nutrition!</p>
+                    <p className="text-gray-500 text-sm mt-2">Ask me anything about your meals, goals, or health.</p>
+                  </div>
+                )}
+                
+                {messages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} animate-message-in`}
+                  >
+                    <div className={`max-w-[80%] rounded-2xl p-4 shadow-sm ${
+                      message.role === 'user'
+                        ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
+                        : 'bg-white text-gray-800 border border-gray-200'
+                    }`}>
+                      {message.role === 'assistant' && (
+                        <div className="flex items-center mb-2">
+                          <span className="text-lg mr-2">🤖</span>
+                          <span className="text-xs text-gray-500 font-medium">AI Coach</span>
                         </div>
                       )}
-                      <p className="text-sm text-gray-500">Try the buttons above or ask me anything about nutrition!</p>
+                      <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                      <p className={`text-xs mt-2 ${
+                        message.role === 'user' ? 'text-blue-100' : 'text-gray-400'
+                      }`}>
+                        {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
                     </div>
                   </div>
-                ) : (
-                  messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                    >
-                      <div
-                        className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
-                          message.role === 'user'
-                            ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-br-md shadow-lg'
-                            : message.metadata?.response_type === 'error'
-                            ? 'bg-red-50 border border-red-200 text-red-800 rounded-bl-md shadow-sm'
-                            : 'bg-white border border-gray-200 text-gray-800 rounded-bl-md shadow-sm'
-                        }`}
-                      >
-                        <div className="whitespace-pre-wrap">{message.content}</div>
-                        {/* Enhanced metadata display */}
-                        {message.metadata && message.role !== 'user' && (
-                          <div className="text-xs text-gray-500 mt-2 pt-2 border-t border-gray-100">
-                            {message.metadata.response_type && message.metadata.response_type !== 'error' && (
-                              <span className="inline-flex items-center bg-gray-100 px-2 py-1 rounded-full mr-2">
-                                <span className="w-2 h-2 bg-blue-400 rounded-full mr-1"></span>
-                                {message.metadata.response_type}
-                              </span>
-                            )}
-                            {message.metadata.insights_used && (
-                              <span className="inline-flex items-center bg-purple-100 px-2 py-1 rounded-full">
-                                <span className="w-2 h-2 bg-purple-400 rounded-full mr-1"></span>
-                                insights used
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
+                ))}
+                
                 {isLoading && (
-                  <div className="flex justify-start">
-                    <div className="bg-gray-100 border border-gray-200 px-4 py-3 rounded-2xl rounded-bl-md text-sm animate-pulse">
-                      <div className="flex items-center space-x-3">
+                  <div className="flex justify-start animate-message-in">
+                    <div className="bg-white text-gray-800 border border-gray-200 rounded-2xl p-4 shadow-sm">
+                      <div className="flex items-center space-x-2">
                         <div className="flex space-x-1">
                           <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
                           <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
                           <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                         </div>
-                        <span className="text-gray-600 font-medium">AI is thinking...</span>
+                        <span className="text-sm text-gray-500">AI is thinking...</span>
                       </div>
                     </div>
                   </div>
@@ -927,43 +865,106 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Enhanced input area with modern styling */}
-              <div className="p-5 border-t border-gray-100 bg-white rounded-b-2xl">
-                <div className="flex gap-3">
-                  <input
-                    type="text"
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        sendMessage(inputValue);
-                      }
-                    }}
-                    placeholder="Ask about nutrition, goals, or meal patterns..."
-                    disabled={isLoading}
-                    className="flex-1 px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:bg-gray-50 transition-all duration-200 placeholder-gray-400"
-                  />
+              {/* Enhanced Quick Actions */}
+              {showQuickActions && messages.length <= 1 && (
+                <div className="p-4 bg-white border-t border-gray-200">
+                  <p className="text-sm font-medium text-gray-700 mb-3">💡 Quick actions:</p>
+                  <div className="grid grid-cols-1 gap-2">
+                    {contextualSuggestions.slice(0, 3).map((suggestion, index) => (
+                      <button
+                        key={index}
+                        onClick={() => handleQuickAction(suggestion)}
+                        className="text-left text-sm p-3 bg-gradient-to-r from-gray-50 to-blue-50 hover:from-blue-50 hover:to-purple-50 rounded-xl border border-gray-200 hover:border-blue-300 transition-all duration-200 transform hover:scale-105 hover:shadow-md"
+                      >
+                        <span className="text-blue-600 font-medium">• {suggestion}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Enhanced Input Area */}
+              <div className="p-4 bg-white border-t border-gray-200 rounded-b-2xl">
+                <div className="flex space-x-3">
+                  <div className="flex-1 relative">
+                    <input
+                      type="text"
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage(inputValue)}
+                      placeholder="Ask about nutrition, meals, or health goals..."
+                      className="w-full p-4 pr-12 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-sm placeholder-gray-500"
+                      disabled={isLoading}
+                    />
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                      <span className="text-xs">💭</span>
+                    </div>
+                  </div>
                   <button
                     onClick={() => sendMessage(inputValue)}
-                    disabled={isLoading || !inputValue.trim()}
-                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-sm font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 active:scale-95 shadow-lg disabled:transform-none"
+                    disabled={!inputValue.trim() || isLoading}
+                    className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-400 text-white px-6 py-4 rounded-xl transition-all duration-200 transform hover:scale-105 active:scale-95 disabled:scale-100 disabled:cursor-not-allowed shadow-lg"
                   >
-                    <span className="flex items-center space-x-2">
-                      <span>{isLoading ? 'Sending...' : 'Send'}</span>
-                      <span className="text-lg">{isLoading ? '⏳' : '📤'}</span>
-                    </span>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
                   </button>
                 </div>
-                <div className="mt-2 text-xs text-gray-500 text-center">
-                  Press Enter to send • Shift+Enter for new line
-                </div>
+                <p className="text-xs text-gray-500 mt-2 text-center">
+                  Press Enter to send • Powered by AI ✨
+                </p>
               </div>
             </>
           )}
         </div>
       )}
-    </>
+
+      {/* Custom CSS for animations */}
+      <style jsx>{`
+        @keyframes slide-up {
+          from {
+            opacity: 0;
+            transform: translateY(20px) scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+        
+        @keyframes message-in {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        @keyframes fade-in {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+        
+        .animate-slide-up {
+          animation: slide-up 0.3s ease-out;
+        }
+        
+        .animate-message-in {
+          animation: message-in 0.3s ease-out;
+        }
+        
+        .animate-fade-in {
+          animation: fade-in 0.5s ease-out;
+        }
+      `}</style>
+    </div>
   );
 };
 
