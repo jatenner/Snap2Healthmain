@@ -1,4 +1,4 @@
--- Setup script for Snap2Health database
+-- Corrected Setup script for Snap2Health database
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -101,17 +101,20 @@ CREATE POLICY "Users can delete their own meals"
   USING (auth.uid()::text = user_id);
 
 -- Create policies for conversations table
-CREATE POLICY IF NOT EXISTS "Users can manage their conversations" 
+DROP POLICY IF EXISTS "Users can manage their conversations" ON conversations;
+CREATE POLICY "Users can manage their conversations" 
   ON conversations FOR ALL 
   USING (auth.uid()::text = user_id);
 
 -- Create policies for chat_messages table  
-CREATE POLICY IF NOT EXISTS "Users can manage their messages" 
+DROP POLICY IF EXISTS "Users can manage their messages" ON chat_messages;
+CREATE POLICY "Users can manage their messages" 
   ON chat_messages FOR ALL 
   USING (auth.uid()::text = user_id);
 
 -- Create policies for user_profiles_learning table
-CREATE POLICY IF NOT EXISTS "Users can manage their learning profiles" 
+DROP POLICY IF EXISTS "Users can manage their learning profiles" ON user_profiles_learning;
+CREATE POLICY "Users can manage their learning profiles" 
   ON user_profiles_learning FOR ALL 
   USING (auth.uid()::text = user_id);
 
@@ -125,17 +128,20 @@ END;
 $$ language 'plpgsql';
 
 -- Create triggers to automatically update updated_at
-CREATE TRIGGER IF NOT EXISTS update_meals_updated_at 
+DROP TRIGGER IF EXISTS update_meals_updated_at ON meals;
+CREATE TRIGGER update_meals_updated_at 
   BEFORE UPDATE ON meals 
   FOR EACH ROW 
   EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER IF NOT EXISTS update_conversations_updated_at 
+DROP TRIGGER IF EXISTS update_conversations_updated_at ON conversations;
+CREATE TRIGGER update_conversations_updated_at 
   BEFORE UPDATE ON conversations 
   FOR EACH ROW 
   EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER IF NOT EXISTS update_user_profiles_learning_updated_at 
+DROP TRIGGER IF EXISTS update_user_profiles_learning_updated_at ON user_profiles_learning;
+CREATE TRIGGER update_user_profiles_learning_updated_at 
   BEFORE UPDATE ON user_profiles_learning 
   FOR EACH ROW 
   EXECUTE FUNCTION update_updated_at_column(); 
