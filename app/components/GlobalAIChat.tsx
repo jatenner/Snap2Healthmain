@@ -24,31 +24,43 @@ interface PageContext {
   currentPage?: string;
 }
 
-// Enhanced quick action buttons with historical context
+// Enhanced quick action buttons with emojis and better categorization
 const enhancedQuickActions = [
   { 
-    label: "📊 My Progress", 
-    action: "Show me my nutrition patterns and progress over the last week" 
+    label: "📊 My Nutrition Trends", 
+    action: "Show me my nutrition patterns and progress over the last week",
+    category: "analysis",
+    icon: "📈"
   },
   { 
     label: "🎯 Goal Check", 
-    action: "How is this meal aligned with my goals?" 
+    action: "How is this meal aligned with my goals?",
+    category: "goals",
+    icon: "🏆"
   },
   { 
     label: "💡 Quick Tips", 
-    action: "Give me 3 quick actionable tips based on my recent meals" 
+    action: "Give me 3 quick actionable tips based on my recent meals",
+    category: "tips",
+    icon: "⚡"
   },
   { 
-    label: "🔍 Compare", 
-    action: "How does this meal compare to my usual intake?" 
+    label: "🔍 Compare Meals", 
+    action: "How does this meal compare to my usual intake?",
+    category: "analysis",
+    icon: "⚖️"
   },
   { 
-    label: "⚡ Simple", 
-    action: "Keep it simple - just the key points" 
+    label: "🥗 What to Eat Next", 
+    action: "What should I eat for my next meal based on my nutrition today?",
+    category: "recommendations",
+    icon: "🍽️"
   },
   { 
-    label: "📚 Detailed", 
-    action: "Give me detailed analysis and explanation" 
+    label: "📚 Detailed Analysis", 
+    action: "Give me detailed analysis and explanation of my nutrition",
+    category: "analysis",
+    icon: "🔬"
   },
 ];
 
@@ -64,6 +76,7 @@ const GlobalAIChat = () => {
   const [userInsights, setUserInsights] = useState<any>(null);
   const [showWelcomePulse, setShowWelcomePulse] = useState(true);
   const [contextualSuggestions, setContextualSuggestions] = useState<string[]>([]);
+  const [activeCategory, setActiveCategory] = useState<string>('all');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [contextLoading, setContextLoading] = useState(false);
 
@@ -71,11 +84,11 @@ const GlobalAIChat = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Effect to hide welcome pulse after 10 seconds or when chat is opened
+  // Effect to hide welcome pulse after 8 seconds or when chat is opened
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowWelcomePulse(false);
-    }, 10000);
+    }, 8000);
 
     if (isOpen) {
       setShowWelcomePulse(false);
@@ -143,7 +156,7 @@ const GlobalAIChat = () => {
   useEffect(() => {
     if (isOpen && messages.length === 0 && user) {
       const context = getPageContext();
-      let greetingMessage = "👋 Hi there! I'm your AI nutrition coach. ";
+      let greetingMessage = "👋 Hi! I'm your AI nutrition coach. ";
       
       switch (context.type) {
         case 'upload':
@@ -198,40 +211,42 @@ const GlobalAIChat = () => {
       case '/':
         return 'The user is on the home page, exploring Snap2Health\'s features and getting started.';
       case '/upload':
-        return 'The user is on the upload page, ready to analyze a new meal by taking a photo or uploading an image.';
-      case '/meal-history': 
-        return 'The user is browsing their meal history, looking at past meals they have analyzed.';
+        return 'The user is on the upload page, ready to analyze a meal photo with AI.';
+      case '/meal-history':
+        return 'The user is viewing their meal history, looking at past nutrition analysis.';
       case '/profile':
-        return 'The user is on their profile page, viewing or editing their personal health information and goals.';
+        return 'The user is on their profile page, managing personal information and nutrition goals.';
       default:
-        return `The user is on the ${pathname.replace('/', '')} page of Snap2Health.`;
+        if (pathname.startsWith('/analysis/')) {
+          return 'The user is viewing a detailed meal analysis with nutrition breakdown.';
+        }
+        return 'The user is exploring the Snap2Health nutrition tracking platform.';
     }
   };
 
   const getCurrentMealId = () => {
     if (typeof window === 'undefined') return null;
     const pathname = window.location.pathname;
-    // Extract meal ID from /analysis/[mealId] route
-    if (pathname.startsWith('/analysis/')) {
-      const segments = pathname.split('/');
-      return segments[2] || null; // [empty, 'analysis', mealId]
-    }
-    return null;
+    const mealMatch = pathname.match(/\/analysis\/([a-f0-9\-]+)/);
+    return mealMatch ? mealMatch[1] : null;
   };
 
-  // Enhanced helper text with context awareness
   const getContextualHelperText = (): string => {
     const context = getPageContext();
+    const baseText = "💬 AI Nutrition Coach";
     
-    if (context.type === 'analysis' && context.nutrients && context.nutrients.length > 0) {
-      return "💬 Ask about this meal's nutrition, compare to your history, or get personalized tips!";
+    switch (context.type) {
+      case 'upload':
+        return `${baseText} - Ready to analyze your meal!`;
+      case 'meal_analysis':
+        return `${baseText} - Ask about this meal's nutrition`;
+      case 'meal_history':
+        return `${baseText} - Explore your nutrition patterns`;
+      case 'profile':
+        return `${baseText} - Optimize your nutrition goals`;
+      default:
+        return `${baseText} - Your personal nutrition assistant`;
     }
-    
-    if (userInsights && typeof userInsights === 'object' && userInsights.totalMeals && userInsights.totalMeals > 0) {
-      return `💬 I've analyzed ${userInsights.totalMeals} of your meals. Ask about patterns, goals, or get advice!`;
-    }
-    
-    return "💬 Ask me about nutrition, your meals, or get personalized health advice!";
   };
 
   // Enhanced function to extract visible nutrition data from the page
@@ -473,6 +488,7 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
                    requestType === 'detailed' ? 800 : 400,
       };
 
+      console.log('[Chat] Sending request to API...');
       const response = await fetch('/api/chat/messages', {
         method: 'POST',
         headers: {
@@ -482,10 +498,13 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error('[Chat] API Error:', response.status, errorText);
+        throw new Error(`API Error: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('[Chat] Received response:', data);
       
       const assistantMessage: Message = {
         id: Date.now().toString(),
@@ -502,12 +521,28 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
       }
       
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('[Chat] Error sending message:', error);
+      
+      // Provide more helpful error messages
+      let errorContent = 'Sorry, I encountered an error. ';
+      if (!user) {
+        errorContent = 'Please sign in to use the AI chat feature.';
+      } else if (error instanceof Error && error.message.includes('401')) {
+        errorContent = 'Authentication error. Please try refreshing the page.';
+      } else if (error instanceof Error && error.message.includes('429')) {
+        errorContent = 'Too many requests. Please wait a moment before trying again.';
+      } else if (error instanceof Error && error.message.includes('500')) {
+        errorContent = 'Server error. Our team has been notified. Please try again later.';
+      } else {
+        errorContent += 'Please check your connection and try again.';
+      }
+      
       const errorMessage: Message = {
         id: Date.now().toString(),
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
+        content: errorContent,
         timestamp: new Date(),
+        metadata: { response_type: 'error' }
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
@@ -583,25 +618,86 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
     }
   };
 
-  // Update the renderQuickActions to use context
+  // Enhanced renderQuickActions with better design and categories
   const renderQuickActions = () => {
     const context = getPageContext();
-    const contextualActions = getContextualQuickActions(context);
+    const categories = ['all', 'analysis', 'goals', 'tips', 'recommendations'];
+    
+    const filteredActions = activeCategory === 'all' 
+      ? enhancedQuickActions 
+      : enhancedQuickActions.filter(action => action.category === activeCategory);
     
     return (
-      <div className="mb-3 flex flex-wrap gap-2">
-        {contextualActions.map((action, index) => (
-          <button
-            key={index}
-            onClick={() => {
-              setInputValue(action);
-              sendMessage(action);
-            }}
-            className="px-3 py-1.5 text-xs bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 text-blue-700 border border-blue-200 rounded-full transition-all duration-200 hover:shadow-sm"
-          >
-            {action}
-          </button>
-        ))}
+      <div className="space-y-3">
+        {/* Category Filter Buttons */}
+        <div className="flex flex-wrap gap-2">
+          {categories.map((category) => (
+            <button
+              key={category}
+              onClick={() => setActiveCategory(category)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-200 ${
+                activeCategory === category
+                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg'
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300'
+              }`}
+            >
+              {category === 'all' ? '🌟 All' : 
+               category === 'analysis' ? '📊 Analysis' :
+               category === 'goals' ? '🎯 Goals' :
+               category === 'tips' ? '💡 Tips' :
+               category === 'recommendations' ? '🥗 Food' : category}
+            </button>
+          ))}
+        </div>
+        
+        {/* Action Buttons */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {filteredActions.map((actionObj, index) => (
+            <button
+              key={index}
+              onClick={() => {
+                setInputValue(actionObj.action);
+                sendMessage(actionObj.action);
+              }}
+              disabled={isLoading}
+              className="group flex items-center space-x-3 p-3 bg-gradient-to-r from-white to-gray-50 hover:from-blue-50 hover:to-indigo-50 border border-gray-200 hover:border-blue-300 rounded-xl transition-all duration-200 hover:shadow-md transform hover:scale-[1.02] text-left disabled:opacity-50"
+            >
+              <div className="text-2xl group-hover:scale-110 transition-transform duration-200">
+                {actionObj.icon}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-gray-900 group-hover:text-blue-900 truncate">
+                  {actionObj.label.replace(/^[📊🎯💡🔍🥗📚]\s*/, '')}
+                </div>
+                <div className="text-xs text-gray-500 group-hover:text-blue-600 line-clamp-2">
+                  Click to ask
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+        
+        {/* Contextual suggestions from current page */}
+        {getContextualQuickActions(context).length > 0 && (
+          <div className="pt-2 border-t border-gray-200">
+            <div className="text-xs text-gray-500 uppercase font-semibold mb-2">💡 Page-specific questions:</div>
+            <div className="flex flex-wrap gap-2">
+              {getContextualQuickActions(context).slice(0, 3).map((action, index) => (
+                <button
+                  key={index}
+                  onClick={() => {
+                    setInputValue(action);
+                    sendMessage(action);
+                  }}
+                  disabled={isLoading}
+                  className="px-3 py-1.5 text-xs bg-gradient-to-r from-green-50 to-emerald-50 hover:from-green-100 hover:to-emerald-100 text-green-700 border border-green-200 rounded-full transition-all duration-200 hover:shadow-sm disabled:opacity-50"
+                >
+                  {action}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -629,7 +725,7 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
       {/* Enhanced floating chat button with multiple attention-grabbing features */}
       <div className="fixed bottom-6 right-6 z-50">
         <div className="relative">
-          {/* Welcome pulse overlay - only shows for first 10 seconds */}
+          {/* Welcome pulse overlay - only shows for first 8 seconds */}
           {showWelcomePulse && (
             <div className="absolute -inset-4 z-10">
               <div className="w-28 h-28 bg-gradient-to-r from-purple-400 via-pink-500 to-red-500 rounded-full animate-ping opacity-30"></div>
@@ -703,133 +799,166 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
 
       {/* Enhanced chat panel with modern design */}
       {isOpen && (
-        <div className={`fixed bottom-28 right-6 bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 transition-all duration-300 transform ${
-          typeof window !== 'undefined' && window.innerWidth < 640 
-            ? 'w-[calc(100vw-2rem)] h-[75vh] left-4 right-4' 
-            : 'w-96 h-[500px]'
+        <div className={`fixed bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 transition-all duration-300 transform ${
+          typeof window !== 'undefined' && window.innerWidth < 768 
+            ? 'bottom-4 left-4 right-4 top-20 w-auto h-auto' 
+            : 'bottom-28 right-6 w-[32rem] h-[650px]'
         }`}>
           {/* Enhanced header with gradient and better typography */}
           <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-t-2xl">
             <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center animate-pulse">
-                <span className="text-lg">🤖</span>
+              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center animate-pulse">
+                <span className="text-xl">🤖</span>
               </div>
               <div>
-                <h3 className="font-semibold text-lg">AI Nutrition Coach</h3>
+                <h3 className="font-bold text-xl">AI Nutrition Coach</h3>
                 {userInsights?.totalMeals > 0 && (
                   <p className="text-xs text-blue-100">
-                    📊 {userInsights.totalMeals} meals analyzed
+                    📊 {userInsights.totalMeals} meals analyzed • Ready to help!
+                  </p>
+                )}
+                {!userInsights?.totalMeals && (
+                  <p className="text-xs text-blue-100">
+                    💡 Your personalized nutrition assistant
                   </p>
                 )}
               </div>
             </div>
-            <button 
-              onClick={() => setIsOpen(false)}
-              className="text-white hover:text-gray-200 text-2xl font-light transition-colors hover:bg-white/10 rounded-full w-8 h-8 flex items-center justify-center"
-            >
-              ×
-            </button>
-          </div>
-
-          {/* Enhanced quick actions with better styling */}
-          <div className="px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-blue-50">
-            {renderQuickActions()}
-          </div>
-
-          {/* Enhanced messages area with better spacing and typography */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-4 h-64 bg-gradient-to-b from-white to-gray-50">
-            {messages.length === 0 ? (
-              <div className="text-center text-gray-600 space-y-4 py-8">
-                <div className="text-4xl animate-bounce">🤖</div>
-                <div className="space-y-2">
-                  <p className="font-medium text-gray-800">{getContextualHelperText()}</p>
-                  {getCurrentMealId() && (
-                    <div className="bg-green-100 border border-green-200 text-green-700 rounded-xl p-3 text-sm animate-pulse">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-lg">🍽️</span>
-                        <span>Analyzing current meal - ask specific questions!</span>
-                      </div>
-                    </div>
-                  )}
-                  <p className="text-sm text-gray-500">Try asking about nutrition, goals, or meal patterns</p>
-                </div>
-              </div>
-            ) : (
-              messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div
-                    className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
-                      message.role === 'user'
-                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-br-md shadow-lg'
-                        : 'bg-white border border-gray-200 text-gray-800 rounded-bl-md shadow-sm'
-                    }`}
-                  >
-                    <div className="whitespace-pre-wrap">{message.content}</div>
-                    {/* Enhanced metadata display */}
-                    {message.metadata && message.role !== 'user' && (
-                      <div className="text-xs text-gray-500 mt-2 pt-2 border-t border-gray-100">
-                        {message.metadata.response_type && (
-                          <span className="inline-flex items-center bg-gray-100 px-2 py-1 rounded-full mr-2">
-                            <span className="w-2 h-2 bg-blue-400 rounded-full mr-1"></span>
-                            {message.metadata.response_type}
-                          </span>
-                        )}
-                        {message.metadata.insights_used && (
-                          <span className="inline-flex items-center bg-purple-100 px-2 py-1 rounded-full">
-                            <span className="w-2 h-2 bg-purple-400 rounded-full mr-1"></span>
-                            insights used
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-            {isLoading && (
-              <div className="flex justify-start">
-                <div className="bg-gray-100 border border-gray-200 px-4 py-3 rounded-2xl rounded-bl-md text-sm animate-pulse">
-                  <div className="flex items-center space-x-2">
-                    <div className="flex space-x-1">
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                    </div>
-                    <span className="text-gray-600">Thinking...</span>
-                  </div>
-                </div>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Enhanced input area with modern styling */}
-          <div className="p-5 border-t border-gray-100 bg-white rounded-b-2xl">
-            <div className="flex gap-3">
-              <input
-                type="text"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && sendMessage(inputValue)}
-                placeholder="Ask about nutrition, goals, or patterns..."
-                disabled={isLoading}
-                className="flex-1 px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:bg-gray-50 transition-all duration-200"
-              />
-              <button
-                onClick={() => sendMessage(inputValue)}
-                disabled={isLoading || !inputValue.trim()}
-                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-sm font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 active:scale-95 shadow-lg"
+            <div className="flex items-center space-x-2">
+              <button 
+                onClick={() => setIsMinimized(!isMinimized)}
+                className="text-white hover:text-gray-200 text-lg transition-colors hover:bg-white/10 rounded-full w-8 h-8 flex items-center justify-center"
+                title={isMinimized ? "Expand" : "Minimize"}
               >
-                <span className="flex items-center space-x-1">
-                  <span>Send</span>
-                  <span className="text-lg">📤</span>
-                </span>
+                {isMinimized ? '⬆' : '⬇'}
+              </button>
+              <button 
+                onClick={() => setIsOpen(false)}
+                className="text-white hover:text-gray-200 text-2xl font-light transition-colors hover:bg-white/10 rounded-full w-8 h-8 flex items-center justify-center"
+              >
+                ×
               </button>
             </div>
           </div>
+
+          {!isMinimized && (
+            <>
+              {/* Enhanced quick actions with better styling */}
+              <div className="px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-blue-50 max-h-48 overflow-y-auto">
+                {renderQuickActions()}
+              </div>
+
+              {/* Enhanced messages area with better spacing and typography */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-gradient-to-b from-white to-gray-50" style={{ 
+                height: typeof window !== 'undefined' && window.innerWidth < 768 ? 'calc(100vh - 320px)' : '380px' 
+              }}>
+                {messages.length === 0 ? (
+                  <div className="text-center text-gray-600 space-y-4 py-8">
+                    <div className="text-5xl animate-bounce">🤖</div>
+                    <div className="space-y-3">
+                      <p className="font-semibold text-lg text-gray-800">{getContextualHelperText().replace('💬 ', '')}</p>
+                      {getCurrentMealId() && (
+                        <div className="bg-green-100 border border-green-200 text-green-700 rounded-xl p-4 text-sm animate-pulse">
+                          <div className="flex items-center space-x-3">
+                            <span className="text-2xl">🍽️</span>
+                            <div>
+                              <div className="font-medium">Meal detected!</div>
+                              <div className="text-xs">Ask me about this meal's nutrition, health benefits, or how to improve it.</div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      <p className="text-sm text-gray-500">Try the buttons above or ask me anything about nutrition!</p>
+                    </div>
+                  </div>
+                ) : (
+                  messages.map((message) => (
+                    <div
+                      key={message.id}
+                      className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
+                          message.role === 'user'
+                            ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-br-md shadow-lg'
+                            : message.metadata?.response_type === 'error'
+                            ? 'bg-red-50 border border-red-200 text-red-800 rounded-bl-md shadow-sm'
+                            : 'bg-white border border-gray-200 text-gray-800 rounded-bl-md shadow-sm'
+                        }`}
+                      >
+                        <div className="whitespace-pre-wrap">{message.content}</div>
+                        {/* Enhanced metadata display */}
+                        {message.metadata && message.role !== 'user' && (
+                          <div className="text-xs text-gray-500 mt-2 pt-2 border-t border-gray-100">
+                            {message.metadata.response_type && message.metadata.response_type !== 'error' && (
+                              <span className="inline-flex items-center bg-gray-100 px-2 py-1 rounded-full mr-2">
+                                <span className="w-2 h-2 bg-blue-400 rounded-full mr-1"></span>
+                                {message.metadata.response_type}
+                              </span>
+                            )}
+                            {message.metadata.insights_used && (
+                              <span className="inline-flex items-center bg-purple-100 px-2 py-1 rounded-full">
+                                <span className="w-2 h-2 bg-purple-400 rounded-full mr-1"></span>
+                                insights used
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+                {isLoading && (
+                  <div className="flex justify-start">
+                    <div className="bg-gray-100 border border-gray-200 px-4 py-3 rounded-2xl rounded-bl-md text-sm animate-pulse">
+                      <div className="flex items-center space-x-3">
+                        <div className="flex space-x-1">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
+                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                        </div>
+                        <span className="text-gray-600 font-medium">AI is thinking...</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* Enhanced input area with modern styling */}
+              <div className="p-5 border-t border-gray-100 bg-white rounded-b-2xl">
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        sendMessage(inputValue);
+                      }
+                    }}
+                    placeholder="Ask about nutrition, goals, or meal patterns..."
+                    disabled={isLoading}
+                    className="flex-1 px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:bg-gray-50 transition-all duration-200 placeholder-gray-400"
+                  />
+                  <button
+                    onClick={() => sendMessage(inputValue)}
+                    disabled={isLoading || !inputValue.trim()}
+                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-sm font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 active:scale-95 shadow-lg disabled:transform-none"
+                  >
+                    <span className="flex items-center space-x-2">
+                      <span>{isLoading ? 'Sending...' : 'Send'}</span>
+                      <span className="text-lg">{isLoading ? '⏳' : '📤'}</span>
+                    </span>
+                  </button>
+                </div>
+                <div className="mt-2 text-xs text-gray-500 text-center">
+                  Press Enter to send • Shift+Enter for new line
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
     </>
