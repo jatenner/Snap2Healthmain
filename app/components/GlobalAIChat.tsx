@@ -169,33 +169,33 @@ const GlobalAIChat = () => {
       const context = getPageContext();
       const userName = user?.email?.split('@')[0] || 'there';
       
-      let greetingMessage = `👋 Hi ${userName}! I'm your AI nutrition coach. `;
+      let greetingMessage = `Good to see you back, ${userName}! I'm Coach Alex, your nutrition specialist. `;
       
       switch (context.type) {
         case 'upload':
-          greetingMessage += "I see you're about to upload a meal! Once you take or upload a photo, I can analyze its nutrition, suggest improvements, and explain how it fits your personal goals.";
+          greetingMessage += "Ready to analyze a new meal? Once you upload your photo, I'll break down the nutrition and show you how it fits with your goals.";
           break;
         case 'analysis':
         case 'meal_analysis':
-          greetingMessage += `I can see you're viewing a nutrition analysis${context.mealName ? ` for "${context.mealName}"` : ''}. Ask me about the nutrients, health benefits, or how to optimize this meal based on your history!`;
+          greetingMessage += `I can see you're reviewing ${context.mealName ? `your "${context.mealName}"` : 'a meal analysis'}. What would you like to know about the nutritional content or how to optimize it?`;
           break;
         case 'history':
         case 'meal_history':
-          greetingMessage += "Looking at your meal history? I can help you spot patterns, identify your healthiest meals, or suggest what to eat next based on your personal trends.";
+          greetingMessage += "Looking at your meal history? I can help identify patterns in your nutrition and suggest strategic improvements based on your data.";
           break;
         case 'profile':
-          greetingMessage += "Great to see you checking your profile! I can help you optimize your nutrition goals, adjust your targets, or explain how to reach your health objectives.";
+          greetingMessage += "Good time to check your profile! Let's talk about optimizing your nutrition goals or adjusting your targets based on your progress.";
           break;
         default:
-          greetingMessage += "I'm here to help with all your nutrition questions! I remember our past conversations and can provide personalized advice based on your meal history.";
+          greetingMessage += "What would you like to work on today? I have access to all your meal data and can provide personalized recommendations.";
       }
       
       // Add authentication confirmation
-      greetingMessage += `\n\n🔐 I recognize you as ${user.email} and can access your personal meal history and preferences.`;
+      greetingMessage += `\n\n✅ I have access to your complete nutrition profile and meal history.`;
       
       // Add quick suggestions
       if (contextualSuggestions.length > 0) {
-        greetingMessage += `\n\n💡 Try asking:\n${contextualSuggestions.slice(0, 3).map(s => `• ${s}`).join('\n')}`;
+        greetingMessage += `\n\n💡 We could discuss:\n${contextualSuggestions.slice(0, 3).map(s => `• ${s}`).join('\n')}`;
       }
       
       // Auto-add greeting message
@@ -250,19 +250,19 @@ const GlobalAIChat = () => {
 
   const getContextualHelperText = (): string => {
     const context = getPageContext();
-    const baseText = "💬 AI Nutrition Coach";
+    const baseText = "👨‍⚕️ Coach Alex";
     
     switch (context.type) {
       case 'upload':
-        return `${baseText} - Ready to analyze your meal!`;
+        return `${baseText} - Ready to analyze your meal`;
       case 'meal_analysis':
-        return `${baseText} - Ask about this meal's nutrition`;
+        return `${baseText} - Nutrition insights available`;
       case 'meal_history':
-        return `${baseText} - Explore your nutrition patterns`;
+        return `${baseText} - Pattern analysis & recommendations`;
       case 'profile':
-        return `${baseText} - Optimize your nutrition goals`;
+        return `${baseText} - Goal optimization consultation`;
       default:
-        return `${baseText} - Your personal nutrition assistant`;
+        return `${baseText} - Nutrition specialist`;
     }
   };
 
@@ -788,14 +788,14 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
               <div className="flex items-center space-x-3">
                 <div className="relative">
                   <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
-                    <span className="text-lg">🤖</span>
+                    <span className="text-lg">👨‍⚕️</span>
                   </div>
                   <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-white animate-pulse"></div>
                 </div>
                 <div>
-                  <h3 className="font-semibold text-lg">AI Nutrition Coach</h3>
+                  <h3 className="font-semibold text-lg">Coach Alex</h3>
                   <p className="text-blue-100 text-xs">
-                    {user ? 'Always ready to help! ✨' : 'Sign in to get started 🔐'}
+                    {user ? 'Nutrition Specialist • Always ready to help ✨' : 'Sign in to get started 🔐'}
                   </p>
                 </div>
               </div>
@@ -866,9 +866,9 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
                   <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
                     {messages.length === 0 && (
                       <div className="text-center py-8">
-                        <div className="text-6xl mb-4 animate-bounce">👋</div>
-                        <p className="text-gray-600 text-lg font-medium">Hey {user?.user_metadata?.name || user?.email?.split('@')[0] || 'there'}! Great to see you! 🌟</p>
-                        <p className="text-gray-500 text-sm mt-2">I'm here to help you on your nutrition journey. What would you like to chat about today?</p>
+                        <div className="text-6xl mb-4">👨‍⚕️</div>
+                        <p className="text-gray-600 text-lg font-medium">Good to see you, {user?.user_metadata?.name || user?.email?.split('@')[0] || 'there'}!</p>
+                        <p className="text-gray-500 text-sm mt-2">I'm Coach Alex, your nutrition specialist. What would you like to work on today?</p>
                       </div>
                     )}
                     
@@ -884,8 +884,8 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
                         }`}>
                           {message.role === 'assistant' && (
                             <div className="flex items-center mb-2">
-                              <span className="text-lg mr-2">🤖</span>
-                              <span className="text-xs text-gray-500 font-medium">AI Coach</span>
+                              <span className="text-lg mr-2">👨‍⚕️</span>
+                              <span className="text-xs text-gray-500 font-medium">Coach Alex</span>
                             </div>
                           )}
                           <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
@@ -907,7 +907,7 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
                               <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
                               <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                             </div>
-                            <span className="text-sm text-gray-500">AI is thinking...</span>
+                            <span className="text-sm text-gray-500">Coach Alex is analyzing...</span>
                           </div>
                         </div>
                       </div>
@@ -961,7 +961,7 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
                       </button>
                     </div>
                     <p className="text-xs text-gray-500 mt-2 text-center">
-                      Press Enter to send • Powered by AI ✨
+                      Press Enter to send • Secure nutrition coaching ✨
                     </p>
                   </div>
                 </>
