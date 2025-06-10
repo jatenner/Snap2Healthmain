@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
     const testResult = await supabase.auth.admin.generateLink({
       type: 'signup',
       email: 'test-rate-limit@example.com',
+      password: 'test-password-123',
       options: {
         data: { test: true }
       }

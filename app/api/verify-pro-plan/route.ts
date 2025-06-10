@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
       emailTest = await supabaseAdmin.auth.admin.generateLink({
         type: 'signup',
         email: testEmail,
+        password: 'test-password-123',
         options: {
           data: { test: true }
         }
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
         connection: {
           success: !connectionError,
           error: connectionError?.message,
-          userCount: connectionTest?.length || 0
+          userCount: connectionTest?.users?.length || 0
         },
         emailLimits: {
           hitRateLimit: emailError?.code === 'over_email_send_rate_limit',

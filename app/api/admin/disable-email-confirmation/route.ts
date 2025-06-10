@@ -15,7 +15,9 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    // Update auth config to disable email confirmations
+    // NOTE: updateAuthConfig method doesn't exist in current Supabase client
+    // This must be done manually in the Supabase Dashboard
+    /*
     const { data, error } = await supabaseAdmin.auth.admin.updateAuthConfig({
       DISABLE_SIGNUP: false,
       ENABLE_EMAIL_CONFIRMATIONS: false, // This is the key setting
@@ -31,18 +33,21 @@ export async function POST(request: NextRequest) {
         suggestion: "Try disabling email confirmations manually in Supabase Dashboard > Project Settings > Authentication"
       }, { status: 400 });
     }
+    */
 
-    console.log('✅ Email confirmations disabled successfully');
+    console.log('ℹ️ Email confirmations must be disabled manually in Supabase Dashboard');
     
     return NextResponse.json({ 
-      success: true, 
-      message: "Email confirmations have been DISABLED! Users can now sign in without confirming their email.",
-      data,
-      nextSteps: [
-        "Test user sign up and sign in",
-        "Existing users who couldn't sign in should now be able to",
-        "No more email confirmation required"
-      ]
+      success: false, 
+      message: "Email confirmations must be disabled manually in Supabase Dashboard. The updateAuthConfig API method is not available.",
+      manualSteps: [
+        "Go to Supabase Dashboard",
+        "Navigate to Project Settings (gear icon)",
+        "Find Authentication section", 
+        "Disable 'Enable email confirmations'",
+        "This will allow users to sign in without email confirmation"
+      ],
+      alternativeRecommendation: "Use the auto-confirm API endpoint at /api/auth/auto-confirm for new user signups"
     });
 
   } catch (error) {

@@ -116,7 +116,7 @@ export default function FixAuthPage() {
               </div>
               <div className="flex-1">
                 <h3 className="text-white font-semibold mb-1">Navigate to Authentication &gt; Settings</h3>
-                <p className="text-blue-400 text-sm">Path: Authentication > Settings</p>
+                <p className="text-blue-400 text-sm">Path: Authentication &gt; Settings</p>
               </div>
             </div>
 
