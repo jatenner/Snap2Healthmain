@@ -169,9 +169,7 @@ const GlobalAIChat = () => {
       const context = getPageContext();
       const userName = user?.email?.split('@')[0] || 'there';
       
-      let greetingMessage = `Good to see you back, ${userName}! I'm your AI nutrition guide. `;
-      greetingMessage += getGoalBasedGreeting(defaultGoal);
-      greetingMessage += ` Ready to analyze your meal and work towards your goals? 🎯`;
+      let greetingMessage = `Good to see you back, ${userName}! I'm your AI nutrition guide. Ready to analyze your meal and work towards your goals? 🎯`;
       
       // Auto-add greeting message
       const autoGreeting: Message = {
