@@ -50,10 +50,10 @@ export function generateMealInsights(mealData: any, userProfile?: UserProfile): 
     
     // CRITICAL METABOLIC INSIGHTS
     const macros = mealData.macronutrients || mealData.analysis?.macronutrients || [];
-    const protein = macros.find((m: any) => m.name.toLowerCase().includes('protein'));
-    const carbs = macros.find((m: any) => m.name.toLowerCase().includes('carb'));
-    const fat = macros.find((m: any) => m.name.toLowerCase().includes('fat'));
-    
+      const protein = macros.find((m: any) => m.name.toLowerCase().includes('protein'));
+      const carbs = macros.find((m: any) => m.name.toLowerCase().includes('carb'));
+      const fat = macros.find((m: any) => m.name.toLowerCase().includes('fat'));
+      
     insights.push(`## ⚡ IMMEDIATE METABOLIC IMPACT`);
     
     if (protein && carbs && fat) {
@@ -201,7 +201,7 @@ export function generateMealInsights(mealData: any, userProfile?: UserProfile): 
       insights.push(`- Periodize carb intake: high on training days, moderate on rest days`);
       insights.push(`- Track HRV and adjust meal timing based on recovery status`);
       insights.push(`- Consider nutrient timing relative to circadian rhythm`);
-    } else {
+      } else {
       insights.push(`- Maintain consistent meal timing for metabolic optimization`);
       insights.push(`- Track energy levels and adjust macronutrient ratios accordingly`);
       insights.push(`- Focus on nutrient density over calorie counting`);

@@ -838,9 +838,9 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
     if (existingInsights && !forceRegenerate) {
       console.log('[generatePersonalizedInsights] Using existing insights instead of regenerating');
       setPersonalizedInsights(existingInsights);
-      return;
-    }
-
+          return;
+        }
+        
     setIsGeneratingInsights(true);
     setError(null);
     setForceRegenerate(false);
@@ -1222,22 +1222,22 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                     </svg>
                     <p className="text-lg">No micronutrient data available for this meal.</p>
-                    </div>
-                  )}
-              </div>
                 </div>
               )}
-
+              </div>
+            </div>
+          )}
+          
           {activeTab === 'ai-insights' && (
             <div className="space-y-8">
               {/* Personalized Insights - Redesigned */}
-              <div className="space-y-6">
+            <div className="space-y-6">
                 <div className="bg-gradient-to-br from-purple-900/30 to-indigo-900/30 backdrop-blur-sm border border-purple-500/20 rounded-xl p-6">
                   <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center space-x-3">
                       <div className="p-3 bg-purple-500/20 rounded-xl">
                         <span className="text-3xl">🧠</span>
-                      </div>
+                  </div>
                       <div>
                         <h3 className="text-2xl font-bold text-white">AI Health Insights</h3>
                         <p className="text-purple-300">Personalized analysis for your 225 lb profile</p>
@@ -1269,7 +1269,7 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
                       <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-6"></div>
                       <h4 className="text-xl font-semibold text-purple-300 mb-2">Analyzing Your Meal</h4>
                       <p className="text-purple-200/70">AI is processing nutritional data and generating personalized insights...</p>
-                    </div>
+                          </div>
                   ) : personalizedInsights ? (
                     <div className="space-y-6">
                       {/* Parse and display insights in beautiful cards */}
@@ -1304,8 +1304,8 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
                               <div className="flex items-center space-x-3 mb-4">
                                 <span className="text-2xl">{icon}</span>
                                 <h4 className="text-xl font-bold text-white">{headerText}</h4>
-                              </div>
-                            </div>
+                          </div>
+                      </div>
                           );
                         }
 
@@ -1315,7 +1315,7 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
                           return (
                             <div key={index} className="bg-gradient-to-r from-blue-500/10 to-teal-500/10 rounded-lg p-4 border border-blue-500/20">
                               <h5 className="text-lg font-semibold text-blue-300 mb-2">{headerText}</h5>
-                            </div>
+                  </div>
                           );
                         }
 
@@ -1372,7 +1372,7 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
                               <div className="flex-shrink-0">
                                 <div className="w-12 h-12 bg-gray-700/50 rounded-full flex items-center justify-center">
                                   <span className="text-xl">{iconEmoji}</span>
-                                </div>
+              </div>
                               </div>
                               <div className="flex-1">
                                 <h5 className={`text-lg font-semibold ${titleColor} mb-3`}>{title}</h5>
@@ -1427,8 +1427,8 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
                       >
                         Generate AI Health Analysis
                       </button>
-                    </div>
-                  )}
+                </div>
+              )}
                 </div>
               </div>
               
@@ -1473,9 +1473,9 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
                     <div className="prose prose-invert prose-lg max-w-none">
                       <p className="text-indigo-100 leading-relaxed">{analysisData.meal_story}</p>
                     </div>
-                  </div>
-                )}
-                
+                </div>
+              )}
+              
                 {analysisData.nutritional_narrative && (
                   <div className="bg-gradient-to-br from-orange-900/30 to-red-900/30 border border-orange-500/30 rounded-xl p-8 shadow-lg">
                     <div className="flex items-center space-x-3 mb-6">
@@ -1490,29 +1490,29 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
                     <div className="prose prose-invert prose-lg max-w-none">
                       <p className="text-orange-100 leading-relaxed">{analysisData.nutritional_narrative}</p>
                     </div>
-                  </div>
-                )}
-                
+                </div>
+              )}
+              
                 {analysisData.time_of_day_optimization && (
                   <div className="bg-gradient-to-br from-cyan-900/30 to-teal-900/30 border border-cyan-500/30 rounded-xl p-8 shadow-lg">
                     <div className="flex items-center space-x-3 mb-6">
                       <div className="w-12 h-12 bg-cyan-500/20 rounded-xl flex items-center justify-center">
                         <span className="text-2xl">🌅</span>
-                      </div>
+                </div>
                       <div>
                         <h4 className="text-2xl font-bold text-white">Circadian Optimization</h4>
                         <p className="text-cyan-300">Best timing for this meal</p>
-                      </div>
-                    </div>
+            </div>
+        </div>
                     <div className="prose prose-invert prose-lg max-w-none">
                       <p className="text-cyan-100 leading-relaxed">{analysisData.time_of_day_optimization}</p>
-                    </div>
-                  </div>
-                )}
+      </div>
+        </div>
+      )}
               </div>
               
-            </div>
-          )}
+        </div>
+      )}
         </div>
       </div>
     </div>

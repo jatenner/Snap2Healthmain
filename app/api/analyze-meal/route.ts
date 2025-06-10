@@ -472,7 +472,7 @@ export async function POST(request: NextRequest) {
           
           (analysisResult as any).macronutrients = (analysisResult as any).macronutrients.map((nutrient: any, index: number) => {
             const originalDV = nutrient.percentDailyValue;
-            const personalizedDV = calculatePersonalizedDV(nutrient, userProfile);
+                  const personalizedDV = calculatePersonalizedDV(nutrient, userProfile);
             
             console.log(`[analyze-meal] CRITICAL DV Debug #${index + 1}:`, {
               nutrient: nutrient.name,
@@ -485,8 +485,8 @@ export async function POST(request: NextRequest) {
               changed: originalDV !== personalizedDV
             });
             
-            return {
-              ...nutrient,
+                  return {
+                    ...nutrient,
               percentDailyValue: personalizedDV,
               originalDV: originalDV // Keep track of original for debugging
             };

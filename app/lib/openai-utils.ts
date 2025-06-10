@@ -623,7 +623,7 @@ Provide accurate nutrition data for the actual foods you see in the image.`;
       finishReason: completion.choices[0]?.finish_reason,
       role: completion.choices[0]?.message?.role
     });
-    
+
     const analysisContent = completion.choices[0]?.message?.content;
 
     if (!analysisContent) {
