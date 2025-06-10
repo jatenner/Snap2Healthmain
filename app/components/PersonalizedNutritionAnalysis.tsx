@@ -537,7 +537,7 @@ const getPersonalizedRecommendations = (analysisData: MealAnalysisData, userGoal
     }
   }
   
-  // Add general recommendations if we don't have enough
+  // Add general recommendations if we do not have enough
   if (recommendations.length < 3) {
     recommendations.push('Aim for a colorful plate with a variety of fruits and vegetables for optimal nutrition.');
     recommendations.push('Stay hydrated by drinking water throughout the day.');
@@ -803,7 +803,7 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
   const [error, setError] = useState<string | null>(null);
   const [forceRegenerate, setForceRegenerate] = useState(false);
 
-  // Auto-generate insights on mount if we don't have them
+  // Auto-generate insights on mount if we do not have them
   useEffect(() => {
     const existingInsights = getExistingInsights();
     
