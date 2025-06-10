@@ -155,15 +155,15 @@ const getNutrientDescription = (name: string): string => {
     'biotin': 'Supports healthy hair, skin, and nails while helping your body process fats and carbohydrates for energy.',
     'folate': 'Works with B12 to make healthy red blood cells and support brain function. Important for cell growth and repair.',
     'thiamine': 'Helps your body convert food into energy and supports proper nerve, muscle, and heart function.',
-    'riboflavin': 'Essential for energy production and helps your body process other nutrients. Supports healthy vision.',
-    'niacin': 'Supports brain function, healthy cholesterol levels, and helps convert food into usable energy.',
+    'riboflavin': 'Vital B vitamin that powers your cellular energy factories (mitochondria) and helps your body extract maximum energy from every calorie. Critical for athletic performance and mental sharpness.',
+    'niacin': 'Essential for converting food into cellular energy and maintaining healthy blood flow to muscles during exercise. Supports brain function and may improve exercise endurance.',
     'pantothenic acid': 'Helps your body make energy from food and produces important hormones for stress response.',
     
     // Minerals - Practical, understandable descriptions
     'calcium': 'Builds and maintains strong bones and teeth. Also needed for muscle contractions and nerve signaling.',
     'iron': 'Carries oxygen in your blood to all parts of your body. Low iron leads to fatigue and weakness.',
     'potassium': 'Helps regulate blood pressure, supports muscle function, and counteracts the effects of too much sodium.',
-    'magnesium': 'Relaxes muscles, supports heart rhythm, and helps with over 300 body processes. Many people are deficient.',
+    'magnesium': 'Natural muscle relaxer that helps you sleep better and reduces cramps. Most people don\'t get enough - a super important mineral that\'s often missing!',
     'zinc': 'Boosts immune function, helps wounds heal faster, and supports taste and smell. Important for growth and development.',
     'phosphorus': 'Critical for ATP energy production in every cell and works with calcium to build unbreakable bones and teeth. Essential for muscle contraction and recovery after intense training.',
     'selenium': 'Master antioxidant that protects your thyroid, boosts immune defense, and helps your body recover from oxidative stress caused by intense exercise and daily life.',
