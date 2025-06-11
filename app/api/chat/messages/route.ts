@@ -921,4 +921,138 @@ ${recentMeals.slice(0, 5).map((meal, index) =>
       });
     } else {
       // No meal data - focus on getting them to log meals
-      const noDataContext = `
+      const noDataContext = `⚠️ LIMITED DATA: This user hasn't logged enough meals for detailed analysis. 
+
+🎯 PRIORITY: Encourage them to log 3-5 meals so I can provide personalized nutrition insights based on their actual eating patterns.
+
+💡 AVAILABLE INFO: ${combinedProfile?.age ? `Age: ${combinedProfile.age}, ` : ''}${combinedProfile?.weight ? `Weight: ${combinedProfile.weight}lbs, ` : ''}${combinedProfile?.primary_goal ? `Goal: ${combinedProfile.primary_goal}` : 'No specific goals set'}
+
+🚀 APPROACH: Provide general evidence-based advice while motivating them to track meals for personalized insights.`;
+
+      contextMessages.unshift({
+        role: 'system',
+        content: noDataContext
+      });
+    }
+
+    const responseStyle = userWantsDetail ? 'detailed' : userWantsSimple ? 'simple' : 'balanced';
+
+    // Check if profile is missing key information
+    const missingProfileFields = [];
+    if (!combinedProfile?.age || combinedProfile.age === 'Unknown') missingProfileFields.push('age');
+    if (!combinedProfile?.weight || combinedProfile.weight === 'Unknown') missingProfileFields.push('weight');
+    if (!combinedProfile?.height || combinedProfile.height === 'Unknown') missingProfileFields.push('height');
+    if (!combinedProfile?.primary_goal || combinedProfile.primary_goal === 'Unknown') missingProfileFields.push('primary health goal');
+    if (!combinedProfile?.activity_level || combinedProfile.activity_level === 'Unknown') missingProfileFields.push('activity level');
+
+    console.log('[Chat Messages API] Missing profile fields:', missingProfileFields);
+    console.log('[Chat Messages API] Full combined profile for AI:', combinedProfile);
+
+    // Get enhanced user context
+    const enhancedContext = await getEnhancedUserContext(user_id, supabase);
+    console.log('[Chat Messages API] Enhanced context analysis:', {
+      totalMeals: enhancedContext?.mealAnalysis?.totalMeals || 0,
+      avgCalories: enhancedContext?.mealAnalysis?.avgCalories || 0,
+      commonTopics: enhancedContext?.chatPatterns?.commonTopics || []
+    });
+
+    // Use custom system prompt if provided (for contextual awareness), otherwise use enhanced prompt
+    const selectedSystemPrompt = systemPrompt || createEnhancedSystemPrompt(combinedProfile, enhancedContext);
+
+    // Debug logging to verify AI is getting proper context
+    console.log('[Chat Messages API] AI Context Summary:', {
+      systemPromptLength: selectedSystemPrompt.length,
+      contextMessagesCount: contextMessages.length,
+      hasMealData: recentMeals && recentMeals.length > 0,
+      mealCount: recentMeals?.length || 0,
+      userProfile: {
+        name: combinedProfile?.name,
+        age: combinedProfile?.age,
+        hasGoals: !!combinedProfile?.primary_goal || !!combinedProfile?.defaultGoal
+      },
+      enhancedContextAvailable: !!enhancedContext,
+      totalMealsAnalyzed: enhancedContext?.mealAnalysis?.totalMeals || 0
+    });
+
+    // Get AI response with enhanced context
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o', // Using the more intelligent model instead of mini
+      messages: [
+        { role: 'system', content: selectedSystemPrompt },
+        ...contextMessages,
+        { role: 'user', content }
+      ],
+      temperature: 0.8, // Slightly more creative for human-like responses
+      max_tokens: userWantsSimple ? 200 : userWantsDetail ? 1000 : 600, // More generous token limits
+    });
+
+    const aiResponse = completion.choices[0]?.message?.content || 'I apologize, but I could not process your request at this time.';
+
+    // Save AI response with context metadata
+    const { data: assistantMessage } = await supabase
+      .from('chat_messages')
+      .insert({
+        conversation_id,
+        role: 'assistant',
+        content: aiResponse,
+        message_metadata: {
+          timestamp: new Date().toISOString(),
+          meal_context: currentMealData ? currentMealData.id : null,
+          response_style: responseStyle,
+          personalization_data: {
+            user_profile_available: !!combinedProfile,
+            learning_profile_available: !!learningProfile,
+            meal_history_count: recentMeals?.length || 0,
+            current_meal_analyzed: !!currentMealData
+          }
+        }
+      })
+      .select()
+      .single();
+
+    // Update conversation timestamp
+    await supabase
+      .from('chat_conversations')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', conversation_id);
+
+    // Learn from this interaction - update user learning profile
+    if (learningProfile && Object.keys(learningInsights).some(key => (learningInsights as any)[key].length > 0)) {
+      const updatedLearningData = {
+        ...learningProfile.learning_data,
+        last_chat_topic: content.substring(0, 100),
+        chat_count: (learningProfile.learning_data?.chat_count || 0) + 1,
+        last_interaction: new Date().toISOString(),
+        discovered_insights: {
+          ...learningProfile.learning_data?.discovered_insights,
+          ...learningInsights
+        }
+      };
+
+      await supabase
+        .from('user_learning_profile')
+        .update({ 
+          learning_data: updatedLearningData,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', user_id);
+    }
+
+    return NextResponse.json({
+      message: aiResponse,
+      conversationId: conversation_id,
+      userMessage,
+      assistantMessage,
+      learningInsights: learningInsights,
+      metadata: {
+        response_style: responseStyle,
+        meal_context: currentMealData ? currentMealData.id : null,
+        user_profile_available: !!combinedProfile
+      }
+    });
+
+  } catch (error) {
+    console.error('[Chat Messages API] Error:', error);
+    return NextResponse.json({ error: 'Failed to process message' }, { status: 500 });
+  }
+}
