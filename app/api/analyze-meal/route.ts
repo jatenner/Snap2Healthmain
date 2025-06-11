@@ -346,37 +346,41 @@ export async function POST(request: NextRequest) {
     
     console.log('[analyze-meal] Uploading image to storage:', filename);
 
-    // Upload to Supabase storage
-    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
-      .from('meal-images')
-      .upload(filename, buffer, {
-        contentType: file.type,
-        upsert: false
-      });
+    // Try uploading to Supabase storage with fallback
+    let publicUrl: string;
+    let uploadSuccess = false;
 
-    if (uploadError) {
-      console.error('[analyze-meal] Storage upload error:', uploadError);
-      
-      // Provide helpful error messages
-      if (uploadError.message?.includes('bucket_not_found')) {
-        return NextResponse.json(
-          { error: 'Image storage is not configured. Please contact support.' },
-          { status: 503 }
-        );
+    try {
+      const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
+        .from('meal-images')
+        .upload(filename, buffer, {
+          contentType: file.type,
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.warn('[analyze-meal] Supabase storage upload failed:', uploadError);
+        throw new Error('Supabase storage failed');
       }
+
+      // Get public URL
+      const { data: { publicUrl: supabaseUrl } } = supabaseAdmin.storage
+        .from('meal-images')
+        .getPublicUrl(filename);
+
+      publicUrl = supabaseUrl;
+      uploadSuccess = true;
+      console.log('[analyze-meal] Image uploaded to Supabase successfully:', publicUrl);
+
+    } catch (storageError) {
+      console.warn('[analyze-meal] Supabase storage unavailable, using data URL fallback');
       
-      return NextResponse.json(
-        { error: `Failed to upload image: ${uploadError.message}` },
-        { status: 500 }
-      );
+      // FALLBACK: Create data URL for Railway deployment
+      const base64Data = buffer.toString('base64');
+      publicUrl = `data:${file.type};base64,${base64Data}`;
+      
+      console.log('[analyze-meal] Using data URL fallback (Railway-compatible)');
     }
-
-    // Get public URL
-    const { data: { publicUrl } } = supabaseAdmin.storage
-      .from('meal-images')
-      .getPublicUrl(filename);
-
-    console.log('[analyze-meal] Image uploaded successfully:', publicUrl);
 
     // Generate unique meal ID  
     const mealId = uuidv4();
