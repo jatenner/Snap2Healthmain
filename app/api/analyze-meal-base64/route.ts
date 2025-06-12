@@ -94,6 +94,7 @@ export async function POST(request: NextRequest) {
     // Run OpenAI analysis with base64 image
     console.log('[analyze-meal-base64] Running OpenAI analysis with base64 image...');
     
+    let analysisResult: any;
     try {
       // Import the analyzeImageWithGPT function directly
       const { analyzeImageWithGPT } = await import('../../lib/openai-utils');

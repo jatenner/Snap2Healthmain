@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     // OpenAI Vision Analysis
     console.log('[analyze-meal-fixed] Starting OpenAI vision analysis...');
     
-    let analysisResult;
+    let analysisResult: any;
     try {
       const completion = await openai.chat.completions.create({
         model: "gpt-4o",

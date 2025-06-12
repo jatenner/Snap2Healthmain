@@ -387,7 +387,7 @@ export async function POST(request: NextRequest) {
 
     // Step 4: Run OpenAI analysis with extended timeout for better accuracy
     console.log('[analyze-meal] Running OpenAI analysis with 120 second timeout for accuracy...');
-    let analysisResult;
+    let analysisResult: any;
     
     try {
       // Run OpenAI analysis with extended timeout for better accuracy
