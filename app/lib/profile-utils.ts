@@ -265,10 +265,10 @@ export const getEffectiveProfile = async (
   // --- Infer height_unit if missing and height seems like inches ---
   if (effectiveUserProfile && effectiveUserProfile.height && !effectiveUserProfile.height_unit) {
     if (effectiveUserProfile.height > 40 && effectiveUserProfile.height < 96) { // Reasonable range for height in inches (e.g. > 3ft 4in, < 8ft)
-      effectiveUserProfile.height_unit = 'in';
+      effectiveUserProfile.height_unit = 'in' as 'in';
       console.log(`[getEffectiveProfile] Inferred height_unit as 'in' for height: ${effectiveUserProfile.height}`);
     } else {
-      effectiveUserProfile.height_unit = 'cm'; // Default to cm
+      effectiveUserProfile.height_unit = 'cm' as 'cm'; // Default to cm
       console.log(`[getEffectiveProfile] Defaulted height_unit to 'cm' for height: ${effectiveUserProfile.height}`);
     }
   }

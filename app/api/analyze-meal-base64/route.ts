@@ -100,9 +100,9 @@ export async function POST(request: NextRequest) {
         goal: goal,
         age: 30,
         weight: 70,
-        weight_unit: 'kg',
+        weight_unit: 'kg' as 'kg',
         height: 170,
-        height_unit: 'cm',
+        height_unit: 'cm' as 'cm',
         gender: 'male',
         activity_level: 'moderate'
       };
