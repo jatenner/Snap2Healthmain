@@ -10,6 +10,10 @@ const supabaseAdmin = createClient(
 export async function POST(request: NextRequest) {
   try {
     console.log('[analyze-meal-base64] 🚀 Starting meal analysis with base64 approach...');
+    console.log('[analyze-meal-base64] Request headers:', Object.fromEntries(request.headers.entries()));
+    console.log('[analyze-meal-base64] Request URL:', request.url);
+    console.log('[analyze-meal-base64] Request method:', request.method);
+    console.log('[analyze-meal-base64] User-Agent:', request.headers.get('user-agent'));
     
     // Parse form data
     const formData = await request.formData();
