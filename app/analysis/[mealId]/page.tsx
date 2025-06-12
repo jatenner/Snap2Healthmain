@@ -93,59 +93,108 @@ export default function AnalysisPage() {
     const fetchAnalysis = async () => {
       console.log('[AnalysisPage] Starting fetch for meal ID:', rawMealId);
       
-      // Get candidate meal IDs to try
-      const candidateIds = attemptToFixMealId(rawMealId);
-      setAttemptedIds(candidateIds);
-      
-      console.log('[AnalysisPage] Will try these meal ID candidates:', candidateIds);
-
-      // Try each candidate ID
-      for (const mealId of candidateIds) {
-        try {
-          console.log('[AnalysisPage] Trying meal ID:', mealId);
-          const response = await fetch(`/api/meals/${mealId}`);
+      // First, try the original meal ID as-is
+      try {
+        console.log('[AnalysisPage] Trying original meal ID:', rawMealId);
+        const response = await fetch(`/api/meals/${rawMealId}`);
+        
+        if (response.ok) {
+          console.log('[AnalysisPage] Successfully found meal with original ID:', rawMealId);
+          const data = await response.json();
           
-          if (response.ok) {
-            console.log('[AnalysisPage] Successfully found meal with ID:', mealId);
-            const data = await response.json();
+          // Transform the data to match PersonalizedNutritionAnalysis expectations
+          const transformedData: MealAnalysisData = {
+            ...data,
+            // Ensure we have the right structure for the advanced component
+            analysis: {
+              calories: data.calories,
+              totalCalories: data.calories,
+              macronutrients: data.macronutrients || [],
+              micronutrients: data.micronutrients || [],
+              phytonutrients: data.phytonutrients || [],
+              personalized_insights: data.personalizedHealthInsights || data.personalized_insights,
+              insights: data.personalizedHealthInsights || data.insights,
+              glycemicImpact: data.glycemicImpact,
+              inflammatoryPotential: data.inflammatoryPotential,
+              nutrientDensity: data.nutrientDensity,
+              suggestions: data.suggestions || data.expertRecommendations || [],
+              scientificInsights: data.scientificInsights || [],
+              goalAlignment: data.goalAlignment,
+              metabolicInsights: data.metabolicInsights,
+              nutritionalNarrative: data.nutritionalNarrative,
+              timeOfDayOptimization: data.timeOfDayOptimization,
+              mealStory: data.mealStory
+            }
+          };
+          
+          setAnalysis(transformedData);
+          setLoading(false);
+          return; // Success with original ID
+        } else {
+          console.log('[AnalysisPage] Original ID failed with status:', response.status);
+        }
+      } catch (err) {
+        console.log('[AnalysisPage] Error with original ID:', err);
+      }
+      
+      // Only try recovery if the original ID failed AND it looks malformed
+      if (rawMealId.includes('--') || rawMealId.length < 30) {
+        console.log('[AnalysisPage] Original ID failed and appears malformed, attempting recovery...');
+        
+        // Get candidate meal IDs to try
+        const candidateIds = attemptToFixMealId(rawMealId);
+        setAttemptedIds(candidateIds);
+        
+        console.log('[AnalysisPage] Will try these recovery candidates:', candidateIds.slice(1)); // Skip the original
+
+        // Try each recovery candidate (skip the first one as we already tried it)
+        for (const mealId of candidateIds.slice(1)) {
+          try {
+            console.log('[AnalysisPage] Trying recovery candidate:', mealId);
+            const response = await fetch(`/api/meals/${mealId}`);
             
-            // Transform the data to match PersonalizedNutritionAnalysis expectations
-            const transformedData: MealAnalysisData = {
-              ...data,
-              // Ensure we have the right structure for the advanced component
-              analysis: {
-                calories: data.calories,
-                totalCalories: data.calories,
-                macronutrients: data.macronutrients || [],
-                micronutrients: data.micronutrients || [],
-                phytonutrients: data.phytonutrients || [],
-                personalized_insights: data.personalizedHealthInsights || data.personalized_insights,
-                insights: data.personalizedHealthInsights || data.insights,
-                glycemicImpact: data.glycemicImpact,
-                inflammatoryPotential: data.inflammatoryPotential,
-                nutrientDensity: data.nutrientDensity,
-                suggestions: data.suggestions || data.expertRecommendations || [],
-                scientificInsights: data.scientificInsights || [],
-                goalAlignment: data.goalAlignment,
-                metabolicInsights: data.metabolicInsights,
-                nutritionalNarrative: data.nutritionalNarrative,
-                timeOfDayOptimization: data.timeOfDayOptimization,
-                mealStory: data.mealStory
-              }
-            };
-            
-            setAnalysis(transformedData);
-            setLoading(false);
-            return; // Success, exit the loop
-          } else {
-            console.log('[AnalysisPage] Failed to fetch with ID:', mealId, 'Status:', response.status);
+            if (response.ok) {
+              console.log('[AnalysisPage] Successfully recovered meal with ID:', mealId);
+              const data = await response.json();
+              
+              // Transform the data to match PersonalizedNutritionAnalysis expectations
+              const transformedData: MealAnalysisData = {
+                ...data,
+                // Ensure we have the right structure for the advanced component
+                analysis: {
+                  calories: data.calories,
+                  totalCalories: data.calories,
+                  macronutrients: data.macronutrients || [],
+                  micronutrients: data.micronutrients || [],
+                  phytonutrients: data.phytonutrients || [],
+                  personalized_insights: data.personalizedHealthInsights || data.personalized_insights,
+                  insights: data.personalizedHealthInsights || data.insights,
+                  glycemicImpact: data.glycemicImpact,
+                  inflammatoryPotential: data.inflammatoryPotential,
+                  nutrientDensity: data.nutrientDensity,
+                  suggestions: data.suggestions || data.expertRecommendations || [],
+                  scientificInsights: data.scientificInsights || [],
+                  goalAlignment: data.goalAlignment,
+                  metabolicInsights: data.metabolicInsights,
+                  nutritionalNarrative: data.nutritionalNarrative,
+                  timeOfDayOptimization: data.timeOfDayOptimization,
+                  mealStory: data.mealStory
+                }
+              };
+              
+              setAnalysis(transformedData);
+              setLoading(false);
+              return; // Success with recovery
+            } else {
+              console.log('[AnalysisPage] Recovery candidate failed:', mealId, 'Status:', response.status);
+            }
+          } catch (err) {
+            console.log('[AnalysisPage] Error with recovery candidate:', mealId, err);
           }
-        } catch (err) {
-          console.log('[AnalysisPage] Error fetching meal ID:', mealId, err);
         }
       }
       
-      // If we get here, none of the candidate IDs worked
+      // If we get here, the original ID failed and recovery didn't work
       setError('Meal analysis not found. This meal may have been deleted or the link is incorrect.');
       setLoading(false);
     };
