@@ -138,8 +138,8 @@ export default function AnalysisPage() {
       }
       
       // Only try recovery if the original ID failed AND it looks malformed
-      if (rawMealId.includes('--') || rawMealId.length < 30) {
-        console.log('[AnalysisPage] Original ID failed and appears malformed, attempting recovery...');
+      if (rawMealId.includes('--')) {
+        console.log('[AnalysisPage] Original ID failed and contains double dashes, attempting recovery...');
         
         // Get candidate meal IDs to try
         const candidateIds = attemptToFixMealId(rawMealId);
