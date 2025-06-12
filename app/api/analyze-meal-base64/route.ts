@@ -124,11 +124,41 @@ export async function POST(request: NextRequest) {
       
     } catch (error) {
       console.error('[analyze-meal-base64] OpenAI analysis failed:', error);
+      
+      // Provide more specific error messages based on the error type
+      let errorMessage = 'OpenAI vision analysis failed to process your meal image.';
+      let errorDetails = error instanceof Error ? error.message : 'Unknown error';
+      
+      if (errorDetails.includes('unsupported image')) {
+        errorMessage = 'The image format is not supported. Please try uploading a JPEG or PNG image.';
+      } else if (errorDetails.includes('image_parse_error')) {
+        errorMessage = 'Unable to process the image. Please try a different image or check the image quality.';
+      } else if (errorDetails.includes('timeout')) {
+        errorMessage = 'Analysis timed out. Please try again with a smaller image.';
+      } else if (errorDetails.includes('rate_limit')) {
+        errorMessage = 'Too many requests. Please wait a moment and try again.';
+      } else if (errorDetails.includes('invalid_request_error')) {
+        errorMessage = 'Invalid image format. Please upload a clear photo of your meal.';
+      }
+      
+      console.error('[analyze-meal-base64] Error details:', {
+        message: errorDetails,
+        imageLength: base64Image?.length || 0,
+        mimeType: mimeType,
+        fileSize: file?.size || 0,
+        fileName: file?.name || 'unknown'
+      });
+      
       return NextResponse.json({
         success: false,
-        error: 'OpenAI vision analysis failed to process your meal image.',
-        details: error instanceof Error ? error.message : 'Unknown error',
-        retryable: true
+        error: errorMessage,
+        details: errorDetails,
+        retryable: true,
+        debugInfo: {
+          imageSize: file?.size || 0,
+          imageType: mimeType,
+          base64Length: base64Image?.length || 0
+        }
       }, { status: 422 });
     }
 
