@@ -141,8 +141,8 @@ export default function AnalysisPage() {
       // Valid UUIDs are 36 characters with 4 dashes in specific positions
       const isValidUUIDFormat = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawMealId);
       
-      if (!isValidUUIDFormat && (rawMealId.includes('--') || rawMealId.length < 30)) {
-        console.log('[AnalysisPage] Original ID failed and appears malformed, attempting recovery...');
+      if (!isValidUUIDFormat && rawMealId.includes('--')) {
+        console.log('[AnalysisPage] Original ID failed and contains double dashes, attempting recovery...');
         
         // Get candidate meal IDs to try
         const candidateIds = attemptToFixMealId(rawMealId);
