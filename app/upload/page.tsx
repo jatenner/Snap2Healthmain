@@ -114,7 +114,18 @@ export default function UploadPage() {
       });
 
       if (!analyzeResponse.ok) {
-        throw new Error(`Analysis failed: ${analyzeResponse.status}`);
+        const errorData = await analyzeResponse.json().catch(() => ({}));
+        const errorMessage = errorData.error || `Analysis failed: ${analyzeResponse.status}`;
+        const errorDetails = errorData.details || '';
+        
+        console.error('Analysis failed:', {
+          status: analyzeResponse.status,
+          error: errorMessage,
+          details: errorDetails,
+          debugInfo: errorData.debugInfo
+        });
+        
+        throw new Error(errorMessage);
       }
 
       const result = await analyzeResponse.json();
