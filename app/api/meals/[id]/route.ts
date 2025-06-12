@@ -65,10 +65,17 @@ export async function GET(
     
     // In development mode or with bypass, allow access without session for testing
     if (!session && !allowBypass) {
+      console.log('[api/meals/id] ❌ Access denied - no session and no bypass allowed');
       return NextResponse.json(
         { error: 'Unauthorized - You must be logged in to view meals' },
         { status: 401 }
       );
+    }
+    
+    if (!session && allowBypass) {
+      console.log('[api/meals/id] ✅ Allowing access via development bypass');
+    } else if (session) {
+      console.log('[api/meals/id] ✅ Allowing access via valid session');
     }
     
     // Create admin client to bypass RLS policies for read operations
