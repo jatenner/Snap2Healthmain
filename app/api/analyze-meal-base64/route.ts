@@ -96,6 +96,21 @@ export async function POST(request: NextRequest) {
     
     let analysisResult: any;
     try {
+      // Import the analyzeImageWithGPT function directly
+      const { analyzeImageWithGPT } = await import('../../lib/openai-utils');
+      
+      // Create a basic user profile for analysis
+      const userProfile = {
+        goal: goal,
+        age: 30,
+        weight: 70,
+        weight_unit: 'kg' as 'kg',
+        height: 170,
+        height_unit: 'cm' as 'cm',
+        gender: 'male',
+        activity_level: 'moderate'
+      };
+      
       // Debug logging for image format
       console.log('[analyze-meal-base64] About to call analyzeImageWithGPT with:');
       console.log('[analyze-meal-base64] - Image starts with data:image/:', base64Image.startsWith('data:image/'));
@@ -104,102 +119,8 @@ export async function POST(request: NextRequest) {
       console.log('[analyze-meal-base64] - Image prefix (first 50 chars):', base64Image.substring(0, 50));
       console.log('[analyze-meal-base64] - MIME type detected:', mimeType);
       
-      // Temporarily bypass analyzeImageWithGPT and call OpenAI directly
-      const OpenAI = (await import('openai')).default;
-      const openai = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY,
-      });
-      
-      console.log('[analyze-meal-base64] Calling OpenAI directly...');
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: "You are a nutrition expert. Analyze food images and return comprehensive nutrition data in valid JSON format. Always respond with valid JSON only, no markdown or explanations."
-          },
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: `Analyze this meal image and return nutrition data in this exact JSON format:
-{
-  "mealName": "descriptive name for this meal",
-  "mealDescription": "what you see in the image",
-  "calories": 400,
-  "protein": 25,
-  "carbs": 45,
-  "fat": 15,
-  "fiber": 6,
-  "foods": ["list", "of", "foods"],
-  "ingredients": ["ingredient", "list"],
-  "macronutrients": [
-    {"name": "Protein", "amount": 25, "unit": "g", "percentDailyValue": null},
-    {"name": "Carbohydrates", "amount": 45, "unit": "g", "percentDailyValue": null},
-    {"name": "Total Fat", "amount": 15, "unit": "g", "percentDailyValue": null},
-    {"name": "Dietary Fiber", "amount": 6, "unit": "g", "percentDailyValue": null},
-    {"name": "Sodium", "amount": 300, "unit": "mg", "percentDailyValue": null}
-  ],
-  "micronutrients": [
-    {"name": "Vitamin C", "amount": 20, "unit": "mg", "percentDailyValue": null},
-    {"name": "Iron", "amount": 3, "unit": "mg", "percentDailyValue": null},
-    {"name": "Calcium", "amount": 120, "unit": "mg", "percentDailyValue": null},
-    {"name": "Potassium", "amount": 500, "unit": "mg", "percentDailyValue": null}
-  ],
-  "benefits": ["key health benefits"],
-  "concerns": ["any nutritional concerns"],
-  "suggestions": ["optimization tips"],
-  "personalizedHealthInsights": "health insights",
-  "healthRating": 7
-}
-
-CRITICAL: Return ONLY valid JSON. No explanations, no markdown, just the JSON object.`
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: base64Image,
-                  detail: "low"
-                }
-              }
-            ]
-          }
-        ],
-        max_tokens: 1500,
-        temperature: 0.3
-      });
-
-      const responseText = completion.choices[0]?.message?.content;
-      console.log('[analyze-meal-base64] OpenAI response received:', responseText?.substring(0, 100));
-
-      if (!responseText) {
-        throw new Error('No response from OpenAI');
-      }
-
-      // Parse the JSON response
-      let cleanedResponse = responseText.trim();
-      
-      // Remove markdown code blocks if present
-      if (cleanedResponse.includes('```')) {
-        cleanedResponse = cleanedResponse
-          .replace(/```json\s*/gi, '')
-          .replace(/```\s*/g, '')
-          .trim();
-      }
-
-      // Extract JSON from response
-      const jsonStart = cleanedResponse.indexOf('{');
-      const jsonEnd = cleanedResponse.lastIndexOf('}');
-      
-      if (jsonStart !== -1 && jsonEnd !== -1) {
-        cleanedResponse = cleanedResponse.substring(jsonStart, jsonEnd + 1);
-      }
-
-      analysisResult = JSON.parse(cleanedResponse);
-      console.log('[analyze-meal-base64] ✅ Successfully parsed OpenAI response directly');
-      console.log('[analyze-meal-base64] Meal name from AI:', analysisResult.mealName);
-
+      analysisResult = await analyzeImageWithGPT(base64Image, userProfile);
+      console.log('[analyze-meal-base64] OpenAI analysis completed successfully');
     } catch (openaiError: any) {
       console.error('[analyze-meal-base64] OpenAI analysis failed:', openaiError);
       
