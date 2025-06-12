@@ -296,11 +296,57 @@ export default function AnalysisPage() {
           </div>
         </div>
 
-        {/* Advanced Analysis Component */}
-        <PersonalizedNutritionAnalysis 
-          analysisData={analysis} 
-          userGoal={analysis.goal}
-        />
+        {/* Debug: Show Raw Meal Data */}
+        <div className="bg-gray-800 rounded-lg p-6 mb-8">
+          <h2 className="text-xl font-bold text-white mb-4">✅ Meal Analysis Loaded Successfully!</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h3 className="text-lg font-semibold text-white mb-2">Basic Info</h3>
+              <div className="text-gray-300 space-y-1">
+                <p><strong>Meal:</strong> {analysis.mealName || analysis.name || 'Unknown'}</p>
+                <p><strong>Calories:</strong> {analysis.calories || 0}</p>
+                <p><strong>Protein:</strong> {analysis.protein || 0}g</p>
+                <p><strong>Carbs:</strong> {analysis.carbs || 0}g</p>
+                <p><strong>Fat:</strong> {analysis.fat || 0}g</p>
+              </div>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-white mb-2">Image</h3>
+              {analysis.imageUrl && (
+                <img 
+                  src={analysis.imageUrl} 
+                  alt="Meal" 
+                  className="w-full h-32 object-cover rounded-lg"
+                />
+              )}
+            </div>
+          </div>
+          
+          <div className="mt-6">
+            <h3 className="text-lg font-semibold text-white mb-2">Insights</h3>
+            <p className="text-gray-300">
+              {analysis.personalizedHealthInsights || analysis.insights || 'No insights available'}
+            </p>
+          </div>
+
+          <div className="mt-6">
+            <h3 className="text-lg font-semibold text-white mb-2">Ingredients</h3>
+            <div className="flex flex-wrap gap-2">
+              {(analysis.ingredients || []).map((ingredient, index) => (
+                <span key={index} className="px-3 py-1 bg-blue-600 text-white rounded-full text-sm">
+                  {ingredient}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-gray-800 rounded-lg p-6">
+          <p className="text-gray-400 text-center">
+            🔧 Debug mode: Showing simplified meal data. 
+            The full PersonalizedNutritionAnalysis component is temporarily disabled for testing.
+          </p>
+        </div>
       </div>
     </div>
   );

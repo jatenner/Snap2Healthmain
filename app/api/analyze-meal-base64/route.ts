@@ -91,9 +91,8 @@ export async function POST(request: NextRequest) {
     // Generate unique meal ID  
     const mealId = uuidv4();
 
-    // Run OpenAI analysis with base64 image directly
+    // Run OpenAI analysis with base64 image
     console.log('[analyze-meal-base64] Running OpenAI analysis with base64 image...');
-    let analysisResult;
     
     try {
       // Import the analyzeImageWithGPT function directly
@@ -111,58 +110,47 @@ export async function POST(request: NextRequest) {
         activity_level: 'moderate'
       };
       
-      // Run OpenAI analysis with timeout
-      analysisResult = await Promise.race([
-        analyzeImageWithGPT(base64Image, userProfile),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('OpenAI analysis timeout after 30 seconds')), 30000)
-        )
-      ]);
-      
+      analysisResult = await analyzeImageWithGPT(base64Data, userProfile);
       console.log('[analyze-meal-base64] OpenAI analysis completed successfully');
+    } catch (openaiError: any) {
+      console.error('[analyze-meal-base64] OpenAI analysis failed:', openaiError);
       
-      // Validate the response
-      if (!analysisResult || !(analysisResult as any).calories) {
-        throw new Error('OpenAI analysis failed to return valid nutrition data');
+      // Provide specific error messages based on the type of OpenAI error
+      let errorMessage = 'OpenAI vision analysis failed to process your meal image';
+      let errorDetails = '';
+      
+      if (openaiError.message) {
+        const errorMsg = openaiError.message.toLowerCase();
+        
+        if (errorMsg.includes('unsupported image')) {
+          errorMessage = 'The uploaded image format is not supported by our analysis system';
+          errorDetails = 'Please try uploading a JPEG or PNG image of your meal';
+        } else if (errorMsg.includes('rate limit')) {
+          errorMessage = 'Our analysis system is currently busy';
+          errorDetails = 'Please try again in a few moments';
+        } else if (errorMsg.includes('timeout')) {
+          errorMessage = 'Analysis took too long to complete';
+          errorDetails = 'Please try uploading a smaller image or try again';
+        } else if (errorMsg.includes('content policy')) {
+          errorMessage = 'The image could not be analyzed due to content restrictions';
+          errorDetails = 'Please ensure the image shows food items only';
+        } else if (errorMsg.includes('invalid api key') || errorMsg.includes('authentication')) {
+          errorMessage = 'Analysis service configuration error';
+          errorDetails = 'Please contact support if this issue persists';
+        } else {
+          errorDetails = `Technical details: ${openaiError.message}`;
+        }
       }
-      
-    } catch (error) {
-      console.error('[analyze-meal-base64] OpenAI analysis failed:', error);
-      
-      // Provide more specific error messages based on the error type
-      let errorMessage = 'OpenAI vision analysis failed to process your meal image.';
-      let errorDetails = error instanceof Error ? error.message : 'Unknown error';
-      
-      if (errorDetails.includes('unsupported image')) {
-        errorMessage = 'The image format is not supported. Please try uploading a JPEG or PNG image.';
-      } else if (errorDetails.includes('image_parse_error')) {
-        errorMessage = 'Unable to process the image. Please try a different image or check the image quality.';
-      } else if (errorDetails.includes('timeout')) {
-        errorMessage = 'Analysis timed out. Please try again with a smaller image.';
-      } else if (errorDetails.includes('rate_limit')) {
-        errorMessage = 'Too many requests. Please wait a moment and try again.';
-      } else if (errorDetails.includes('invalid_request_error')) {
-        errorMessage = 'Invalid image format. Please upload a clear photo of your meal.';
-      }
-      
-      console.error('[analyze-meal-base64] Error details:', {
-        message: errorDetails,
-        imageLength: base64Image?.length || 0,
-        mimeType: mimeType,
-        fileSize: file?.size || 0,
-        fileName: file?.name || 'unknown'
-      });
       
       return NextResponse.json({
         success: false,
         error: errorMessage,
         details: errorDetails,
-        retryable: true,
-        debugInfo: {
-          imageSize: file?.size || 0,
-          imageType: mimeType,
-          base64Length: base64Image?.length || 0
-        }
+        debugInfo: process.env.NODE_ENV === 'development' ? {
+          originalError: openaiError.message,
+          stack: openaiError.stack,
+          timestamp: new Date().toISOString()
+        } : undefined
       }, { status: 422 });
     }
 
