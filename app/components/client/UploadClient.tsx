@@ -180,7 +180,7 @@ export default function UploadClient() {
       updateProgress('Preparing upload...');
 
       // API endpoint definition
-      const apiUrl = '/api/analyze-meal';
+      const apiUrl = '/api/analyze-meal-base64';
 
       // Create FormData
       const formData = new FormData();

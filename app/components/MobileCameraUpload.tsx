@@ -232,7 +232,7 @@ export default function MobileCameraUpload({
       formData.append('goal', 'General Health');
       formData.append('mealName', `Mobile Capture ${new Date().toLocaleTimeString()}`);
       
-      const response = await fetch('/api/analyze-meal', {
+      const response = await fetch('/api/analyze-meal-base64', {
         method: 'POST',
         body: formData
       });

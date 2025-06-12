@@ -40,7 +40,7 @@ async function getMealWithErrorHandling(id: string): Promise<any> {
     if (!response.ok) {
       // If not found in main endpoint, try the alternate API
       if (response.status === 404) {
-        const backupResponse = await fetch(`/api/analyze-meal?id=${normalizedId}`);
+        const backupResponse = await fetch(`/api/analyze-meal-base64?id=${normalizedId}`);
         if (backupResponse.ok) {
           return await backupResponse.json();
         }

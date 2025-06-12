@@ -108,7 +108,7 @@ export default function UploadPage() {
         analyzeFormData.append('goal', profile.goal);
       }
 
-      const analyzeResponse = await fetch('/api/analyze-meal', {
+      const analyzeResponse = await fetch('/api/analyze-meal-base64', {
         method: 'POST',
         body: analyzeFormData,
       });

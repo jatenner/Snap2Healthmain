@@ -140,7 +140,7 @@ const syncMealDataWithSupabase = async (mealId: string) => {
     
     // Force a fresh fetch from API
     const timestamp = Date.now();
-    const response = await fetch(`/api/analyze-meal?id=${mealId}&t=${timestamp}&force=true`);
+    const response = await fetch(`/api/analyze-meal-base64?id=${mealId}&t=${timestamp}&force=true`);
     
     if (response.ok) {
       const data = await response.json();

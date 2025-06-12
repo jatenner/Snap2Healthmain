@@ -372,7 +372,7 @@ export default function StandaloneMealAnalysis({
       }
       
       // Send the image for analysis
-      const response = await fetch('/api/analyze-meal', {
+      const response = await fetch('/api/analyze-meal-base64', {
         method: 'POST',
         body: formData
       });
@@ -738,7 +738,7 @@ export default function StandaloneMealAnalysis({
         if (!currentMealId) return;
         
         // Check status with the status-only endpoint
-        const statusResponse = await fetch(`/api/analyze-meal?id=${currentMealId}&statusOnly=true`);
+        const statusResponse = await fetch(`/api/analyze-meal-base64?id=${currentMealId}&statusOnly=true`);
         
         if (!statusResponse.ok) {
           console.warn(`[StandaloneMealAnalysis] Status polling response not OK: ${statusResponse.status}`);

@@ -373,7 +373,7 @@ export async function POST(request: NextRequest) {
       console.log('[analyze-meal] Image uploaded to Supabase successfully:', publicUrl);
 
     } catch (storageError) {
-      console.warn('[analyze-meal] Supabase storage unavailable, using data URL fallback');
+      console.warn('[analyze-meal] Supabase storage unavailable, using data URL fallback for Railway deployment');
       
       // FALLBACK: Create data URL for Railway deployment
       const base64Data = buffer.toString('base64');

@@ -234,7 +234,7 @@ export default function UploadForm() {
       }
       
       // Enhanced fetch with explicit headers
-      const response = await fetch('/api/analyze-meal', {
+      const response = await fetch('/api/analyze-meal-base64', {
         method: 'POST',
         body: formData,
         credentials: 'include', // Include cookies

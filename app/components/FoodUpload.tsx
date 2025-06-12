@@ -355,8 +355,8 @@ const FoodUpload: React.FC<FoodUploadProps> = ({ onUpload, isLoading = false, pr
       
       console.log(`Starting to upload meal image (${file.size} bytes, ${file.type}) with goal: ${selectedGoal}`);
       
-      // Send the file to the SPEED-OPTIMIZED server endpoint
-      const response = await fetch('/api/analyze-meal-speed-optimized', {
+      // Send the file to the server endpoint
+      const response = await fetch('/api/analyze-meal-base64', {
         method: 'POST',
         body: formData,
       });

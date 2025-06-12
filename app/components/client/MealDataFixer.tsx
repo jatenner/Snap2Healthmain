@@ -33,7 +33,7 @@ const getLocalMealData = (mealId: string): any | null => {
 // Helper function to fetch meal data with error handling
 const getMealWithErrorHandling = async (mealId: string): Promise<any | null> => {
   try {
-    const response = await fetch(`/api/analyze-meal?id=${mealId}`);
+    const response = await fetch(`/api/analyze-meal-base64?id=${mealId}`);
     if (!response.ok) return null;
     return await response.json();
   } catch (e) {
