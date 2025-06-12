@@ -111,7 +111,15 @@ export async function POST(request: NextRequest) {
         activity_level: 'moderate'
       };
       
-      analysisResult = await analyzeImageWithGPT(base64Data, userProfile);
+      // Debug logging for image format
+      console.log('[analyze-meal-base64] About to call analyzeImageWithGPT with:');
+      console.log('[analyze-meal-base64] - Image starts with data:image/:', base64Image.startsWith('data:image/'));
+      console.log('[analyze-meal-base64] - Image contains base64:', base64Image.includes('base64,'));
+      console.log('[analyze-meal-base64] - Image length:', base64Image.length);
+      console.log('[analyze-meal-base64] - Image prefix (first 50 chars):', base64Image.substring(0, 50));
+      console.log('[analyze-meal-base64] - MIME type detected:', mimeType);
+      
+      analysisResult = await analyzeImageWithGPT(base64Image, userProfile);
       console.log('[analyze-meal-base64] OpenAI analysis completed successfully');
     } catch (openaiError: any) {
       console.error('[analyze-meal-base64] OpenAI analysis failed:', openaiError);
