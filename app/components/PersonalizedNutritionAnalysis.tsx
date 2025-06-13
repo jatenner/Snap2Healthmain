@@ -1265,7 +1265,7 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
                   ) : personalizedInsights ? (
                     <div className="space-y-6">
                       {/* Parse and display insights in beautiful cards */}
-                      {personalizedInsights.split("\n\n").map((section, index) => {
+                      {personalizedInsights.split('\n\n').map((section, index) => {
                         // Skip empty sections
                         if (!section.trim()) return null;
 
