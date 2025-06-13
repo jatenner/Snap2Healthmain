@@ -966,13 +966,13 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
     if (isLimitNutrient) {
       // Reverse logic for limit nutrients - high values are red (bad)
       if (dv >= 50) return 'bg-red-500';
-      if (dv >= 25) return 'bg-yellow-500';
+      if (dv >= 20) return 'bg-yellow-500';
       return 'bg-green-500';
     }
     
     // For beneficial nutrients - high values are green (good)
     if (dv >= 50) return 'bg-green-500';
-    if (dv >= 25) return 'bg-yellow-500';
+    if (dv >= 20) return 'bg-yellow-500';
     return 'bg-red-500';
   };
 
@@ -991,7 +991,7 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
     }
     
     if (dv >= 50) return 'Excellent';
-    if (dv >= 25) return 'Good';
+    if (dv >= 20) return 'Good';
     if (dv >= 10) return 'Fair';
     return 'Low';
   };
