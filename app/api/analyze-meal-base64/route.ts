@@ -12,29 +12,41 @@ const supabaseAdmin = createClient(
 
 // Simple inline OpenAI function to avoid import issues
 async function analyzeImageWithGPT(base64Image: string, userProfile: any = {}): Promise<any> {
+  console.log('[analyzeImageWithGPT] Starting analysis...');
+  
+  // Check API key first
+  if (!process.env.OPENAI_API_KEY) {
+    console.error('[analyzeImageWithGPT] No OpenAI API key found');
+    throw new Error('OpenAI API key not configured');
+  }
+  
   const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
-    maxRetries: 0,
-    timeout: 15000,
+    maxRetries: 2,
+    timeout: 30000, // Increased timeout
   });
 
   if (!base64Image.startsWith('data:image/')) {
+    console.error('[analyzeImageWithGPT] Invalid image format:', base64Image.substring(0, 50));
     throw new Error('Invalid image format - must be data:image URL');
   }
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      {
-        role: "system",
-        content: "You are a nutrition expert. Analyze food images accurately and return comprehensive nutrition data with COMPLETE micronutrient profiles and accurate Daily Value percentages in valid JSON format."
-      },
-      {
-        role: "user", 
-        content: [
-          {
-            type: "text",
-            text: `Analyze this meal image and provide COMPREHENSIVE nutrition data with COMPLETE micronutrient analysis in JSON format:
+  console.log('[analyzeImageWithGPT] Making OpenAI API call...');
+  
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: "You are a nutrition expert. Analyze food images accurately and return comprehensive nutrition data with COMPLETE micronutrient profiles and accurate Daily Value percentages in valid JSON format."
+        },
+        {
+          role: "user", 
+          content: [
+            {
+              type: "text",
+              text: `Analyze this meal image and provide COMPREHENSIVE nutrition data with COMPLETE micronutrient analysis in JSON format:
 
 {
   "mealName": "descriptive name of what you see",
@@ -102,44 +114,75 @@ CRITICAL: Calculate accurate percentDailyValue for ALL nutrients using these Dai
 - Potassium: 4700mg = 100% DV
 
 Return ONLY valid JSON with ALL nutrients and accurate percentDailyValue calculations.`
-          },
-          {
-            type: "image_url",
-            image_url: {
-              url: base64Image,
-              detail: "high"
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: base64Image,
+                detail: "high"
+              }
             }
-          }
-        ]
-      }
-    ],
-    max_tokens: 3000,
-    temperature: 0.2,
-  });
+          ]
+        }
+      ],
+      max_tokens: 3000,
+      temperature: 0.2,
+    });
 
-  const responseContent = completion.choices[0]?.message?.content || '';
-  
-  if (responseContent.includes('ERROR') || 
-      responseContent.includes("I can't see") || 
-      responseContent.includes("I cannot see") ||
-      responseContent.includes("unable to view")) {
-    throw new Error('OpenAI Vision API cannot process the image');
-  }
-
-  let cleanResponse = responseContent.trim();
-  
-  if (cleanResponse.includes('```')) {
-    const jsonMatch = cleanResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    if (jsonMatch && jsonMatch[1]) {
-      cleanResponse = jsonMatch[1];
+    console.log('[analyzeImageWithGPT] OpenAI API call successful');
+    
+    const responseContent = completion.choices[0]?.message?.content || '';
+    
+    if (!responseContent) {
+      console.error('[analyzeImageWithGPT] Empty response from OpenAI');
+      throw new Error('Empty response from OpenAI API');
     }
-  }
-  
-  const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    return JSON.parse(jsonMatch[0]);
-  } else {
-    throw new Error('No JSON object found in response');
+    
+    if (responseContent.includes('ERROR') || 
+        responseContent.includes("I can't see") || 
+        responseContent.includes("I cannot see") ||
+        responseContent.includes("unable to view")) {
+      console.error('[analyzeImageWithGPT] OpenAI cannot process image:', responseContent.substring(0, 200));
+      throw new Error('OpenAI Vision API cannot process the image');
+    }
+
+    let cleanResponse = responseContent.trim();
+    
+    if (cleanResponse.includes('```')) {
+      const jsonMatch = cleanResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (jsonMatch && jsonMatch[1]) {
+        cleanResponse = jsonMatch[1];
+      }
+    }
+    
+    const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsedResult = JSON.parse(jsonMatch[0]);
+      console.log('[analyzeImageWithGPT] Successfully parsed JSON response');
+      return parsedResult;
+    } else {
+      console.error('[analyzeImageWithGPT] No JSON object found in response:', responseContent.substring(0, 200));
+      throw new Error('No JSON object found in response');
+    }
+    
+  } catch (error: any) {
+    console.error('[analyzeImageWithGPT] OpenAI API error:', {
+      message: error.message,
+      type: error.type,
+      code: error.code,
+      status: error.status
+    });
+    
+    // Re-throw with more specific error message
+    if (error.code === 'insufficient_quota') {
+      throw new Error('OpenAI API quota exceeded. Please check your billing.');
+    } else if (error.code === 'invalid_api_key') {
+      throw new Error('Invalid OpenAI API key. Please check configuration.');
+    } else if (error.message?.includes('timeout')) {
+      throw new Error('OpenAI API request timed out. Please try again.');
+    } else {
+      throw new Error(`OpenAI API error: ${error.message || 'Unknown error'}`);
+    }
   }
 }
 
