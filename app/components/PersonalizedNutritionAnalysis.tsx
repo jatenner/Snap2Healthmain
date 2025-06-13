@@ -1116,11 +1116,7 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
                         {nutrient.percentDailyValue && nutrient.percentDailyValue > 0 && (
                           <div className="w-full bg-gray-600 rounded-full h-4 mb-4">
                             <div 
-                              className={`h-4 rounded-full transition-all duration-700 ${
-                                nutrient.name.toLowerCase().includes('protein') ? 'bg-green-500' :
-                                nutrient.name.toLowerCase().includes('carb') ? 'bg-green-500' :
-                                nutrient.name.toLowerCase().includes('fat') ? 'bg-yellow-500' : 'bg-green-500'
-                              }`}
+                              className={`h-4 rounded-full transition-all duration-700 ${getNutrientStatusColor(nutrient)}`}
                               style={{ width: `${Math.min(100, nutrient.percentDailyValue)}%` }}
                             ></div>
                           </div>
