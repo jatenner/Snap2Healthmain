@@ -299,26 +299,9 @@ const getNutrientBadge = (nutrient: Nutrient): { label: string; color: string } 
 const renderNutrientBar = (nutrient: Nutrient, index: number) => {
   const dv = nutrient.percentDailyValue || 0;
   
-  // Simple red/yellow/green system based on daily value completion
-  let barColor = 'bg-red-500'; // Default: Low completion = red
-  
-  // For nutrients we want to limit (sodium, sugar, saturated fat, cholesterol)
-  const limitNutrients = ['sodium', 'sugar', 'saturated fat', 'cholesterol'];
-  const isLimitNutrient = limitNutrients.some(limit => 
-    nutrient.name.toLowerCase().includes(limit)
-  );
-  
-  if (isLimitNutrient) {
-    // Reverse logic for limit nutrients - high values are bad (red)
-    if (dv >= 50) barColor = 'bg-red-500';
-    else if (dv >= 25) barColor = 'bg-yellow-500';
-    else barColor = 'bg-green-500';
-  } else {
-    // Normal logic for beneficial nutrients - high values are good (green)
-    if (dv >= 50) barColor = 'bg-green-500';
-    else if (dv >= 25) barColor = 'bg-yellow-500';
-    else barColor = 'bg-red-500';
-  }
+  // Use the red/yellow/green system for all nutrients based on daily value completion
+  const colorSystem = getDVColorSystem({...nutrient, percentDailyValue: dv});
+  const barColor = colorSystem.progressColor;
   
   // Use personalized value if available, otherwise use the standard one
   const displayValue = nutrient.percentDailyValue || 0;
@@ -1042,7 +1025,7 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
               <div className="text-3xl sm:text-4xl lg:text-5xl font-bold text-blue-400 mb-4">
                 {getCalories()} <span className="text-lg sm:text-xl font-normal text-gray-400">calories</span>
               </div>
-              {analysisData.created_at && (
+                            {analysisData.created_at && (
                 <p className="text-gray-400 text-base sm:text-lg">
                   Analyzed on {new Date(analysisData.created_at).toLocaleDateString()}
                 </p>
@@ -1104,7 +1087,7 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
                     <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                          </span>
+                  </span>
                   Macronutrients
                 </h3>
                 
@@ -1128,23 +1111,23 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
                               <div className="text-sm text-gray-400">Daily Value</div>
                             </div>
                           )}
-                    </div>
-                    
+                        </div>
+                        
                         {nutrient.percentDailyValue && nutrient.percentDailyValue > 0 && (
                           <div className="w-full bg-gray-600 rounded-full h-4 mb-4">
-                      <div 
+                            <div 
                               className={`h-4 rounded-full transition-all duration-700 ${
-                                
-                          
-                          (() => { const dv = nutrient.percentDailyValue || 0; if (dv >= 75) return 'bg-green-500'; if (dv >= 20) return 'bg-yellow-500'; return 'bg-red-500'; })()
-                        }`}
+                                nutrient.name.toLowerCase().includes('protein') ? 'bg-green-500' :
+                                nutrient.name.toLowerCase().includes('carb') ? 'bg-green-500' :
+                                nutrient.name.toLowerCase().includes('fat') ? 'bg-yellow-500' : 'bg-green-500'
+                              }`}
                               style={{ width: `${Math.min(100, nutrient.percentDailyValue)}%` }}
-                      ></div>
-                    </div>
+                            ></div>
+                          </div>
                         )}
-                    
+                        
                         <p className="text-gray-300 text-sm leading-relaxed">{nutrient.description}</p>
-                  </div>
+                      </div>
                     ))}
                   </div>
                 ) : (
@@ -1417,21 +1400,20 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
                     <div className="flex items-center space-x-3 mb-6">
                       <div className="w-12 h-12 bg-cyan-500/20 rounded-xl flex items-center justify-center">
                         <span className="text-2xl">🌅</span>
-                </div>
+                      </div>
                       <div>
                         <h4 className="text-2xl font-bold text-white">Circadian Optimization</h4>
                         <p className="text-cyan-300">Best timing for this meal</p>
-            </div>
-        </div>
+                      </div>
+                    </div>
                     <div className="prose prose-invert prose-lg max-w-none">
                       <p className="text-cyan-100 leading-relaxed">{analysisData.time_of_day_optimization}</p>
-      </div>
-        </div>
-      )}
+                    </div>
+                  </div>
+                )}
               </div>
-              
-        </div>
-      )}
+            </div>
+          )}
         </div>
       </div>
     </div>

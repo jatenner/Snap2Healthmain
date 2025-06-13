@@ -178,22 +178,37 @@ export function formatDateTimeEST(date: Date | string): string {
 
 export function getRelativeDateEST(date: string | Date): string {
   try {
-    const inputDate = typeof date === 'string' ? new Date(date) : date;
+    let inputDateEST: string;
+    
+    // If date is already in YYYY-MM-DD format, use it directly
+    if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      inputDateEST = date;
+    } else {
+      // Convert to EST date string for comparison
+      const inputDate = typeof date === 'string' ? new Date(date) : date;
+      inputDateEST = inputDate.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    }
+    
     const now = getEasternTime();
     
     // Get dates in EST for comparison
     const todayEST = now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD format
     const yesterdayEST = new Date(now.getTime() - 24 * 60 * 60 * 1000)
       .toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-    const inputDateEST = inputDate.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
     
     if (inputDateEST === todayEST) return 'Today';
     if (inputDateEST === yesterdayEST) return 'Yesterday';
     
-    return formatDateEST(inputDate);
+    // For formatting the fallback, create a proper date object
+    const fallbackDate = typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date) 
+      ? new Date(date + 'T12:00:00') // Add noon time to avoid timezone issues
+      : (typeof date === 'string' ? new Date(date) : date);
+    
+    return formatDateEST(fallbackDate);
   } catch (e) {
     console.error('Error getting relative date:', e);
-    return formatDateEST(date);
+    const fallbackDate = typeof date === 'string' ? new Date(date) : date;
+    return formatDateEST(fallbackDate);
   }
 }
 

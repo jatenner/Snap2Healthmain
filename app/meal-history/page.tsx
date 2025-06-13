@@ -55,7 +55,10 @@ const groupMealsByDate = (meals: MealHistoryEntry[]): DayGroup[] => {
   const grouped: Record<string, MealHistoryEntry[]> = {};
   
   meals.forEach(meal => {
-    const date = new Date(meal.created_at).toISOString().split('T')[0] || 'unknown';
+    // Convert to Eastern time zone for proper date grouping
+    const date = new Date(meal.created_at).toLocaleDateString('en-CA', { 
+      timeZone: 'America/New_York' 
+    }) || 'unknown'; // This returns YYYY-MM-DD format in Eastern time
     
     if (!grouped[date]) {
       grouped[date] = [];
