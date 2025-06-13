@@ -318,15 +318,27 @@ Return a valid JSON object with this exact structure:
   "macronutrients": [
     {"name": "Protein", "amount": number, "unit": "g", "percentDailyValue": number},
     {"name": "Carbohydrates", "amount": number, "unit": "g", "percentDailyValue": number},
-    {"name": "Fat", "amount": number, "unit": "g", "percentDailyValue": number}
+    {"name": "Fat", "amount": number, "unit": "g", "percentDailyValue": number},
+    {"name": "Dietary Fiber", "amount": number, "unit": "g", "percentDailyValue": number},
+    {"name": "Sodium", "amount": number, "unit": "mg", "percentDailyValue": number}
   ],
   "micronutrients": [
-    {"name": "Vitamin C", "amount": number, "unit": "mg", "percentDailyValue": number},
-    {"name": "Iron", "amount": number, "unit": "mg", "percentDailyValue": number}
+    // IMPORTANT: Only include nutrients that are actually present in significant amounts in this specific meal
+    // Analyze the actual food items visible and include relevant vitamins and minerals accordingly
+    // Examples based on what you actually detect:
+    // - If you see citrus: include Vitamin C, Folate, etc.
+    // - If you see leafy greens: include Vitamin K, Iron, Folate, etc. 
+    // - If you see dairy: include Calcium, Vitamin D, Riboflavin, etc.
+    // - If you see meat: include Iron, B12, Zinc, etc.
+    // - If you see whole grains: include B vitamins, Magnesium, etc.
+    // DO NOT include vitamins/minerals that aren't realistically present in this meal
+    {"name": "VitaminName", "amount": number, "unit": "mg|mcg", "percentDailyValue": number}
   ],
   "insights": "Comprehensive personalized analysis (500+ words) covering metabolic impact, performance optimization, health benefits, and specific recommendations for this ${profileData.age || 'adult'} ${profileData.gender || 'individual'} with ${profileData.goal || 'health'} goals"
 }
 \`\`\`
+
+**CRITICAL: Only include micronutrients that are actually present in significant amounts in the foods you identify. Do not include a predetermined list - analyze each meal individually.**
 
 Analyze the meal image now and provide the comprehensive nutritional analysis.`;
 }

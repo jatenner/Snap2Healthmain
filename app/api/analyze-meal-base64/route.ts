@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import OpenAI from 'openai';
+import { calculatePersonalizedDV } from '../../lib/profile-utils';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -250,6 +251,160 @@ export async function POST(request: NextRequest) {
       
       analysisResult = await analyzeImageWithGPT(base64Image, userProfile);
       console.log('[analyze-meal-base64] OpenAI analysis completed successfully');
+      
+      // DEBUG: Check analysis result structure for DV calculation
+      console.log('[analyze-meal-base64] Analysis result structure check:', {
+        hasMacros: !!(analysisResult as any)?.macronutrients,
+        hasMicros: !!(analysisResult as any)?.micronutrients,
+        macroCount: Array.isArray((analysisResult as any)?.macronutrients) ? (analysisResult as any).macronutrients.length : 0,
+        microCount: Array.isArray((analysisResult as any)?.micronutrients) ? (analysisResult as any).micronutrients.length : 0,
+        resultKeys: Object.keys(analysisResult as any || {}).slice(0, 10)
+      });
+      
+      // ✅ CRITICAL FIX: Calculate personalized daily values and add them to nutrients
+      console.log('[analyze-meal-base64] 🎯 Starting DV% calculation process...');
+      console.log('[analyze-meal-base64] Analysis result type:', typeof analysisResult);
+      console.log('[analyze-meal-base64] Analysis result keys:', Object.keys(analysisResult as any || {}));
+      
+      if (analysisResult && typeof analysisResult === 'object') {
+        console.log('[analyze-meal-base64] ✅ Valid analysis result found - proceeding with DV calculation');
+        
+        // Get full user profile from session metadata for DV calculation
+        const sessionMetadata = session?.user?.user_metadata || {};
+        console.log('[analyze-meal-base64] Session metadata for DV calculation:', {
+          age: sessionMetadata.age,
+          weight: sessionMetadata.weight,
+          gender: sessionMetadata.gender,
+          activityLevel: sessionMetadata.activityLevel,
+          goal: sessionMetadata.defaultGoal
+        });
+        
+        const fullUserProfile = {
+          age: parseInt(sessionMetadata.age) || 25,
+          weight: parseInt(sessionMetadata.weight) || 225,
+          weight_unit: 'lb' as 'lb',
+          height: parseInt(sessionMetadata.height) || 78,
+          height_unit: 'in' as 'in',
+          gender: sessionMetadata.gender || 'male',
+          activity_level: sessionMetadata.activityLevel || 'active',
+          goal: sessionMetadata.defaultGoal || goal
+        };
+      
+        console.log('[analyze-meal-base64] 📊 Profile for DV calculation:', fullUserProfile);
+        
+        // Find nutrients in all possible locations with robust checking
+        let macronutrients = null;
+        let micronutrients = null;
+        
+        // Check multiple possible locations for nutrients
+        const locations = [
+          (analysisResult as any).macronutrients,
+          (analysisResult as any).analysis?.macronutrients,
+          (analysisResult as any).nutrients?.macronutrients
+        ];
+        
+        for (const location of locations) {
+          if (Array.isArray(location) && location.length > 0) {
+            macronutrients = location;
+            break;
+          }
+        }
+        
+        const microLocations = [
+          (analysisResult as any).micronutrients,
+          (analysisResult as any).analysis?.micronutrients,
+          (analysisResult as any).nutrients?.micronutrients
+        ];
+        
+        for (const location of microLocations) {
+          if (Array.isArray(location) && location.length > 0) {
+            micronutrients = location;
+            break;
+          }
+        }
+        
+        console.log('[analyze-meal-base64] 🔍 Nutrient search results:', {
+          macroFound: !!macronutrients,
+          microFound: !!micronutrients,
+          macroCount: Array.isArray(macronutrients) ? macronutrients.length : 0,
+          microCount: Array.isArray(micronutrients) ? micronutrients.length : 0
+        });
+        
+        // Calculate DV% for macronutrients
+        if (macronutrients && Array.isArray(macronutrients) && macronutrients.length > 0) {
+          console.log('[analyze-meal-base64] 🧮 Processing macronutrients for DV calculation...');
+          
+          const updatedMacros = macronutrients.map((nutrient: any, index: number) => {
+            const originalDV = nutrient.percentDailyValue;
+            const personalizedDV = calculatePersonalizedDV(nutrient, fullUserProfile);
+            
+            console.log(`[analyze-meal-base64] 📈 Macro ${index + 1} - ${nutrient.name}:`, {
+              amount: nutrient.amount,
+              unit: nutrient.unit,
+              originalDV: originalDV,
+              personalizedDV: personalizedDV,
+              profileUsed: `${fullUserProfile.gender}, ${fullUserProfile.age}y, ${fullUserProfile.weight}${fullUserProfile.weight_unit}, ${fullUserProfile.activity_level}`
+            });
+            
+            return {
+              ...nutrient,
+              percentDailyValue: personalizedDV
+            };
+          });
+          
+          // Update macronutrients in all possible locations
+          (analysisResult as any).macronutrients = updatedMacros;
+          if ((analysisResult as any).analysis) {
+            (analysisResult as any).analysis.macronutrients = updatedMacros;
+          }
+          if ((analysisResult as any).nutrients) {
+            (analysisResult as any).nutrients.macronutrients = updatedMacros;
+          }
+          
+          console.log('[analyze-meal-base64] ✅ Macronutrients DV% updated successfully');
+        } else {
+          console.log('[analyze-meal-base64] ⚠️ No macronutrients found for DV calculation');
+        }
+        
+        // Calculate DV% for micronutrients  
+        if (micronutrients && Array.isArray(micronutrients) && micronutrients.length > 0) {
+          console.log('[analyze-meal-base64] 🧮 Processing micronutrients for DV calculation...');
+          
+          const updatedMicros = micronutrients.map((nutrient: any, index: number) => {
+            const originalDV = nutrient.percentDailyValue;
+            const personalizedDV = calculatePersonalizedDV(nutrient, fullUserProfile);
+            
+            console.log(`[analyze-meal-base64] 📈 Micro ${index + 1} - ${nutrient.name}:`, {
+              amount: nutrient.amount,
+              unit: nutrient.unit,
+              originalDV: originalDV,
+              personalizedDV: personalizedDV
+            });
+            
+            return {
+              ...nutrient,
+              percentDailyValue: personalizedDV
+            };
+          });
+          
+          // Update micronutrients in all possible locations
+          (analysisResult as any).micronutrients = updatedMicros;
+          if ((analysisResult as any).analysis) {
+            (analysisResult as any).analysis.micronutrients = updatedMicros;
+          }
+          if ((analysisResult as any).nutrients) {
+            (analysisResult as any).nutrients.micronutrients = updatedMicros;
+          }
+          
+          console.log('[analyze-meal-base64] ✅ Micronutrients DV% updated successfully');
+        } else {
+          console.log('[analyze-meal-base64] ⚠️ No micronutrients found for DV calculation');
+        }
+        
+        console.log('[analyze-meal-base64] 🎉 DV% calculation process completed successfully');
+      } else {
+        console.log('[analyze-meal-base64] ❌ Invalid analysis result - skipping DV calculation');
+      }
     } catch (openaiError: any) {
       console.error('[analyze-meal-base64] OpenAI analysis failed:', openaiError);
       

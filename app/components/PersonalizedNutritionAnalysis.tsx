@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from './client/ClientAuthProvider';
 import { safeForEach, safeMap, safeFilter, getArrayOrEmpty } from '../lib/utils';
 import { createClient } from '../lib/supabase/client';
+import EnhancedMicronutrientDisplay from './EnhancedMicronutrientDisplay';
 
 // Enhanced interfaces to support all nutrient data
 interface Nutrient {
@@ -296,38 +297,34 @@ const getNutrientBadge = (nutrient: Nutrient): { label: string; color: string } 
 
 // Render a nutrient bar with description and badge
 const renderNutrientBar = (nutrient: Nutrient, index: number) => {
-  // Calculate personalized daily value for this nutrient
-  const personalizedDV = null; // Simplified for now, can be enhanced with user profile
+  const dv = nutrient.percentDailyValue || 0;
+  
+  // Simple red/yellow/green system based on daily value completion
+  let barColor = 'bg-red-500'; // Default: Low completion = red
+  
+  // For nutrients we want to limit (sodium, sugar, saturated fat, cholesterol)
+  const limitNutrients = ['sodium', 'sugar', 'saturated fat', 'cholesterol'];
+  const isLimitNutrient = limitNutrients.some(limit => 
+    nutrient.name.toLowerCase().includes(limit)
+  );
+  
+  if (isLimitNutrient) {
+    // Reverse logic for limit nutrients - high values are bad (red)
+    if (dv >= 50) barColor = 'bg-red-500';
+    else if (dv >= 25) barColor = 'bg-yellow-500';
+    else barColor = 'bg-green-500';
+  } else {
+    // Normal logic for beneficial nutrients - high values are good (green)
+    if (dv >= 50) barColor = 'bg-green-500';
+    else if (dv >= 25) barColor = 'bg-yellow-500';
+    else barColor = 'bg-red-500';
+  }
   
   // Use personalized value if available, otherwise use the standard one
-  const displayValue = personalizedDV || nutrient.percentDailyValue || 0;
+  const displayValue = nutrient.percentDailyValue || 0;
   
   // Cap percentage at 100% for display purposes
   const displayPercentage = Math.min(displayValue, 100);
-  
-  // Choose appropriate color based on type of nutrient
-  let barColor = 'bg-blue-500';
-  
-  // Protein: Blue
-  if (nutrient.name.toLowerCase().includes('protein')) {
-    barColor = 'bg-blue-500';
-  } 
-  // Carbs: Green
-  else if (nutrient.name.toLowerCase().includes('carb')) {
-    barColor = 'bg-green-500';
-  } 
-  // Fats: Yellow/orange
-  else if (nutrient.name.toLowerCase().includes('fat')) {
-    barColor = 'bg-amber-500';
-  }
-  // Fiber: Purple
-  else if (nutrient.name.toLowerCase().includes('fiber')) {
-    barColor = 'bg-purple-500';
-  }
-  // Sugars: Red (usually try to minimize)
-  else if (nutrient.name.toLowerCase().includes('sugar')) {
-    barColor = 'bg-red-500';
-  }
   
   // Get nutrient badge if applicable - use personalized DV for badge calculation
   const personalizedNutrient = {...nutrient, percentDailyValue: displayValue};
@@ -341,7 +338,7 @@ const renderNutrientBar = (nutrient: Nutrient, index: number) => {
           <span className="text-blue-100 ml-2">
             {nutrient.amount} {nutrient.unit} 
             <span className="text-blue-100/60 ml-1">
-              {displayValue > 0 ? `(${displayValue}% DV${personalizedDV !== nutrient.percentDailyValue ? '*' : ''})` : '(DV not available)'}
+              {displayValue > 0 ? `(${displayValue}% DV${personalizedNutrient.percentDailyValue !== nutrient.percentDailyValue ? '*' : ''})` : '(DV not available)'}
             </span>
           </span>
         </div>
@@ -367,7 +364,7 @@ const renderNutrientBar = (nutrient: Nutrient, index: number) => {
         </p>
       )}
       
-      {personalizedDV !== nutrient.percentDailyValue && (
+      {personalizedNutrient.percentDailyValue !== nutrient.percentDailyValue && (
         <p className="text-xs text-cyan-accent mt-1">
           *Personalized to your profile
         </p>
@@ -803,36 +800,17 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
   const [error, setError] = useState<string | null>(null);
   const [forceRegenerate, setForceRegenerate] = useState(false);
 
-  // Auto-generate insights on mount if we do not have them
+  // Auto-generate insights on mount - always generate fresh insights
   useEffect(() => {
-    const existingInsights = getExistingInsights();
-    
-    if (existingInsights) {
-      // We have good insights already - use them immediately
-      console.log('[PersonalizedNutritionAnalysis] Using existing insights from meal analysis');
-      setPersonalizedInsights(existingInsights);
-      setIsGeneratingInsights(false);
-    } else {
-      // Always auto-generate insights if none exist - no more button waiting!
-      console.log('[PersonalizedNutritionAnalysis] No insights found - checking again...');
-      
-      // Immediately start generating insights - no more waiting!
-      console.log('[PersonalizedNutritionAnalysis] Auto-generating comprehensive analysis...');
-      setIsGeneratingInsights(true);
-      generatePersonalizedInsights();
-    }
+    // Always auto-generate insights - no more basic fallbacks!
+    console.log('[PersonalizedNutritionAnalysis] Auto-generating comprehensive analysis...');
+    setIsGeneratingInsights(true);
+    generatePersonalizedInsights();
   }, [analysisData]);
 
   const generatePersonalizedInsights = async () => {
-    // Always check for existing insights first
-    const existingInsights = getExistingInsights();
-    
-    if (existingInsights && !forceRegenerate) {
-      console.log('[generatePersonalizedInsights] Using existing insights instead of regenerating');
-      setPersonalizedInsights(existingInsights);
-          return;
-        }
-        
+    // Skip existing insights check - always generate fresh comprehensive analysis
+    console.log('[generatePersonalizedInsights] Generating fresh comprehensive insights...');
     setIsGeneratingInsights(true);
     setError(null);
     setForceRegenerate(false);
@@ -962,38 +940,57 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
     });
 
     for (const source of sources) {
-      if (source && typeof source === 'string' && source.length > 100) {
-        console.log('[getExistingInsights] Found insights of length:', source.length);
-        console.log('[getExistingInsights] Preview:', source.substring(0, 200) + '...');
-        return source;
+      if (source && typeof source === 'string' && source.length > 1000) {
+        // Only accept insights that are substantial (1000+ chars) and contain rich analysis
+        const lowerSource = source.toLowerCase();
+        const hasRichContent = (
+          lowerSource.includes('your body') || 
+          lowerSource.includes('metabolic') || 
+          lowerSource.includes('personalized') ||
+          lowerSource.includes('tdee') ||
+          lowerSource.includes('protein target') ||
+          lowerSource.includes('goal alignment') ||
+          lowerSource.includes('how this meal fits') ||
+          lowerSource.includes('what your body is doing') ||
+          lowerSource.includes('specific improvements') ||
+          lowerSource.includes('action plan')
+        );
+        
+        if (hasRichContent) {
+          console.log('[getExistingInsights] Found quality insights of length:', source.length);
+          console.log('[getExistingInsights] Preview:', source.substring(0, 200) + '...');
+          return source;
+        } else {
+          console.log('[getExistingInsights] Found basic insights, skipping:', source.substring(0, 100) + '...');
+        }
       }
     }
 
-    console.log('[getExistingInsights] No quality insights found in data');
+    console.log('[getExistingInsights] No quality insights found in data - will generate new ones');
     return '';
   };
 
-  // Helper function to get nutrient status color
+  // Helper function to get nutrient status color - RED/YELLOW/GREEN system only
   const getNutrientStatusColor = (nutrient: Nutrient): string => {
     const dv = nutrient.percentDailyValue || 0;
     
-    // For nutrients we want to limit (sodium, sugar, saturated fat)
+    // For nutrients we want to limit (sodium, sugar, saturated fat, cholesterol)
     const limitNutrients = ['sodium', 'sugar', 'saturated fat', 'cholesterol'];
     const isLimitNutrient = limitNutrients.some(limit => 
       nutrient.name.toLowerCase().includes(limit)
     );
     
     if (isLimitNutrient) {
+      // Reverse logic for limit nutrients - high values are red (bad)
       if (dv >= 50) return 'bg-red-500';
       if (dv >= 25) return 'bg-yellow-500';
       return 'bg-green-500';
     }
     
-    // For beneficial nutrients
+    // For beneficial nutrients - high values are green (good)
     if (dv >= 50) return 'bg-green-500';
-    if (dv >= 25) return 'bg-green-400';
-    if (dv >= 10) return 'bg-blue-500';
-    return 'bg-gray-500';
+    if (dv >= 25) return 'bg-yellow-500';
+    return 'bg-red-500';
   };
 
   const getNutrientStatusText = (nutrient: Nutrient): string => {
@@ -1019,10 +1016,10 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
   if (!analysisData) {
     return (
       <div className="bg-gray-800 rounded-2xl p-8 text-center">
-        <div className="animate-pulse">
-          <div className="h-6 bg-gray-700 rounded w-3/4 mx-auto mb-4"></div>
+                <div className="animate-pulse">
+                    <div className="h-6 bg-gray-700 rounded w-3/4 mx-auto mb-4"></div>
           <div className="h-4 bg-gray-700 rounded w-1/2 mx-auto"></div>
-          </div>
+        </div>
       </div>
     );
   }
@@ -1048,9 +1045,9 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
               {analysisData.created_at && (
                 <p className="text-gray-400 text-base sm:text-lg">
                   Analyzed on {new Date(analysisData.created_at).toLocaleDateString()}
-            </p>
-          )}
-        </div>
+                </p>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1089,7 +1086,7 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
                 <svg className="w-5 h-5 sm:w-6 sm:h-6 mb-1 sm:mb-0 sm:mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                 </svg>
-                <span className="hidden sm:inline">AI Health Insights</span>
+                <span className="hidden sm:inline">Health Insights</span>
                 <span className="sm:hidden">AI Insights</span>
               </span>
             </button>
@@ -1137,9 +1134,9 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
                           <div className="w-full bg-gray-600 rounded-full h-4 mb-4">
                       <div 
                               className={`h-4 rounded-full transition-all duration-700 ${
-                                nutrient.name.toLowerCase().includes('protein') ? 'bg-blue-500' :
-                          nutrient.name.toLowerCase().includes('carb') ? 'bg-green-500' :
-                          nutrient.name.toLowerCase().includes('fat') ? 'bg-amber-500' : 'bg-purple-500'
+                                
+                          
+                          (() => { const dv = nutrient.percentDailyValue || 0; if (dv >= 75) return 'bg-green-500'; if (dv >= 20) return 'bg-yellow-500'; return 'bg-red-500'; })()
                         }`}
                               style={{ width: `${Math.min(100, nutrient.percentDailyValue)}%` }}
                       ></div>
@@ -1156,11 +1153,11 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
                     <p className="text-lg">No macronutrient data available for this meal.</p>
-            </div>
-          )}
+                  </div>
+                )}
               </div>
 
-              {/* Micronutrients */}
+              {/* Micronutrients - Enhanced Display */}
               <div>
                 <h3 className="text-3xl font-bold text-white mb-8 flex items-center">
                   <span className="w-10 h-10 bg-green-600 rounded-xl flex items-center justify-center mr-4">
@@ -1172,257 +1169,188 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
                 </h3>
                 
                 {getMicronutrients().length > 0 ? (
-                  <div className="grid lg:grid-cols-3 md:grid-cols-2 gap-4">
-                    {getMicronutrients().map((nutrient, index) => (
-                      <div key={index} className="bg-gradient-to-br from-gray-700 to-gray-800 rounded-xl p-5 shadow-lg">
-                        <div className="flex justify-between items-start mb-3">
-                          <h5 className="font-semibold text-white text-lg leading-tight">{nutrient.name}</h5>
-                          {nutrient.percentDailyValue && nutrient.percentDailyValue > 0 && (
-                            <span className={`px-3 py-1 rounded-full text-xs font-bold text-white ${getNutrientStatusColor(nutrient)}`}>
-                              {getNutrientStatusText(nutrient)}
-                                  </span>
-                                )}
+                  <div className="grid lg:grid-cols-3 md:grid-cols-2 gap-6">
+                    {getMicronutrients().map((nutrient, index) => {
+                      const dv = nutrient.percentDailyValue || 0;
+                      
+                      // Simple unified color system: 0-19% red, 20-74% yellow, 75%+ green
+                      let colorClass = "";
+                      let statusLabel = "";
+                      let bgColor = "";
+                      
+                      if (dv >= 75) {
+                        colorClass = "bg-green-500";
+                        statusLabel = "Excellent";
+                        bgColor = "bg-green-900/20 border-green-500/30";
+                      } else if (dv >= 20) {
+                        colorClass = "bg-yellow-500";
+                        statusLabel = "Good";
+                        bgColor = "bg-yellow-900/20 border-yellow-500/30";
+                      } else if (dv > 0) {
+                        colorClass = "bg-red-500";
+                        statusLabel = "Low";
+                        bgColor = "bg-red-900/20 border-red-500/30";
+                      } else {
+                        colorClass = "bg-gray-500";
+                        statusLabel = "Unknown";
+                        bgColor = "bg-white/5 border-white/10";
+                      }
+                      
+                      return (
+                        <div key={index} className={`${bgColor} backdrop-blur-sm rounded-xl p-6 border hover:shadow-lg transition-all duration-300`}>
+                          {/* Header with nutrient name and status badge */}
+                          <div className="flex justify-between items-start mb-4">
+                            <h4 className="font-bold text-white text-lg leading-tight">{nutrient.name}</h4>
+                            {dv > 0 && (
+                              <span className={`px-3 py-1 rounded-full text-xs font-bold text-white ${colorClass}`}>
+                                {statusLabel}
+                              </span>
+                            )}
+                          </div>
+                          
+                          {/* Amount and DV% - Enhanced Typography */}
+                          <div className="mb-4">
+                            <div className="flex items-baseline justify-between mb-2">
+                              <span className="text-3xl font-bold text-white">
+                                {nutrient.amount}
+                              </span>
+                              <span className="text-lg text-gray-300 ml-2">
+                                {nutrient.unit}
+                              </span>
+                            </div>
+                            {dv > 0 && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-2xl font-bold text-white">
+                                  {Math.round(dv)}%
+                                </span>
+                                <span className="text-sm text-gray-400 font-medium">
+                                  Daily Value
+                                </span>
                               </div>
-                              
-                        <div className="flex justify-between items-center mb-4">
-                          <span className="text-xl font-bold text-blue-400">
-                            {nutrient.amount} {nutrient.unit}
-                          </span>
-                          {nutrient.percentDailyValue && nutrient.percentDailyValue > 0 && (
-                            <span className="text-gray-300 font-medium">
-                              {Math.round(nutrient.percentDailyValue)}% DV
-                            </span>
-                                )}
-                              </div>
-                              
-                        {nutrient.percentDailyValue && nutrient.percentDailyValue > 0 && (
-                          <div className="w-full bg-gray-600 rounded-full h-2 mb-4">
-                            <div 
-                              className={`h-2 rounded-full transition-all duration-700 ${getNutrientStatusColor(nutrient)}`}
-                              style={{ width: `${Math.min(nutrient.percentDailyValue, 100)}%` }}
+                            )}
+                          </div>
+                          
+                          {/* Progress Bar - Enhanced */}
+                          {dv > 0 && (
+                            <div className="mb-4">
+                              <div className="w-full bg-gray-700 rounded-full h-3 shadow-inner">
+                                <div 
+                                  className={`h-3 rounded-full transition-all duration-700 shadow-lg ${colorClass}`}
+                                  style={{ width: `${Math.min(dv, 100)}%` }}
                                 ></div>
                               </div>
-                        )}
-                        
-                        <p className="text-gray-400 text-xs leading-relaxed">{nutrient.description}</p>
-                          </div>
-                        ))}
-                      </div>
+                            </div>
+                          )}
+                          
+                          {/* Description */}
+                          <p className="text-gray-300 text-sm leading-relaxed">
+                            {nutrient.description || getNutrientDescription(nutrient.name)}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
                 ) : (
                   <div className="text-center py-12 text-gray-400">
                     <svg className="w-16 h-16 mx-auto mb-6 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                     </svg>
                     <p className="text-lg">No micronutrient data available for this meal.</p>
-                </div>
-              )}
+                  </div>
+                )}
               </div>
             </div>
           )}
           
           {activeTab === 'ai-insights' && (
             <div className="space-y-8">
-              {/* Personalized Insights - Redesigned */}
-            <div className="space-y-6">
-                <div className="bg-gradient-to-br from-purple-900/30 to-indigo-900/30 backdrop-blur-sm border border-purple-500/20 rounded-xl p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center space-x-3">
-                      <div className="p-3 bg-purple-500/20 rounded-xl">
-                        <span className="text-3xl">🧠</span>
-                  </div>
-                      <div>
-                        <h3 className="text-2xl font-bold text-white">AI Health Insights</h3>
-                        <p className="text-purple-300">Personalized analysis for your 225 lb profile</p>
-                      </div>
+              {/* Clean, Flowing Health Insights */}
+              <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-8">
+                <div className="flex items-center justify-between mb-8">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-16 h-16 bg-blue-600/20 rounded-xl flex items-center justify-center">
+                      <span className="text-3xl">🧠</span>
                     </div>
-                    {personalizedInsights && (
-                      <button
-                        onClick={() => {
-                          setForceRegenerate(true);
-                          generatePersonalizedInsights();
+                    <div>
+                      <h3 className="text-3xl font-bold text-white">Health Insights</h3>
+                      <p className="text-gray-400">What this meal means for your body</p>
+                    </div>
+                  </div>
+                  {personalizedInsights && (
+                    <button
+                      onClick={() => {
+                        setForceRegenerate(true);
+                        generatePersonalizedInsights();
+                      }}
+                      disabled={isGeneratingInsights}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-colors"
+                    >
+                      {isGeneratingInsights ? 'Analyzing...' : 'Refresh Analysis'}
+                    </button>
+                  )}
+                </div>
+                
+                {isGeneratingInsights ? (
+                  <div className="flex flex-col items-center justify-center py-16">
+                    <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-6"></div>
+                    <h4 className="text-xl font-semibold text-purple-300 mb-2">Analyzing Your Meal</h4>
+                    <p className="text-purple-200/70">AI is processing nutritional data and generating personalized insights...</p>
+                  </div>
+                ) : personalizedInsights ? (
+                  <div className="space-y-6">
+                    {/* Clean markdown rendering */}
+                    <div className="prose prose-invert prose-lg max-w-none">
+                      <div 
+                        className="text-gray-200 leading-relaxed space-y-4"
+                        dangerouslySetInnerHTML={{
+                          __html: personalizedInsights
+                            // Convert markdown headers to HTML
+                            .replace(/### \*\*(.*?)\*\*/g, '<h3 class="text-2xl font-bold text-white mt-8 mb-4 flex items-center"><span class="mr-3">📊</span>$1</h3>')
+                            .replace(/### (.*?)$/gm, '<h3 class="text-2xl font-bold text-white mt-8 mb-4 flex items-center"><span class="mr-3">📊</span>$1</h3>')
+                            .replace(/## \*\*(.*?)\*\*/g, '<h2 class="text-3xl font-bold text-white mt-10 mb-6 flex items-center"><span class="mr-3">🎯</span>$1</h2>')
+                            .replace(/## (.*?)$/gm, '<h2 class="text-3xl font-bold text-white mt-10 mb-6 flex items-center"><span class="mr-3">🎯</span>$1</h2>')
+                            // Convert bold text
+                            .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white font-semibold">$1</strong>')
+                            // Convert emojis and progress bars to styled elements
+                            .replace(/📊 (.*?):/g, '<div class="flex items-center mb-3"><span class="text-2xl mr-3">📊</span><span class="text-lg font-semibold text-blue-300">$1:</span></div>')
+                            .replace(/🔥 (.*?):/g, '<div class="flex items-center mb-3"><span class="text-2xl mr-3">🔥</span><span class="text-lg font-semibold text-orange-300">$1:</span></div>')
+                            .replace(/💪 (.*?):/g, '<div class="flex items-center mb-3"><span class="text-2xl mr-3">💪</span><span class="text-lg font-semibold text-blue-300">$1:</span></div>')
+                            .replace(/🥗 (.*?):/g, '<div class="flex items-center mb-3"><span class="text-2xl mr-3">🥗</span><span class="text-lg font-semibold text-green-300">$1:</span></div>')
+                            .replace(/⚡ (.*?):/g, '<div class="flex items-center mb-3"><span class="text-2xl mr-3">⚡</span><span class="text-lg font-semibold text-yellow-300">$1:</span></div>')
+                            .replace(/🎯 (.*?):/g, '<div class="flex items-center mb-3"><span class="text-2xl mr-3">🎯</span><span class="text-lg font-semibold text-purple-300">$1:</span></div>')
+                            .replace(/🧬 (.*?):/g, '<div class="flex items-center mb-3"><span class="text-2xl mr-3">🧬</span><span class="text-lg font-semibold text-indigo-300">$1:</span></div>')
+                            .replace(/🍽️ (.*?):/g, '<div class="flex items-center mb-3"><span class="text-2xl mr-3">🍽️</span><span class="text-lg font-semibold text-gray-300">$1:</span></div>')
+                            // Convert progress bars to visual elements
+                            .replace(/(████+░*)/g, '<div class="inline-block bg-gray-700 rounded-full h-2 w-32 mr-2 overflow-hidden"><div class="bg-gradient-to-r from-blue-500 to-purple-500 h-full rounded-full" style="width: 60%"></div></div>')
+                            // Convert line breaks to proper spacing
+                            .replace(/\n\n/g, '</p><p class="mb-4">')
+                            .replace(/\n/g, '<br/>')
+                            // Wrap in paragraph tags
+                            .replace(/^/, '<p class="mb-4">')
+                            .replace(/$/, '</p>')
+                            // Clean up empty paragraphs
+                            .replace(/<p class="mb-4"><\/p>/g, '')
                         }}
-                        disabled={isGeneratingInsights}
-                        className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-all duration-200 hover:scale-105 shadow-lg"
-                      >
-                        {isGeneratingInsights ? (
-                          <div className="flex items-center space-x-2">
-                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                            <span>Analyzing...</span>
-                          </div>
-                        ) : (
-                          'Regenerate Analysis'
-                        )}
-                      </button>
-                    )}
-                  </div>
-                  
-                  {isGeneratingInsights ? (
-                    <div className="flex flex-col items-center justify-center py-16">
-                      <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-6"></div>
-                      <h4 className="text-xl font-semibold text-purple-300 mb-2">Analyzing Your Meal</h4>
-                      <p className="text-purple-200/70">AI is processing nutritional data and generating personalized insights...</p>
-                          </div>
-                  ) : personalizedInsights ? (
-                    <div className="space-y-6">
-                      {/* Parse and display insights in beautiful cards */}
-                      {personalizedInsights.split('\n\n').map((section, index) => {
-                        // Skip empty sections
-                        if (!section.trim()) return null;
-
-                        // Handle main section headers (### or ##)
-                        if (section.trim().startsWith('### ') || section.trim().startsWith('## ')) {
-                          const headerText = section.replace(/^###?\s/, '').trim();
-                          const iconMap: Record<string, string> = {
-                            'metabolic': '⚡',
-                            'glucose': '🩸',
-                            'energy': '💪',
-                            'nutrient': '🥗',
-                            'timing': '⏰',
-                            'recovery': '🔄',
-                            'performance': '🎯',
-                            'health': '❤️',
-                            'analysis': '📊',
-                            'impact': '📈',
-                            'response': '🧬',
-                            'metabolism': '🔥'
-                          };
-                          
-                          const icon = Object.entries(iconMap).find(([key]) => 
-                            headerText.toLowerCase().includes(key)
-                          )?.[1] || '📋';
-
-                          return (
-                            <div key={index} className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 rounded-xl p-6 border border-indigo-500/20">
-                              <div className="flex items-center space-x-3 mb-4">
-                                <span className="text-2xl">{icon}</span>
-                                <h4 className="text-xl font-bold text-white">{headerText}</h4>
-                          </div>
-                      </div>
-                          );
-                        }
-
-                        // Handle subsection headers (####)
-                        if (section.trim().startsWith('#### ')) {
-                          const headerText = section.replace(/^####\s/, '').trim();
-                          return (
-                            <div key={index} className="bg-gradient-to-r from-blue-500/10 to-teal-500/10 rounded-lg p-4 border border-blue-500/20">
-                              <h5 className="text-lg font-semibold text-blue-300 mb-2">{headerText}</h5>
-                  </div>
-                          );
-                        }
-
-                        // Handle content sections with auto-categorization
-                        const lowerSection = section.toLowerCase();
-                        let cardStyle = "bg-gray-800/50 border border-gray-600/30";
-                        let iconEmoji = "📝";
-                        let titleColor = "text-gray-300";
-
-                        if (lowerSection.includes('glucose') || lowerSection.includes('blood sugar') || lowerSection.includes('glycemic')) {
-                          cardStyle = "bg-gradient-to-br from-red-900/20 to-orange-900/20 border border-red-500/30";
-                          iconEmoji = "🩸";
-                          titleColor = "text-red-300";
-                        } else if (lowerSection.includes('energy') || lowerSection.includes('metabolism') || lowerSection.includes('calories')) {
-                          cardStyle = "bg-gradient-to-br from-yellow-900/20 to-amber-900/20 border border-yellow-500/30";
-                          iconEmoji = "⚡";
-                          titleColor = "text-yellow-300";
-                        } else if (lowerSection.includes('protein') || lowerSection.includes('muscle') || lowerSection.includes('recovery')) {
-                          cardStyle = "bg-gradient-to-br from-blue-900/20 to-cyan-900/20 border border-blue-500/30";
-                          iconEmoji = "💪";
-                          titleColor = "text-blue-300";
-                        } else if (lowerSection.includes('vitamin') || lowerSection.includes('mineral') || lowerSection.includes('nutrient')) {
-                          cardStyle = "bg-gradient-to-br from-green-900/20 to-emerald-900/20 border border-green-500/30";
-                          iconEmoji = "🥗";
-                          titleColor = "text-green-300";
-                        } else if (lowerSection.includes('timing') || lowerSection.includes('morning') || lowerSection.includes('circadian')) {
-                          cardStyle = "bg-gradient-to-br from-purple-900/20 to-indigo-900/20 border border-purple-500/30";
-                          iconEmoji = "⏰";
-                          titleColor = "text-purple-300";
-                        }
-
-                        // Extract title from first sentence or use generic title
-                        const sentences = section.split('.');
-                        const firstSentence = sentences[0] || '';
-                        let title = "Analysis";
-                        
-                        if (firstSentence && firstSentence.length < 100) {
-                          title = firstSentence.replace(/^(The|This|Your|A)?\s*/i, '').trim();
-                        } else if (lowerSection.includes('glucose')) {
-                          title = "Glucose Response";
-                        } else if (lowerSection.includes('energy')) {
-                          title = "Energy Metabolism";
-                        } else if (lowerSection.includes('protein')) {
-                          title = "Protein Impact";
-                        } else if (lowerSection.includes('nutrient')) {
-                          title = "Nutrient Analysis";
-                        } else if (lowerSection.includes('timing')) {
-                          title = "Optimal Timing";
-                        }
-
-                        return (
-                          <div key={index} className={`${cardStyle} rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300`}>
-                            <div className="flex items-start space-x-4">
-                              <div className="flex-shrink-0">
-                                <div className="w-12 h-12 bg-gray-700/50 rounded-full flex items-center justify-center">
-                                  <span className="text-xl">{iconEmoji}</span>
-              </div>
-                              </div>
-                              <div className="flex-1">
-                                <h5 className={`text-lg font-semibold ${titleColor} mb-3`}>{title}</h5>
-                                <div className="prose prose-invert prose-sm max-w-none">
-                                  {section.split('\n').map((paragraph, pIndex) => {
-                                    if (!paragraph.trim()) return null;
-                                    
-                                    // Handle bold text
-                                    if (paragraph.includes('**')) {
-                                      const parts = paragraph.split(/(\*\*.*?\*\*)/g);
-                                      return (
-                                        <p key={pIndex} className="text-gray-300 leading-relaxed mb-3">
-                                          {parts.map((part, partIndex) => {
-                                            if (part.startsWith('**') && part.endsWith('**')) {
-                                              return (
-                                                <span key={partIndex} className="font-semibold text-white">
-                                                  {part.replace(/\*\*/g, '')}
-                                                </span>
-                                              );
-                                            }
-                                            return <span key={partIndex}>{part}</span>;
-                                          })}
-                                        </p>
-                                      );
-                                    }
-                                    
-                                    return (
-                                      <p key={pIndex} className="text-gray-300 leading-relaxed mb-3">
-                                        {paragraph}
-                                      </p>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      }).filter(Boolean)}
+                      />
                     </div>
-                  ) : (
-                    <div className="text-center py-16">
-                      <div className="mb-6">
-                        <div className="w-20 h-20 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <span className="text-3xl">🤖</span>
-                        </div>
-                        <h4 className="text-xl font-semibold text-white mb-2">Generating AI Health Insights</h4>
-                        <p className="text-gray-400 mb-6">Our AI is analyzing your meal to provide personalized health insights...</p>
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        <span className="inline-block animate-pulse">●</span>
-                        <span className="mx-1">Processing nutritional data</span>
-                        <span className="inline-block animate-pulse">●</span>
-                      </div>
-                </div>
-              )}
-                </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-16">
+                    <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <span className="text-3xl">🤖</span>
+                    </div>
+                    <h4 className="text-xl font-semibold text-white mb-2">Ready to Analyze</h4>
+                    <p className="text-gray-400 mb-6">Click to generate personalized health insights for this meal</p>
+                    <button
+                      onClick={generatePersonalizedInsights}
+                      className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors"
+                    >
+                      Generate Insights
+                    </button>
+                  </div>
+                )}
               </div>
-              
+
               {/* Expert Recommendations - Enhanced */}
               {analysisData.expert_recommendations && analysisData.expert_recommendations.length > 0 && (
                 <div className="bg-gradient-to-br from-emerald-900/30 to-green-900/30 border border-emerald-500/30 rounded-xl p-8 shadow-lg">

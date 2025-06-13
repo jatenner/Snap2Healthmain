@@ -29,7 +29,7 @@ export default function ProfilePage() {
     age: '',
     gender: '',
     height: '',
-    height_unit: 'ft',
+    height_unit: 'in',
     weight: '',
     weight_unit: 'lbs',
     primary_goal: '',
@@ -48,12 +48,21 @@ export default function ProfilePage() {
 
   React.useEffect(() => {
     if (profile) {
+      // Handle height - stored height is in inches, display as inches by default
+      let displayHeight = profile.height?.toString() || '';
+      let heightUnit = 'in'; // Default to inches since that's how we store it
+      
+      // Use the stored height unit if available, otherwise default to inches
+      if (profile.height_unit) {
+        heightUnit = profile.height_unit;
+      }
+
       setFormData({
         full_name: profile.full_name || '',
         age: profile.age?.toString() || '',
         gender: profile.gender || '',
-        height: profile.height?.toString() || '',
-        height_unit: profile.height_unit || 'ft',
+        height: displayHeight,
+        height_unit: heightUnit,
         weight: profile.weight?.toString() || '',
         weight_unit: profile.weight_unit || 'lbs',
         primary_goal: profile.goal || '',
@@ -96,12 +105,20 @@ export default function ProfilePage() {
   const handleSave = async () => {
     setSaving(true);
     try {
+      // Convert height to inches for storage if needed
+      let heightInInches = formData.height ? parseFloat(formData.height) : undefined;
+      if (heightInInches && formData.height_unit === 'ft') {
+        heightInInches = heightInInches * 12; // Convert feet to inches
+      } else if (heightInInches && formData.height_unit === "cm") {
+        heightInInches = heightInInches * 0.393701; // Convert cm to inches
+      }
+
       const profileData = {
         full_name: formData.full_name,
         age: formData.age ? parseInt(formData.age) : undefined,
         gender: formData.gender,
-        height: formData.height ? parseFloat(formData.height) : undefined,
-        height_unit: formData.height_unit,
+        height: heightInInches,
+        height_unit: 'in', // Always store as inches
         weight: formData.weight ? parseFloat(formData.weight) : undefined,
         weight_unit: formData.weight_unit,
         goal: formData.primary_goal,
@@ -370,6 +387,7 @@ export default function ProfilePage() {
                     onChange={(e) => handleInputChange('height_unit', e.target.value)}
                     className="px-3 py-2 bg-gray-700 border border-gray-600 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-20"
                   >
+                    <option value="in">in</option>
                     <option value="ft">ft</option>
                     <option value="cm">cm</option>
                   </select>

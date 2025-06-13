@@ -284,7 +284,9 @@ export default function ProfileClient() {
         age: profile.age ? parseInt(profile.age) : null,
         gender: profile.gender,
         height: profile.height ? parseFloat(profile.height) : null,
+        height_unit: 'in', // Always store height in inches
         weight: profile.weight ? parseFloat(profile.weight) : null,
+        weight_unit: 'lb', // Always store weight in pounds
         goal: profile.goal || 'General Health',
         activity_level: profile.activity_level || 'Moderate',
         updated_at: new Date().toISOString()

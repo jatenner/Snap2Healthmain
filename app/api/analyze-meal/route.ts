@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import { getFullUserProfile } from '../../lib/profile-server-utils';
 import { analyzeMealWithOpenAI } from '../../lib/openai-utils';
+import { calculatePersonalizedDV } from '../../lib/profile-utils';
 import OpenAI from 'openai';
 import { shouldBypassAuth } from '../../lib/env-config';
 
@@ -450,9 +451,6 @@ export async function POST(request: NextRequest) {
       if ((analysisResult as any)?.macronutrients || (analysisResult as any)?.micronutrients) {
         console.log('[analyze-meal] Calculating daily values...');
         
-        // Import the DV calculation function
-          const { calculatePersonalizedDV } = await import('../../lib/profile-utils');
-          
         // CRITICAL DEBUG: Log profile being used for calculations
         console.log('[analyze-meal] CRITICAL DEBUG - Profile used for DV calculation:', JSON.stringify(userProfile, null, 2));
         console.log('[analyze-meal] Profile analysis for 225lb user:', {
