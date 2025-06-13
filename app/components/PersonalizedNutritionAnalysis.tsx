@@ -1265,7 +1265,7 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
                   ) : personalizedInsights ? (
                     <div className="space-y-6">
                       {/* Parse and display insights in beautiful cards */}
-                      {personalizedInsights.split('\n\n').map((section, index) => {
+                      {personalizedInsights.split("\n\n").map((section, index) => (<div key={index} className="mb-6 p-4 bg-gray-800/50 rounded-lg border border-gray-600/30"><div className="prose prose-invert prose-sm max-w-none"><div dangerouslySetInnerHTML={{__html: section.replace(/\*\*(.*?)\*\*/g, "<strong class=\"text-white font-semibold\">$1</strong>").replace(/\n/g, "<br/>")}} /></div></div>)).filter(Boolean)}
                         // Skip empty sections
                         if (!section.trim()) return null;
 
