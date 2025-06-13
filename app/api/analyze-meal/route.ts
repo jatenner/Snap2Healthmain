@@ -189,12 +189,9 @@ function validateEnvironment() {
 }
 
 export async function POST(request: NextRequest) {
-  // Skip during build to prevent build failures
-  if (!process.env.RAILWAY_ENVIRONMENT && process.env.NODE_ENV === "production") {
-    return NextResponse.json({ error: "Route disabled during build" }, { status: 503 });
-  }
   console.log('[analyze-meal] POST handler called');
   
+
   // Validate environment configuration
   const { isValid, errors } = validateEnvironment();
   if (!isValid) {
