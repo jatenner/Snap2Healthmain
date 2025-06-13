@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import OpenAI from 'openai';
 import { calculatePersonalizedDV } from '../../lib/profile-utils';
-import { analyzeImageWithGPT } from '../../lib/openai-utils-fixed';
+import { analyzeImageWithGPT } from '../../lib/openai-utils';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,

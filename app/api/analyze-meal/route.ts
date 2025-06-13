@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import OpenAI from 'openai';
-import { analyzeImageWithGPT } from "../../lib/openai-utils-fixed";
+import { analyzeImageWithGPT } from "../../lib/openai-utils";
 import { calculatePersonalizedDV } from '../../lib/profile-utils';
 
 const supabaseAdmin = createClient(
