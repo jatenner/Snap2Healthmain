@@ -282,6 +282,7 @@ Keep each section 2-3 sentences, focus on actionable health insights.`;
 export async function POST(request: NextRequest) {
   try {
     console.log('[analyze-meal-base64] 🚀 Starting meal analysis with base64 approach...');
+    console.log('[analyze-meal-base64] Environment check - OpenAI key exists:', !!process.env.OPENAI_API_KEY);
     console.log('[analyze-meal-base64] Request headers:', Object.fromEntries(request.headers.entries()));
     console.log('[analyze-meal-base64] Request URL:', request.url);
     console.log('[analyze-meal-base64] Request method:', request.method);
