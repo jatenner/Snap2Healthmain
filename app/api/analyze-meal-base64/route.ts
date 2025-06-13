@@ -407,6 +407,8 @@ export async function POST(request: NextRequest) {
       console.log('[analyze-meal-base64] - Image length:', base64Image.length);
       console.log('[analyze-meal-base64] - Image prefix (first 50 chars):', base64Image.substring(0, 50));
       console.log('[analyze-meal-base64] - MIME type detected:', mimeType);
+      console.log('[analyze-meal-base64] - OpenAI API key exists:', !!process.env.OPENAI_API_KEY);
+      console.log('[analyze-meal-base64] - OpenAI API key prefix:', process.env.OPENAI_API_KEY?.substring(0, 7) + '...');
       
       analysisResult = await analyzeImageWithGPT(base64Image, {
         goal: goal,
