@@ -29,6 +29,73 @@ interface FoodSources {
   [key: string]: string;
 }
 
+// Daily Value reference values (FDA standards)
+const DAILY_VALUES: { [key: string]: number } = {
+  // Vitamins
+  'Vitamin A': 900, // mcg
+  'Vitamin C': 90, // mg
+  'Vitamin D': 20, // mcg
+  'Vitamin E': 15, // mg
+  'Vitamin K': 120, // mcg
+  'Vitamin B1': 1.2, // mg (Thiamine)
+  'Vitamin B2': 1.3, // mg (Riboflavin)
+  'Vitamin B3': 16, // mg (Niacin)
+  'Vitamin B5': 5, // mg (Pantothenic Acid)
+  'Vitamin B6': 1.7, // mg
+  'Vitamin B7': 30, // mcg (Biotin)
+  'Vitamin B9': 400, // mcg (Folate)
+  'Vitamin B12': 2.4, // mcg
+  'Folate': 400, // mcg
+  'Thiamine': 1.2, // mg
+  'Riboflavin': 1.3, // mg
+  'Niacin': 16, // mg
+  'Pantothenic Acid': 5, // mg
+  'Biotin': 30, // mcg
+  
+  // Minerals
+  'Calcium': 1300, // mg
+  'Iron': 18, // mg
+  'Magnesium': 420, // mg
+  'Phosphorus': 1250, // mg
+  'Potassium': 4700, // mg
+  'Sodium': 2300, // mg
+  'Zinc': 11, // mg
+  'Copper': 0.9, // mg
+  'Manganese': 2.3, // mg
+  'Selenium': 55, // mcg
+  'Chromium': 35, // mcg
+  'Molybdenum': 45, // mcg
+  'Iodine': 150, // mcg
+  'Fluoride': 4, // mg
+  'Chloride': 2300, // mg
+};
+
+// Function to calculate Daily Value percentage
+function calculateDailyValuePercentage(nutrient: any): number {
+  const nutrientName = nutrient.name;
+  const amount = nutrient.amount || 0;
+  const unit = nutrient.unit || '';
+  
+  // Get the daily value for this nutrient
+  const dailyValue = DAILY_VALUES[nutrientName];
+  if (!dailyValue || amount === 0) {
+    return 0;
+  }
+  
+  // Convert units if necessary
+  let convertedAmount = amount;
+  if (unit === 'mcg' && dailyValue > 100) {
+    // Daily value is in mg, convert mcg to mg
+    convertedAmount = amount / 1000;
+  } else if (unit === 'mg' && dailyValue < 1) {
+    // Daily value is in mcg, convert mg to mcg
+    convertedAmount = amount * 1000;
+  }
+  
+  const percentage = Math.round((convertedAmount / dailyValue) * 100);
+  return Math.min(percentage, 999); // Cap at 999% for display
+}
+
 export async function POST(request: NextRequest) {
   try {
     console.log('[generate-personalized-insights] Starting advanced insights generation...');
@@ -110,8 +177,15 @@ export async function POST(request: NextRequest) {
     const micronutrients = mealData?.micronutrients || mealData?.analysis?.micronutrients || [];
     const macronutrients = mealData?.macronutrients || mealData?.analysis?.macronutrients || [];
     
-    console.log('[generate-personalized-insights] Micronutrients found:', micronutrients.length);
+    // Calculate proper Daily Value percentages for micronutrients
+    const enhancedMicronutrients = micronutrients.map((micro: any) => ({
+      ...micro,
+      percentDailyValue: calculateDailyValuePercentage(micro)
+    }));
+    
+    console.log('[generate-personalized-insights] Micronutrients found:', enhancedMicronutrients.length);
     console.log('[generate-personalized-insights] Macronutrients found:', macronutrients.length);
+    console.log('[generate-personalized-insights] Enhanced micronutrients:', enhancedMicronutrients.map((m: any) => `${m.name}: ${m.amount}${m.unit} (${m.percentDailyValue}% DV)`));
     
     // Get user profile from session metadata (this is the real data!)
     const sessionProfile = session?.user?.user_metadata || {};
@@ -160,7 +234,7 @@ export async function POST(request: NextRequest) {
 
 **MEAL SNAPSHOT:**
 🍽️ ${mealName}: ${calories} calories, ${protein}g protein, ${carbs}g carbs, ${fat}g fat
-🧪 Micronutrients: ${micronutrients.length} vitamins & minerals analyzed
+�� Micronutrients: ${enhancedMicronutrients.length} vitamins & minerals analyzed
 📊 Macronutrients: ${macronutrients.length} primary nutrients tracked
 
 **YOUR DAILY TARGETS:**
@@ -169,7 +243,7 @@ export async function POST(request: NextRequest) {
 ⚡ Activity Level: ${activityLevel}
 
 **MICRONUTRIENT BREAKDOWN:**
-${micronutrients.map((micro: any) => `- ${micro.name}: ${micro.amount}${micro.unit} (${micro.percentDailyValue || 0}% DV)`).join('\n')}
+${enhancedMicronutrients.map((micro: any) => `- ${micro.name}: ${micro.amount}${micro.unit} (${micro.percentDailyValue}% DV)`).join('\n')}
 
 **MACRONUTRIENT BREAKDOWN:**
 ${macronutrients.map((macro: any) => `- ${macro.name}: ${macro.amount}${macro.unit} (${macro.percentDailyValue || 0}% DV)`).join('\n')}
@@ -203,7 +277,7 @@ ${firstName}, let's talk about the vitamins and minerals in this meal - these ar
 
 **🧪 VITAMIN & MINERAL BREAKDOWN:**
 
-${micronutrients.length > 0 ? micronutrients.map(micro => {
+${enhancedMicronutrients.length > 0 ? enhancedMicronutrients.map(micro => {
   const percentage = micro.percentDailyValue || 0;
   const progressBar = '█'.repeat(Math.min(10, Math.floor(percentage/10))) + '░'.repeat(Math.max(0, 10 - Math.floor(percentage/10)));
   const status = percentage < 10 ? '🔴 LOW' : percentage < 25 ? '🟡 MODERATE' : percentage >= 50 ? '🟢 EXCELLENT' : '✅ GOOD';
@@ -214,9 +288,9 @@ ${progressBar} ${percentage}% DV ${status}`;
 
 **🎯 WHAT THIS MEANS FOR YOUR BODY:**
 
-${micronutrients.filter(m => (m.percentDailyValue || 0) >= 25).length > 0 ? `
+${enhancedMicronutrients.filter(m => (m.percentDailyValue || 0) >= 25).length > 0 ? `
 **✅ WINNING NUTRIENTS (25%+ DV):**
-${micronutrients.filter(m => (m.percentDailyValue || 0) >= 25).map(micro => {
+${enhancedMicronutrients.filter(m => (m.percentDailyValue || 0) >= 25).map(micro => {
   const nutrientBenefits = {
     'Vitamin C': 'boosts immune system, helps iron absorption, supports collagen production',
     'Vitamin A': 'supports vision, immune function, and skin health',
@@ -235,9 +309,9 @@ ${micronutrients.filter(m => (m.percentDailyValue || 0) >= 25).map(micro => {
   return `- **${micro.name}** (${micro.percentDailyValue}% DV): ${benefit}`;
 }).join('\n')}` : ''}
 
-${micronutrients.filter(m => (m.percentDailyValue || 0) < 10 && (m.percentDailyValue || 0) > 0).length > 0 ? `
+${enhancedMicronutrients.filter(m => (m.percentDailyValue || 0) < 10 && (m.percentDailyValue || 0) > 0).length > 0 ? `
 **🔴 NUTRIENTS YOU'RE MISSING (Under 10% DV):**
-${micronutrients.filter(m => (m.percentDailyValue || 0) < 10 && (m.percentDailyValue || 0) > 0).map(micro => {
+${enhancedMicronutrients.filter(m => (m.percentDailyValue || 0) < 10 && (m.percentDailyValue || 0) > 0).map(micro => {
   const foodSources = {
     'Vitamin C': 'citrus fruits, bell peppers, strawberries, broccoli',
     'Vitamin A': 'carrots, sweet potatoes, spinach, liver',
@@ -256,7 +330,7 @@ ${micronutrients.filter(m => (m.percentDailyValue || 0) < 10 && (m.percentDailyV
 
 **💡 QUICK FIXES:** ${firstName}, your body is craving these nutrients! Try adding a colorful salad, some nuts, or a piece of fruit to boost your vitamin and mineral intake.` : ''}
 
-${micronutrients.length === 0 ? `
+${enhancedMicronutrients.length === 0 ? `
 **⚠️ MICRONUTRIENT ALERT:**
 This meal appears to be lacking in vitamins and minerals. Your body needs these micronutrients to:
 - Support immune function and fight off illness
@@ -407,7 +481,7 @@ Be conversational but authoritative. Make them feel like they're getting advice 
           fat,
           caloriePercentage,
           proteinPercentage,
-          micronutrientCount: micronutrients.length,
+          micronutrientCount: enhancedMicronutrients.length,
           macronutrientCount: macronutrients.length
         },
         generatedAt: new Date().toISOString(),
