@@ -1,0 +1,13 @@
+# Exclude problematic debug routes during build
+app/api/debug/
+app/api/admin/db/test-openai/
+app/api/test-*/
+
+# Exclude backup files
+*.backup*
+*.bak
+*.old*
+
+# Exclude development files
+.env.local
+.env.development 
