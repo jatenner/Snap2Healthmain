@@ -115,7 +115,16 @@ export default function UploadPage() {
 
       if (!analyzeResponse.ok) {
         const errorData = await analyzeResponse.json().catch(() => ({}));
-        const errorMessage = errorData.error || `Analysis failed: ${analyzeResponse.status}`;
+        let errorMessage = errorData.error || `Analysis failed: ${analyzeResponse.status}`;
+        
+        // Handle specific error cases with better user messaging
+        if (analyzeResponse.status === 502) {
+          errorMessage = 'Server temporarily unavailable - your analysis may still be processing. Check your meal history in a few moments.';
+        } else if (analyzeResponse.status === 504) {
+          errorMessage = 'Analysis is taking longer than expected - please try again with a smaller image';
+        } else if (analyzeResponse.status >= 500) {
+          errorMessage = 'Server error - please try again in a few moments';
+        }
         const errorDetails = errorData.details || '';
         
         console.error('Analysis failed:', {
