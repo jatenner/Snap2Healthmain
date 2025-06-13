@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import OpenAI from 'openai';
 import { calculatePersonalizedDV } from '../../lib/profile-utils';
+import { analyzeImageWithGPT } from '../../lib/openai-utils-fixed';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -226,21 +228,6 @@ export async function POST(request: NextRequest) {
     
     let analysisResult: any;
     try {
-      // Import the analyzeImageWithGPT function directly
-      const { analyzeImageWithGPT } = await import("../../lib/openai-utils-fixed");
-      
-      // Create a basic user profile for analysis
-      const userProfile = {
-        goal: goal,
-        age: 30,
-        weight: 70,
-        weight_unit: 'kg' as 'kg',
-        height: 170,
-        height_unit: 'cm' as 'cm',
-        gender: 'male',
-        activity_level: 'moderate'
-      };
-      
       // Debug logging for image format
       console.log('[analyze-meal-base64] About to call analyzeImageWithGPT with:');
       console.log('[analyze-meal-base64] - Image starts with data:image/:', base64Image.startsWith('data:image/'));
@@ -249,7 +236,16 @@ export async function POST(request: NextRequest) {
       console.log('[analyze-meal-base64] - Image prefix (first 50 chars):', base64Image.substring(0, 50));
       console.log('[analyze-meal-base64] - MIME type detected:', mimeType);
       
-      analysisResult = await analyzeImageWithGPT(base64Image, userProfile);
+      analysisResult = await analyzeImageWithGPT(base64Image, {
+        goal: goal,
+        age: 30,
+        weight: 70,
+        weight_unit: 'kg' as 'kg',
+        height: 170,
+        height_unit: 'cm' as 'cm',
+        gender: 'male',
+        activity_level: 'moderate'
+      });
       console.log('[analyze-meal-base64] OpenAI analysis completed successfully');
       
       // DEBUG: Check analysis result structure for DV calculation
