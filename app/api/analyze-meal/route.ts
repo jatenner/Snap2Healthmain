@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import OpenAI from 'openai';
-import { analyzeImageWithGPT } from "../../lib/openai-utils";
 import { calculatePersonalizedDV } from '../../lib/profile-utils';
 
 const supabaseAdmin = createClient(
@@ -10,9 +10,98 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Simple inline OpenAI function to avoid import issues
+async function analyzeImageWithGPT(base64Image: string, userProfile: any = {}): Promise<any> {
+  const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+    maxRetries: 0,
+    timeout: 15000,
+  });
+
+  if (!base64Image.startsWith('data:image/')) {
+    throw new Error('Invalid image format - must be data:image URL');
+  }
+
+  const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY }); const completion = await openaiClient.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      {
+        role: "system",
+        content: "You are a nutrition expert. Analyze food images accurately and return comprehensive nutrition data in valid JSON format."
+      },
+      {
+        role: "user", 
+        content: [
+          {
+            type: "text",
+            text: `Analyze this meal image and provide accurate nutrition data in JSON format:
+
+{
+  "mealName": "descriptive name of what you see",
+  "mealDescription": "detailed description of the meal",
+  "calories": estimated_calories,
+  "protein": grams,
+  "carbs": grams,
+  "fat": grams,
+  "macronutrients": [
+    {"name": "Protein", "amount": number, "unit": "g", "percentDailyValue": null},
+    {"name": "Total Carbohydrates", "amount": number, "unit": "g", "percentDailyValue": null},
+    {"name": "Total Fat", "amount": number, "unit": "g", "percentDailyValue": null}
+  ],
+  "micronutrients": [
+    {"name": "Iron", "amount": number, "unit": "mg", "percentDailyValue": null},
+    {"name": "Vitamin C", "amount": number, "unit": "mg", "percentDailyValue": null},
+    {"name": "Calcium", "amount": number, "unit": "mg", "percentDailyValue": null}
+  ],
+  "foods": ["list", "of", "foods", "you", "identify"],
+  "ingredients": ["main", "ingredients"],
+  "benefits": ["health benefits"],
+  "concerns": ["nutritional concerns"],
+  "suggestions": ["improvement suggestions"],
+  "healthRating": 1-10
+}
+
+Return ONLY valid JSON.`
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: base64Image,
+              detail: "high"
+            }
+          }
+        ]
+      }
+    ],
+    max_tokens: 2000,
+    temperature: 0.2,
+  });
+
+  const responseContent = completion.choices[0]?.message?.content || '';
+  
+  if (responseContent.includes('ERROR') || 
+      responseContent.includes("I can't see") || 
+      responseContent.includes("I cannot see") ||
+      responseContent.includes("unable to view")) {
+    throw new Error('OpenAI Vision API cannot process the image');
+  }
+
+  let cleanResponse = responseContent.trim();
+  
+  if (cleanResponse.includes('```')) {
+    const jsonMatch = cleanResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (jsonMatch && jsonMatch[1]) {
+      cleanResponse = jsonMatch[1];
+    }
+  }
+  
+  const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    return JSON.parse(jsonMatch[0]);
+  } else {
+    throw new Error('No JSON object found in response');
+  }
+}
 
 // Background function to generate insights immediately after meal analysis
 async function generateInsightsInBackground(mealId: string, userId: string, userMetadata: any, analysis: any) {
@@ -72,7 +161,7 @@ Keep each section 2-3 sentences, focus on actionable health insights.`;
 
     console.log('[background-insights] Sending fast request to OpenAI...');
     
-    const completion = await openai.chat.completions.create({
+    const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY }); const completion = await openaiClient.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
@@ -227,20 +316,6 @@ export async function POST(request: NextRequest) {
     
     let analysisResult: any;
     try {
-      // Import the analyzeImageWithGPT function directly
-      
-      // Create a basic user profile for analysis
-      const userProfile = {
-        goal: goal,
-        age: 30,
-        weight: 70,
-        weight_unit: 'kg' as 'kg',
-        height: 170,
-        height_unit: 'cm' as 'cm',
-        gender: 'male',
-        activity_level: 'moderate'
-      };
-      
       // Debug logging for image format
       console.log('[analyze-meal-base64] About to call analyzeImageWithGPT with:');
       console.log('[analyze-meal-base64] - Image starts with data:image/:', base64Image.startsWith('data:image/'));
@@ -249,7 +324,16 @@ export async function POST(request: NextRequest) {
       console.log('[analyze-meal-base64] - Image prefix (first 50 chars):', base64Image.substring(0, 50));
       console.log('[analyze-meal-base64] - MIME type detected:', mimeType);
       
-      analysisResult = await analyzeImageWithGPT(base64Image, userProfile);
+      analysisResult = await analyzeImageWithGPT(base64Image, {
+        goal: goal,
+        age: 30,
+        weight: 70,
+        weight_unit: 'kg' as 'kg',
+        height: 170,
+        height_unit: 'cm' as 'cm',
+        gender: 'male',
+        activity_level: 'moderate'
+      });
       console.log('[analyze-meal-base64] OpenAI analysis completed successfully');
       
       // DEBUG: Check analysis result structure for DV calculation
