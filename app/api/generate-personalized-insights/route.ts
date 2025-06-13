@@ -13,6 +13,22 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// Interface definitions for nutrient types
+interface Nutrient {
+  name: string;
+  amount: number;
+  unit: string;
+  percentDailyValue?: number;
+}
+
+interface NutrientBenefits {
+  [key: string]: string;
+}
+
+interface FoodSources {
+  [key: string]: string;
+}
+
 export async function POST(request: NextRequest) {
   try {
     console.log('[generate-personalized-insights] Starting advanced insights generation...');
@@ -90,6 +106,13 @@ export async function POST(request: NextRequest) {
     const ingredients = mealData?.ingredients || '';
     const description = mealData?.description || '';
     
+    // Extract micronutrients for detailed analysis
+    const micronutrients = mealData?.micronutrients || mealData?.analysis?.micronutrients || [];
+    const macronutrients = mealData?.macronutrients || mealData?.analysis?.macronutrients || [];
+    
+    console.log('[generate-personalized-insights] Micronutrients found:', micronutrients.length);
+    console.log('[generate-personalized-insights] Macronutrients found:', macronutrients.length);
+    
     // Get user profile from session metadata (this is the real data!)
     const sessionProfile = session?.user?.user_metadata || {};
     console.log('[generate-personalized-insights] Session user metadata:', sessionProfile);
@@ -137,11 +160,24 @@ export async function POST(request: NextRequest) {
 
 **MEAL SNAPSHOT:**
 🍽️ ${mealName}: ${calories} calories, ${protein}g protein, ${carbs}g carbs, ${fat}g fat
+🧪 Micronutrients: ${micronutrients.length} vitamins & minerals analyzed
+📊 Macronutrients: ${macronutrients.length} primary nutrients tracked
 
 **YOUR DAILY TARGETS:**
 🎯 Calories: ${tdee} per day
 🥩 Protein: ${dailyProteinTarget}g per day (crucial for your goals!)
 ⚡ Activity Level: ${activityLevel}
+
+**MICRONUTRIENT BREAKDOWN:**
+${micronutrients.map((micro: any) => `- ${micro.name}: ${micro.amount}${micro.unit} (${micro.percentDailyValue || 0}% DV)`).join('\n')}
+
+**MACRONUTRIENT BREAKDOWN:**
+${macronutrients.map((macro: any) => `- ${macro.name}: ${macro.amount}${macro.unit} (${macro.percentDailyValue || 0}% DV)`).join('\n')}
+
+**Why ${dailyProteinTarget}g matters for you:**
+Your body needs this much protein because you're ${activityLevel} and focused on ${goal.toLowerCase()}. Protein helps repair muscle tissue, keeps you full longer, and supports your metabolism. Think of it as the building blocks your body craves!
+
+${protein < dailyProteinTarget * 0.25 ? `🚨 **Heads up:** This meal is pretty low on protein for your goals. You'll need to pack more into your other meals - think Greek yogurt, lean meats, or a protein shake.` : protein > dailyProteinTarget * 0.4 ? `🔥 **Nice work!** This meal is doing heavy lifting for your protein goals. You're well on your way to hitting that ${dailyProteinTarget}g target.` : `✅ **Solid choice:** Decent protein here, but you'll need consistent protein at every meal to reach your ${dailyProteinTarget}g daily target.`}
 
 ## 1. **How This Meal Fits Your Goals**
 
@@ -160,6 +196,76 @@ Here's where it gets interesting, ${firstName}. You got ${protein}g of protein f
 Your body needs this much protein because you're ${activityLevel} and focused on ${goal.toLowerCase()}. Protein helps repair muscle tissue, keeps you full longer, and supports your metabolism. Think of it as the building blocks your body craves!
 
 ${protein < dailyProteinTarget * 0.25 ? `🚨 **Heads up:** This meal is pretty low on protein for your goals. You'll need to pack more into your other meals - think Greek yogurt, lean meats, or a protein shake.` : protein > dailyProteinTarget * 0.4 ? `🔥 **Nice work!** This meal is doing heavy lifting for your protein goals. You're well on your way to hitting that ${dailyProteinTarget}g target.` : `✅ **Solid choice:** Decent protein here, but you'll need consistent protein at every meal to reach your ${dailyProteinTarget}g daily target.`}
+
+## 1.5. **Micronutrient Deep Dive - What Your Body Is Getting**
+
+${firstName}, let's talk about the vitamins and minerals in this meal - these are the unsung heroes that keep your body running like a well-oiled machine!
+
+**🧪 VITAMIN & MINERAL BREAKDOWN:**
+
+${micronutrients.length > 0 ? micronutrients.map(micro => {
+  const percentage = micro.percentDailyValue || 0;
+  const progressBar = '█'.repeat(Math.min(10, Math.floor(percentage/10))) + '░'.repeat(Math.max(0, 10 - Math.floor(percentage/10)));
+  const status = percentage < 10 ? '🔴 LOW' : percentage < 25 ? '🟡 MODERATE' : percentage >= 50 ? '🟢 EXCELLENT' : '✅ GOOD';
+  
+  return `📊 **${micro.name}**: ${micro.amount}${micro.unit}
+${progressBar} ${percentage}% DV ${status}`;
+}).join('\n\n') : '⚠️ Limited micronutrient data available - this meal may be missing key vitamins and minerals your body needs.'}
+
+**🎯 WHAT THIS MEANS FOR YOUR BODY:**
+
+${micronutrients.filter(m => (m.percentDailyValue || 0) >= 25).length > 0 ? `
+**✅ WINNING NUTRIENTS (25%+ DV):**
+${micronutrients.filter(m => (m.percentDailyValue || 0) >= 25).map(micro => {
+  const nutrientBenefits = {
+    'Vitamin C': 'boosts immune system, helps iron absorption, supports collagen production',
+    'Vitamin A': 'supports vision, immune function, and skin health',
+    'Vitamin D': 'crucial for bone health, immune function, and mood regulation',
+    'Vitamin E': 'powerful antioxidant, protects cells from damage',
+    'Vitamin K': 'essential for blood clotting and bone health',
+    'Iron': 'carries oxygen in blood, prevents fatigue and weakness',
+    'Calcium': 'builds strong bones and teeth, supports muscle function',
+    'Magnesium': 'supports muscle and nerve function, energy production',
+    'Potassium': 'regulates blood pressure, supports heart and muscle function',
+    'Zinc': 'supports immune system, wound healing, and protein synthesis',
+    'Folate': 'crucial for DNA synthesis and red blood cell formation',
+    'B12': 'essential for nerve function and red blood cell production'
+  };
+  const benefit = nutrientBenefits[micro.name] || 'supports various body functions';
+  return `- **${micro.name}** (${micro.percentDailyValue}% DV): ${benefit}`;
+}).join('\n')}` : ''}
+
+${micronutrients.filter(m => (m.percentDailyValue || 0) < 10 && (m.percentDailyValue || 0) > 0).length > 0 ? `
+**🔴 NUTRIENTS YOU'RE MISSING (Under 10% DV):**
+${micronutrients.filter(m => (m.percentDailyValue || 0) < 10 && (m.percentDailyValue || 0) > 0).map(micro => {
+  const foodSources = {
+    'Vitamin C': 'citrus fruits, bell peppers, strawberries, broccoli',
+    'Vitamin A': 'carrots, sweet potatoes, spinach, liver',
+    'Vitamin D': 'fatty fish, egg yolks, fortified foods',
+    'Iron': 'red meat, spinach, lentils, tofu',
+    'Calcium': 'dairy products, leafy greens, almonds',
+    'Magnesium': 'nuts, seeds, whole grains, dark chocolate',
+    'Potassium': 'bananas, potatoes, beans, yogurt',
+    'Zinc': 'meat, shellfish, seeds, nuts',
+    'Folate': 'leafy greens, legumes, fortified grains',
+    'B12': 'meat, fish, dairy, nutritional yeast'
+  };
+  const sources = foodSources[micro.name] || 'various whole foods';
+  return `- **${micro.name}** (only ${micro.percentDailyValue}% DV): Add ${sources}`;
+}).join('\n')}
+
+**💡 QUICK FIXES:** ${firstName}, your body is craving these nutrients! Try adding a colorful salad, some nuts, or a piece of fruit to boost your vitamin and mineral intake.` : ''}
+
+${micronutrients.length === 0 ? `
+**⚠️ MICRONUTRIENT ALERT:**
+This meal appears to be lacking in vitamins and minerals. Your body needs these micronutrients to:
+- Support immune function and fight off illness
+- Convert food into energy efficiently  
+- Maintain healthy skin, hair, and nails
+- Support brain function and mood
+- Build and repair tissues
+
+**EASY ADDITIONS:** Add some colorful vegetables, fruits, nuts, or seeds to boost the nutrient density!` : ''}
 
 ## 2. **What Your Body Is Doing With This Food**
 
@@ -234,6 +340,7 @@ ${firstName}, you're ${age} years old and working toward ${goal.toLowerCase()} -
 - **Specific & Actionable**: Give exact numbers, specific food suggestions, and clear next steps
 - **Goal-Focused**: Everything ties back to their specific goals and body stats
 - **Educational**: Explain WHY things matter (why protein targets, why timing matters, etc.)
+- **Micronutrient-Focused**: Pay special attention to vitamins and minerals - what they're getting, what they're missing, and why it matters for their health
 
 Think like a knowledgeable trainer who genuinely cares about their success and wants to make nutrition feel approachable and achievable. Use their exact stats to make everything personal and relevant.
 
@@ -269,7 +376,7 @@ Be conversational but authoritative. Make them feel like they're getting advice 
         .eq('id', mealId)
         .then(({ error }) => {
           if (error) {
-            console.error('[generate-personalized-insights] Background save error:', error);
+            console.error('[generate-personalized-insights] Error saving insights to database:', error);
           } else {
             console.log('[generate-personalized-insights] Successfully saved insights to database');
           }
@@ -278,13 +385,13 @@ Be conversational but authoritative. Make them feel like they're getting advice 
 
     return NextResponse.json({
       success: true,
-      insights: insights,
+      insights,
       metadata: {
         userProfile: { 
           firstName,
           age, 
           weight: `${weight} ${weightUnit}`, 
-          height: `${Math.floor(height/12)}'${height%12}"`, 
+          height: `${Math.floor(height/12)}'${height%12}\"`, 
           gender, 
           activityLevel, 
           goal,
@@ -299,29 +406,31 @@ Be conversational but authoritative. Make them feel like they're getting advice 
           carbs, 
           fat,
           caloriePercentage,
-          proteinPercentage
+          proteinPercentage,
+          micronutrientCount: micronutrients.length,
+          macronutrientCount: macronutrients.length
         },
         generatedAt: new Date().toISOString(),
         source: 'advanced_analysis',
-        version: '5.0-personal'
+        version: '6.0-micronutrient-enhanced'
       }
     });
 
   } catch (error) {
     console.error('[generate-personalized-insights] Error:', error);
-    
     return NextResponse.json({
       success: false,
-      error: 'Failed to generate personalized insights',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : 'Failed to generate insights'
     }, { status: 500 });
   }
 }
 
 export async function GET() {
-  return NextResponse.json({ 
-    message: "Advanced Personalized Insights API - Use POST method with meal data",
-    status: "active",
-    version: "4.0-advanced"
+  return NextResponse.json({
+    message: 'Personalized Insights Generator API - Enhanced with Micronutrient Analysis',
+    version: '6.0-micronutrient-enhanced',
+    endpoints: {
+      POST: 'Generate personalized nutrition insights with comprehensive micronutrient analysis'
+    }
   });
 }
