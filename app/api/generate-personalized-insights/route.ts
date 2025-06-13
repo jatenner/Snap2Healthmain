@@ -95,6 +95,7 @@ export async function POST(request: NextRequest) {
     console.log('[generate-personalized-insights] Session user metadata:', sessionProfile);
     
     // Extract user profile information from session with proper fallbacks
+    const firstName = (sessionProfile.full_name || userProfile?.full_name || sessionProfile.name || userProfile?.name || 'there').split(' ')[0];
     const age = parseInt(sessionProfile.age) || parseInt(userProfile?.age) || 25;
     const weight = parseInt(sessionProfile.weight) || parseInt(userProfile?.weight) || 225;
     const weightUnit = sessionProfile.weight_unit || userProfile?.weight_unit || 'lbs';
@@ -105,7 +106,7 @@ export async function POST(request: NextRequest) {
     const goal = userGoal || sessionProfile.defaultGoal || sessionProfile.goal || userProfile?.goal || 'athletic performance';
 
     console.log('[generate-personalized-insights] Final user profile:', {
-      age, weight, weightUnit, height, heightUnit, gender, activityLevel, goal
+      firstName, age, weight, weightUnit, height, heightUnit, gender, activityLevel, goal
     });
 
     // Calculate TDEE and other metrics
@@ -128,71 +129,95 @@ export async function POST(request: NextRequest) {
     
     const tdee = Math.round(bmr * (activityMultipliers[activityLevel] || 1.725));
     const caloriePercentage = Math.round((calories / tdee) * 100);
+    const dailyProteinTarget = Math.round(weightInKg * 2.2);
+    const proteinPercentage = Math.round((protein / dailyProteinTarget) * 100);
     
     // Create comprehensive prompt for detailed analysis
-    const prompt = `**YOUR CLIENT:**
-- ${age}-year-old ${gender}, ${weight} lbs, ${Math.floor(height/12)}'${height%12}"
-- ${activityLevel} lifestyle, Goal: ${goal}
-- Daily needs: ~${tdee} calories, ~${Math.round(weightInKg * 2.2)} grams protein
+    const prompt = `Hey ${firstName}! Let's break down your ${mealName} and see how it fits into your ${goal.toLowerCase()} journey.
 
-**THIS MEAL:**
-${mealName} - ${calories} calories, ${protein}g protein, ${carbs}g carbs, ${fat}g fat
+**MEAL SNAPSHOT:**
+🍽️ ${mealName}: ${calories} calories, ${protein}g protein, ${carbs}g carbs, ${fat}g fat
 
-Write a personalized analysis as if you're talking directly to them. Use "you" and "your" throughout. Be specific about their numbers and give direct advice.
+**YOUR DAILY TARGETS:**
+🎯 Calories: ${tdee} per day
+🥩 Protein: ${dailyProteinTarget}g per day (crucial for your goals!)
+⚡ Activity Level: ${activityLevel}
 
 ## 1. **How This Meal Fits Your Goals**
 
 **Calorie Check:**
-This meal gives you ${calories} calories, which is ${Math.round((calories/tdee)*100)}% of your ${tdee}-calorie daily target. ${calories < tdee * 0.15 ? "This is on the lighter side - you'll need substantial meals throughout the day to hit your targets." : calories > tdee * 0.4 ? "This is a pretty hefty meal - make sure your other meals are lighter to stay balanced." : "This is a solid meal size that fits well into your daily plan."}
+This meal gave you ${calories} calories, which is ${caloriePercentage}% of your daily ${tdee}-calorie target. ${calories < tdee * 0.15 ? "This is pretty light - you'll want to make sure your other meals are more substantial to fuel your body properly." : calories > tdee * 0.4 ? "This is a hearty meal! Just balance it out with lighter options throughout the day." : "Perfect meal size - this fits nicely into your daily plan."}
 
-**Protein Analysis:**
-You got ${protein}g of protein here. For your ${weight}-lb frame and ${goal.toLowerCase()} goals, you should aim for about ${Math.round(weightInKg * 2.2)}g protein daily. This meal covers ${Math.round((protein/(weightInKg * 2.2))*100)}% of that target. ${protein < (weightInKg * 2.2) * 0.25 ? `This is pretty low protein for you - you'll need to pack more protein into your other meals. Try adding Greek yogurt, protein powder, or extra lean meat.` : protein > (weightInKg * 2.2) * 0.4 ? `Great protein content! This meal is doing heavy lifting for your daily protein goals.` : `Decent protein, but you'll need consistent protein at every meal to hit your ${Math.round(weightInKg * 2.2)}g daily target.`}
+**Protein Power Check:**
+Here's where it gets interesting, ${firstName}. You got ${protein}g of protein from this meal.
+
+📊 **Your Protein Intake vs. Target:**
+- This meal: ${protein}g
+- Daily target: ${dailyProteinTarget}g  
+- You hit: ${proteinPercentage}% of your daily goal
+
+**Why ${dailyProteinTarget}g matters for you:**
+Your body needs this much protein because you're ${activityLevel} and focused on ${goal.toLowerCase()}. Protein helps repair muscle tissue, keeps you full longer, and supports your metabolism. Think of it as the building blocks your body craves!
+
+${protein < dailyProteinTarget * 0.25 ? `🚨 **Heads up:** This meal is pretty low on protein for your goals. You'll need to pack more into your other meals - think Greek yogurt, lean meats, or a protein shake.` : protein > dailyProteinTarget * 0.4 ? `🔥 **Nice work!** This meal is doing heavy lifting for your protein goals. You're well on your way to hitting that ${dailyProteinTarget}g target.` : `✅ **Solid choice:** Decent protein here, but you'll need consistent protein at every meal to reach your ${dailyProteinTarget}g daily target.`}
 
 ## 2. **What Your Body Is Doing With This Food**
 
 **Energy & Performance Impact:**
-${carbs > 40 ? `With ${carbs}g carbs, this meal will fuel your workouts well. Your muscles will store this as glycogen for energy during training.` : `At only ${carbs}g carbs, this won't fully top off your energy tanks. Consider adding rice, oats, or fruit if you're training soon.`}
+${carbs > 40 ? `With ${carbs}g of carbs, your muscles are getting a nice glycogen boost - perfect fuel for your workouts! Your body will store this energy for when you need it most.` : `At ${carbs}g carbs, this won't fully top off your energy tanks. If you're training soon, consider adding some rice, oats, or fruit.`}
 
-${fat > 20 ? `The ${fat}g of fat will help with hormone production (important for a ${age}-year-old ${gender}) and keep you satisfied longer.` : `Pretty low fat at ${fat}g - you might get hungry sooner and miss out on fat-soluble vitamins.`}
+${fat > 20 ? `The ${fat}g of fat is great for hormone production (super important at ${age}!) and will keep you satisfied for hours.` : `Pretty light on fat at ${fat}g - you might find yourself getting hungry sooner, and you're missing out on fat-soluble vitamins.`}
 
 **Recovery & Muscle Building:**
-${protein > 25 ? `The ${protein}g protein will trigger muscle protein synthesis for about 3-4 hours, supporting your ${goal.toLowerCase()} goals.` : `With only ${protein}g protein, you're not maximizing muscle protein synthesis. Aim for 25-40g per meal.`}
+${protein > 25 ? `The ${protein}g of protein will trigger muscle protein synthesis for the next 3-4 hours - exactly what your body needs for ${goal.toLowerCase()}!` : `With ${protein}g protein, you're not fully maximizing muscle protein synthesis. Aim for 25-40g per meal for optimal results.`}
 
 ## 3. **Specific Improvements For You**
 
 **To Better Hit Your Goals:**
-${protein < (weightInKg * 2.2) * 0.25 ? `
-• **Add More Protein**: Try adding 4-6 oz more lean meat, 2 eggs, or a protein shake
-• **High-Protein Swaps**: Greek yogurt instead of regular, protein pasta, or cottage cheese
-• **Quick Protein Boosts**: Sprinkle hemp seeds, add nuts, or mix in protein powder` : ''}
+
+${protein < dailyProteinTarget * 0.25 ? `
+🥩 **Protein Boost Ideas:**
+- Add 4-6 oz of grilled chicken, turkey, or lean beef
+- Mix in 2 eggs or have a protein shake on the side
+- Try Greek yogurt instead of regular, or add cottage cheese
+- Sprinkle hemp seeds, nuts, or protein powder into your meals` : ''}
 
 ${calories < tdee * 0.15 ? `
-• **Increase Portions**: You need more calories - add healthy fats like avocado, nuts, or olive oil
-• **Add Calorie-Dense Foods**: Quinoa, sweet potato, or nut butter can boost calories without much volume` : ''}
+🔥 **Calorie Boost Ideas:**
+- Add healthy fats: avocado, nuts, olive oil drizzle
+- Include calorie-dense foods: quinoa, sweet potato, nut butter
+- Don't be afraid of larger portions - your body needs fuel!` : ''}
 
 ${carbs < 30 && goal.toLowerCase().includes('performance') ? `
-• **Fuel Your Training**: Add rice, oats, or fruit to better support your athletic performance
-• **Pre/Post Workout**: Time higher-carb meals around your training sessions` : ''}
+⚡ **Energy Boost Ideas:**
+- Add rice, oats, or fruit to better fuel your training
+- Time your biggest carb meals around your workouts
+- Your performance goals need that glycogen!` : ''}
 
 ## 4. **Your Action Plan**
 
-**For Tomorrow:**
-• Target ${Math.round(tdee/4)} calories per meal (you had ${calories} this time)
-• Get ${Math.round((weightInKg * 2.2)/4)}g protein per meal (you had ${protein}g)
-• ${goal.toLowerCase().includes('performance') ? 'Time your biggest carb meals around workouts' : 'Keep carbs moderate and focus on protein and healthy fats'}
+**For Tomorrow, ${firstName}:**
+- 🎯 Target around ${Math.round(tdee/4)} calories per meal (you had ${calories} this time)
+- 🥩 Get ${Math.round(dailyProteinTarget/4)}g protein per meal (you had ${protein}g)
+- ${goal.toLowerCase().includes('performance') ? '⚡ Time your biggest carb meals around workouts' : '🥗 Keep carbs moderate and focus on protein and healthy fats'}
 
 **Quick Wins:**
-• Always include a palm-sized protein source
-• Add a fist-sized portion of vegetables
-• Include healthy fats (thumb-sized portion)
-• ${goal.toLowerCase().includes('performance') ? 'Add complex carbs equal to your cupped hand' : 'Keep carbs to half a cupped hand unless training'}
+- Always include a palm-sized protein source
+- Add a fist-sized portion of vegetables for nutrients
+- Include healthy fats (thumb-sized portion) for satiety
+- ${goal.toLowerCase().includes('performance') ? 'Add complex carbs equal to your cupped hand for energy' : 'Keep carbs to half a cupped hand unless training'}
 
 **Red Flags to Watch:**
-${sodium > 800 ? `• This meal was high in sodium (${sodium}mg) - watch your blood pressure and hydration` : ''}
-${sugar > 25 ? `• High sugar content (${sugar}g) might cause energy crashes - pair with protein next time` : ''}
-${fiber < 5 ? `• Low fiber (${fiber}g) - add vegetables or switch to whole grains for better digestion` : ''}
+${sodium > 800 ? `🧂 High sodium alert (${sodium}mg) - watch your blood pressure and drink extra water` : ''}
+${sugar > 25 ? `🍭 High sugar content (${sugar}g) might cause energy crashes - pair with protein next time` : ''}
+${fiber < 5 ? `🌾 Low fiber (${fiber}g) - add vegetables or switch to whole grains for better digestion` : ''}
 
-Remember: You're ${age} years old and ${weight} lbs - your body needs consistent fuel to perform at its best. Make every meal count toward your ${goal.toLowerCase()} goals!`;
+**Bottom Line:**
+${firstName}, you're ${age} years old and working toward ${goal.toLowerCase()} - your body is capable of amazing things when you fuel it right. Every meal is a chance to get closer to your goals. Keep building those healthy habits! 💪
+
+**Visual Progress:**
+📊 Protein: ${protein}g ████${'█'.repeat(Math.min(10, Math.floor(proteinPercentage/10)))}${'░'.repeat(Math.max(0, 10 - Math.floor(proteinPercentage/10)))} ${proteinPercentage}% of ${dailyProteinTarget}g target
+🔥 Calories: ${calories} ████${'█'.repeat(Math.min(10, Math.floor(caloriePercentage/10)))}${'░'.repeat(Math.max(0, 10 - Math.floor(caloriePercentage/10)))} ${caloriePercentage}% of ${tdee} target`;
 
     console.log('[generate-personalized-insights] Sending advanced food science request to OpenAI...');
     
@@ -201,17 +226,18 @@ Remember: You're ${age} years old and ${weight} lbs - your body needs consistent
       messages: [
         {
           role: "system",
-          content: `You are a personal nutritionist and trainer speaking directly to your client. Your tone should be:
+          content: `You are a friendly, knowledgeable nutrition coach speaking directly to your client by their first name. Your tone should be:
 
-- **Direct & Personal**: Use "you" and "your" throughout - speak TO them, not ABOUT them
+- **Personal & Conversational**: Use their first name, speak like a supportive friend who knows their stuff
+- **Visual & Engaging**: Include emojis, progress bars, and visual elements to make it easy to scan
+- **Encouraging but Real**: Celebrate wins AND point out areas for improvement - be honest but supportive
 - **Specific & Actionable**: Give exact numbers, specific food suggestions, and clear next steps
-- **Encouraging but Honest**: Point out what they're doing well AND what needs improvement
-- **Goal-Focused**: Everything should tie back to their specific goals and body stats
-- **Practical**: Suggest real foods and realistic changes they can make today
+- **Goal-Focused**: Everything ties back to their specific goals and body stats
+- **Educational**: Explain WHY things matter (why protein targets, why timing matters, etc.)
 
-Think like a knowledgeable trainer who cares about their success and wants to give them the exact guidance they need to improve their nutrition and reach their goals.
+Think like a knowledgeable trainer who genuinely cares about their success and wants to make nutrition feel approachable and achievable. Use their exact stats to make everything personal and relevant.
 
-Be conversational but authoritative. Use their exact stats (age, weight, height, goals) to make everything personal and relevant to them specifically.`
+Be conversational but authoritative. Make them feel like they're getting advice from someone who really knows them and their goals.`
         },
         {
           role: "user",
@@ -255,6 +281,7 @@ Be conversational but authoritative. Use their exact stats (age, weight, height,
       insights: insights,
       metadata: {
         userProfile: { 
+          firstName,
           age, 
           weight: `${weight} ${weightUnit}`, 
           height: `${Math.floor(height/12)}'${height%12}"`, 
@@ -262,7 +289,8 @@ Be conversational but authoritative. Use their exact stats (age, weight, height,
           activityLevel, 
           goal,
           bmr: Math.round(bmr),
-          tdee: tdee
+          tdee: tdee,
+          dailyProteinTarget
         },
         mealInfo: { 
           name: mealName, 
@@ -270,11 +298,12 @@ Be conversational but authoritative. Use their exact stats (age, weight, height,
           protein, 
           carbs, 
           fat,
-          caloriePercentage
+          caloriePercentage,
+          proteinPercentage
         },
         generatedAt: new Date().toISOString(),
         source: 'advanced_analysis',
-        version: '4.0'
+        version: '5.0-personal'
       }
     });
 

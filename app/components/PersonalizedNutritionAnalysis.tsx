@@ -962,7 +962,7 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
     });
 
     for (const source of sources) {
-      if (source && typeof source === 'string' && source.length > 100) {
+      if (source && typeof source === 'string' && source.length > 2000) {
         console.log('[getExistingInsights] Found insights of length:', source.length);
         console.log('[getExistingInsights] Preview:', source.substring(0, 200) + '...');
         return source;
