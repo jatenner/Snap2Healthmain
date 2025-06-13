@@ -198,6 +198,58 @@ export default function AnalysisPage() {
       }
       
       // If we get here, the original ID failed and recovery didn't work
+      // Create an emergency analysis as a last resort
+      console.log('[AnalysisPage] All recovery attempts failed, creating emergency analysis...');
+      
+      try {
+        const emergencyResponse = await fetch('/api/meals/emergency-analysis', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            originalMealId: rawMealId,
+            reason: 'meal_not_found'
+          })
+        });
+        
+        if (emergencyResponse.ok) {
+          const emergencyData = await emergencyResponse.json();
+          console.log('[AnalysisPage] Emergency analysis created successfully');
+          
+          // Transform the emergency data to match PersonalizedNutritionAnalysis expectations
+          const transformedData: MealAnalysisData = {
+            ...emergencyData,
+            analysis: {
+              calories: emergencyData.calories,
+              totalCalories: emergencyData.calories,
+              macronutrients: emergencyData.macronutrients || [],
+              micronutrients: emergencyData.micronutrients || [],
+              phytonutrients: emergencyData.phytonutrients || [],
+              personalized_insights: emergencyData.personalizedHealthInsights || emergencyData.personalized_insights,
+              insights: emergencyData.personalizedHealthInsights || emergencyData.insights,
+              glycemicImpact: emergencyData.glycemicImpact,
+              inflammatoryPotential: emergencyData.inflammatoryPotential,
+              nutrientDensity: emergencyData.nutrientDensity,
+              suggestions: emergencyData.suggestions || emergencyData.expertRecommendations || [],
+              scientificInsights: emergencyData.scientificInsights || [],
+              goalAlignment: emergencyData.goalAlignment,
+              metabolicInsights: emergencyData.metabolicInsights,
+              nutritionalNarrative: emergencyData.nutritionalNarrative,
+              timeOfDayOptimization: emergencyData.timeOfDayOptimization,
+              mealStory: emergencyData.mealStory
+            }
+          };
+          
+          setAnalysis(transformedData);
+          setLoading(false);
+          return; // Success with emergency analysis
+        }
+      } catch (emergencyErr) {
+        console.log('[AnalysisPage] Emergency analysis also failed:', emergencyErr);
+      }
+      
+      // Only show error if even emergency analysis fails
       setError('Meal analysis not found. This meal may have been deleted or the link is incorrect.');
       setLoading(false);
     };
