@@ -1265,144 +1265,20 @@ const PersonalizedNutritionAnalysis: React.FC<PersonalizedNutritionAnalysisProps
                   ) : personalizedInsights ? (
                     <div className="space-y-6">
                       {/* Parse and display insights in beautiful cards */}
-                      {personalizedInsights.split('\n\n').map((section, index) => {
-                        // Skip empty sections
-                        if (!section.trim()) return null;
-
-                        // Handle main section headers (### or ##)
-                        if (section.trim().startsWith('### ') || section.trim().startsWith('## ')) {
-                          const headerText = section.replace(/^###?\s/, '').trim();
-                          const iconMap: Record<string, string> = {
-                            'metabolic': '⚡',
-                            'glucose': '🩸',
-                            'energy': '💪',
-                            'nutrient': '🥗',
-                            'timing': '⏰',
-                            'recovery': '🔄',
-                            'performance': '🎯',
-                            'health': '❤️',
-                            'analysis': '📊',
-                            'impact': '📈',
-                            'response': '🧬',
-                            'metabolism': '🔥'
-                          };
-                          
-                          const icon = Object.entries(iconMap).find(([key]) => 
-                            headerText.toLowerCase().includes(key)
-                          )?.[1] || '📋';
-
-                          return (
-                            <div key={index} className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 rounded-xl p-6 border border-indigo-500/20">
-                              <div className="flex items-center space-x-3 mb-4">
-                                <span className="text-2xl">{icon}</span>
-                                <h4 className="text-xl font-bold text-white">{headerText}</h4>
-                          </div>
+                      {<div className="bg-gray-800/50 rounded-xl p-6 border border-gray-600/30">
+                      <div className="prose prose-invert prose-lg max-w-none">
+                        <div 
+                          className="text-gray-300 leading-relaxed"
+                          dangerouslySetInnerHTML={{
+                            __html: personalizedInsights
+                              .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white font-semibold">$1</strong>')
+                              .replace(/### (.*?)$/gm, '<h3 class="text-xl font-bold text-white mt-6 mb-3">$1</h3>')
+                              .replace(/## (.*?)$/gm, '<h2 class="text-2xl font-bold text-white mt-8 mb-4">$1</h2>')
+                              .replace(/\n/g, '<br/>')
+                          }} 
+                        />
                       </div>
-                          );
-                        }
-
-                        // Handle subsection headers (####)
-                        if (section.trim().startsWith('#### ')) {
-                          const headerText = section.replace(/^####\s/, '').trim();
-                          return (
-                            <div key={index} className="bg-gradient-to-r from-blue-500/10 to-teal-500/10 rounded-lg p-4 border border-blue-500/20">
-                              <h5 className="text-lg font-semibold text-blue-300 mb-2">{headerText}</h5>
-                  </div>
-                          );
-                        }
-
-                        // Handle content sections with auto-categorization
-                        const lowerSection = section.toLowerCase();
-                        let cardStyle = "bg-gray-800/50 border border-gray-600/30";
-                        let iconEmoji = "📝";
-                        let titleColor = "text-gray-300";
-
-                        if (lowerSection.includes('glucose') || lowerSection.includes('blood sugar') || lowerSection.includes('glycemic')) {
-                          cardStyle = "bg-gradient-to-br from-red-900/20 to-orange-900/20 border border-red-500/30";
-                          iconEmoji = "🩸";
-                          titleColor = "text-red-300";
-                        } else if (lowerSection.includes('energy') || lowerSection.includes('metabolism') || lowerSection.includes('calories')) {
-                          cardStyle = "bg-gradient-to-br from-yellow-900/20 to-amber-900/20 border border-yellow-500/30";
-                          iconEmoji = "⚡";
-                          titleColor = "text-yellow-300";
-                        } else if (lowerSection.includes('protein') || lowerSection.includes('muscle') || lowerSection.includes('recovery')) {
-                          cardStyle = "bg-gradient-to-br from-blue-900/20 to-cyan-900/20 border border-blue-500/30";
-                          iconEmoji = "💪";
-                          titleColor = "text-blue-300";
-                        } else if (lowerSection.includes('vitamin') || lowerSection.includes('mineral') || lowerSection.includes('nutrient')) {
-                          cardStyle = "bg-gradient-to-br from-green-900/20 to-emerald-900/20 border border-green-500/30";
-                          iconEmoji = "🥗";
-                          titleColor = "text-green-300";
-                        } else if (lowerSection.includes('timing') || lowerSection.includes('morning') || lowerSection.includes('circadian')) {
-                          cardStyle = "bg-gradient-to-br from-purple-900/20 to-indigo-900/20 border border-purple-500/30";
-                          iconEmoji = "⏰";
-                          titleColor = "text-purple-300";
-                        }
-
-                        // Extract title from first sentence or use generic title
-                        const sentences = section.split('.');
-                        const firstSentence = sentences[0] || '';
-                        let title = "Analysis";
-                        
-                        if (firstSentence && firstSentence.length < 100) {
-                          title = firstSentence.replace(/^(The|This|Your|A)?\s*/i, '').trim();
-                        } else if (lowerSection.includes('glucose')) {
-                          title = "Glucose Response";
-                        } else if (lowerSection.includes('energy')) {
-                          title = "Energy Metabolism";
-                        } else if (lowerSection.includes('protein')) {
-                          title = "Protein Impact";
-                        } else if (lowerSection.includes('nutrient')) {
-                          title = "Nutrient Analysis";
-                        } else if (lowerSection.includes('timing')) {
-                          title = "Optimal Timing";
-                        }
-
-                        return (
-                          <div key={index} className={`${cardStyle} rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300`}>
-                            <div className="flex items-start space-x-4">
-                              <div className="flex-shrink-0">
-                                <div className="w-12 h-12 bg-gray-700/50 rounded-full flex items-center justify-center">
-                                  <span className="text-xl">{iconEmoji}</span>
-              </div>
-                              </div>
-                              <div className="flex-1">
-                                <h5 className={`text-lg font-semibold ${titleColor} mb-3`}>{title}</h5>
-                                <div className="prose prose-invert prose-sm max-w-none">
-                                  {section.split('\n').map((paragraph, pIndex) => {
-                                    if (!paragraph.trim()) return null;
-                                    
-                                    // Handle bold text
-                                    if (paragraph.includes('**')) {
-                                      const parts = paragraph.split(/(\*\*.*?\*\*)/g);
-                                      return (
-                                        <p key={pIndex} className="text-gray-300 leading-relaxed mb-3">
-                                          {parts.map((part, partIndex) => {
-                                            if (part.startsWith('**') && part.endsWith('**')) {
-                                              return (
-                                                <span key={partIndex} className="font-semibold text-white">
-                                                  {part.replace(/\*\*/g, '')}
-                                                </span>
-                                              );
-                                            }
-                                            return <span key={partIndex}>{part}</span>;
-                                          })}
-                                        </p>
-                                      );
-                                    }
-                                    
-                                    return (
-                                      <p key={pIndex} className="text-gray-300 leading-relaxed mb-3">
-                                        {paragraph}
-                                      </p>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      }).filter(Boolean)}
+                    </div>}
                     </div>
                   ) : (
                     <div className="text-center py-16">
