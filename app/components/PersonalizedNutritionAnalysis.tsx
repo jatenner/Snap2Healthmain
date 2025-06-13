@@ -300,8 +300,8 @@ const renderNutrientBar = (nutrient: Nutrient, index: number) => {
   const dv = nutrient.percentDailyValue || 0;
   
   // Use the red/yellow/green system for all nutrients based on daily value completion
-  const colorSystem = getDVColorSystem({...nutrient, percentDailyValue: dv});
-  const barColor = colorSystem.progressColor;
+  const colorSystem = getNutrientStatusColor({...nutrient, percentDailyValue: dv});
+  const barColor = colorSystem;
   
   // Use personalized value if available, otherwise use the standard one
   const displayValue = nutrient.percentDailyValue || 0;
