@@ -227,7 +227,7 @@ export async function POST(request: NextRequest) {
     let analysisResult: any;
     try {
       // Import the analyzeImageWithGPT function directly
-      const { analyzeImageWithGPT } = await import('../../lib/openai-utils');
+      const { analyzeImageWithGPT } = await import("../../lib/openai-utils-fixed");
       
       // Create a basic user profile for analysis
       const userProfile = {
