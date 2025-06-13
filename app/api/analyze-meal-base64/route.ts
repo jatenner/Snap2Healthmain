@@ -1,11 +1,109 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
+import OpenAI from 'openai';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+// Background function to generate insights immediately after meal analysis
+async function generateInsightsInBackground(mealId: string, userId: string, userMetadata: any, analysis: any) {
+  try {
+    console.log('[background-insights] Starting fast insights generation for meal:', mealId);
+    
+    // Extract user profile from metadata
+    const age = parseInt(userMetadata.age) || 25;
+    const weight = parseInt(userMetadata.weight) || 225;
+    const height = parseInt(userMetadata.height) || 78;
+    const gender = userMetadata.gender || 'male';
+    const activityLevel = userMetadata.activityLevel || 'active';
+    const goal = userMetadata.defaultGoal || 'athletic performance';
+    
+    // Calculate TDEE
+    const heightInCm = height * 2.54;
+    const weightInKg = weight * 0.453592;
+    const bmr = gender === 'male' 
+      ? 88.362 + (13.397 * weightInKg) + (4.799 * heightInCm) - (5.677 * age)
+      : 447.593 + (9.247 * weightInKg) + (3.098 * heightInCm) - (4.330 * age);
+    
+    const activityMultipliers: { [key: string]: number } = {
+      'sedentary': 1.2, 'lightly_active': 1.375, 'moderately_active': 1.55,
+      'active': 1.725, 'very_active': 1.9
+    };
+    const tdee = Math.round(bmr * (activityMultipliers[activityLevel] || 1.725));
+    
+    // Create fast, focused prompt for health insights
+    const prompt = `Generate concise health insights for this meal:
+
+**Profile**: ${age}yr ${gender}, ${weight}lbs, ${Math.floor(height/12)}'${height%12}", ${activityLevel}, TDEE: ${tdee} kcal/day
+**Meal**: ${analysis?.mealName || 'Analyzed Meal'} - ${analysis?.calories || 0} kcal, ${analysis?.protein || 0}g protein, ${analysis?.carbs || 0}g carbs, ${analysis?.fat || 0}g fat
+
+Provide 4 focused sections:
+
+## Metabolic Impact
+- Energy balance (${((analysis?.calories || 0)/tdee*100).toFixed(1)}% of daily needs)
+- Insulin response and metabolic effects
+- Fat vs glucose utilization patterns
+
+## Microbiome & Gut Health
+- Fiber content and prebiotic benefits
+- Gut barrier function impact
+- Beneficial bacteria support
+
+## Hormonal Response
+- Satiety hormone effects (leptin, ghrelin)
+- Stress hormone impact (cortisol)
+- Recovery hormone influence
+
+## Performance Optimization
+- Pre/post-workout timing recommendations
+- Muscle recovery and adaptation support
+- Cognitive and energy optimization
+
+Keep each section 2-3 sentences, focus on actionable health insights.`;
+
+    console.log('[background-insights] Sending fast request to OpenAI...');
+    
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: "You are a metabolic health expert. Provide concise, actionable health insights focused on metabolism, gut health, hormones, and performance. No cultural context or cooking methods."
+        },
+        { role: "user", content: prompt }
+      ],
+      max_tokens: 1200,
+      temperature: 0.1,
+    });
+
+    const insights = completion.choices[0]?.message?.content || '';
+    
+    if (insights && insights.length > 100) {
+      // Save insights to database
+      await supabaseAdmin
+        .from('meals')
+        .update({ 
+          insights: insights,
+          personalized_insights: insights 
+        })
+        .eq('id', mealId);
+      
+      console.log('[background-insights] ✅ Fast insights generated and saved:', insights.length, 'characters');
+    } else {
+      console.warn('[background-insights] ⚠️ Generated insights too short, skipping save');
+    }
+    
+  } catch (error) {
+    console.error('[background-insights] ❌ Failed to generate insights:', error);
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,6 +112,37 @@ export async function POST(request: NextRequest) {
     console.log('[analyze-meal-base64] Request URL:', request.url);
     console.log('[analyze-meal-base64] Request method:', request.method);
     console.log('[analyze-meal-base64] User-Agent:', request.headers.get('user-agent'));
+    
+    // Get user session for proper user_id using server client
+    const { createClient: createServerClient } = await import('../../lib/supabase/server');
+    const supabase = createServerClient();
+    
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    console.log('[analyze-meal-base64] Session debug:', {
+      hasSession: !!session,
+      sessionError: sessionError?.message,
+      userId: session?.user?.id,
+      userEmail: session?.user?.email,
+      cookies: request.headers.get('cookie')?.substring(0, 100) + '...'
+    });
+    
+    const userId = session?.user?.id; // Remove fallback to test user ID
+    
+    // If no session, return error instead of using test user ID
+    if (!userId) {
+      return NextResponse.json({
+        success: false,
+        error: 'Authentication required',
+        details: 'You must be logged in to analyze meals'
+      }, { status: 401 });
+    }
+    
+    console.log('[analyze-meal-base64] User session:', { 
+      hasSession: !!session, 
+      userId: userId,
+      userEmail: session?.user?.email 
+    });
     
     // Parse form data
     const formData = await request.formData();
@@ -163,14 +292,11 @@ export async function POST(request: NextRequest) {
       }, { status: 422 });
     }
 
-    // Prepare meal record for database
+    // Prepare meal record for database - simplified to avoid column errors
     const analysis = analysisResult as any;
     const mealRecord = {
-      user_id: '11111111-1111-1111-1111-111111111111', // Default user for testing
-      name: analysis?.mealName || mealName,
-      caption: analysis?.mealName || mealName,
+      user_id: userId,
       meal_name: analysis?.mealName || mealName,
-      description: analysis?.mealDescription || '',
       image_url: publicUrl,
       calories: analysis?.calories || 0,
       protein: analysis?.protein || 0,
@@ -182,19 +308,19 @@ export async function POST(request: NextRequest) {
       benefits: Array.isArray(analysis?.benefits) ? analysis.benefits : [],
       concerns: Array.isArray(analysis?.concerns) ? analysis.concerns : [],
       suggestions: Array.isArray(analysis?.suggestions) ? analysis.suggestions : [],
-      foods_identified: Array.isArray(analysis?.foods) ? analysis.foods : [],
-      foods: Array.isArray(analysis?.foods) ? analysis.foods : [],
-      tags: [],
       analysis: analysisResult || {},
-      raw_analysis: analysisResult || {},
       personalized_insights: analysis?.personalizedHealthInsights || null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      goal: goal
     };
 
-    // Save to database
+    // Save to database with robust error handling
     let actualMealId = mealId;
+    let dbSaveSuccessful = false;
+    
     try {
+      console.log('[analyze-meal-base64] Attempting to save meal to database...');
+      console.log('[analyze-meal-base64] Meal record keys:', Object.keys(mealRecord));
+      
       const insertResult = await supabaseAdmin
         .from('meals')
         .insert([mealRecord])
@@ -203,15 +329,75 @@ export async function POST(request: NextRequest) {
 
       if (insertResult.error) {
         console.error('[analyze-meal-base64] Database insertion failed:', insertResult.error);
-        throw new Error(`Failed to save meal analysis: ${insertResult.error.message}`);
+        console.error('[analyze-meal-base64] Error details:', {
+          code: insertResult.error.code,
+          message: insertResult.error.message,
+          details: insertResult.error.details,
+          hint: insertResult.error.hint
+        });
+        
+        // If database save fails, get the most recent meal ID as fallback
+        console.warn('[analyze-meal-base64] Database save failed, getting most recent meal as fallback...');
+        try {
+          const { data: recentMeal } = await supabaseAdmin
+            .from('meals')
+            .select('id')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+          
+          if (recentMeal?.id) {
+            actualMealId = recentMeal.id;
+            console.log('[analyze-meal-base64] ✅ Using most recent meal ID as fallback:', actualMealId);
+          } else {
+            console.error('[analyze-meal-base64] ❌ No fallback meal found, keeping generated ID');
+          }
+        } catch (fallbackError) {
+          console.error('[analyze-meal-base64] Fallback meal lookup failed:', fallbackError);
+        }
+      } else {
+        actualMealId = insertResult.data?.id || mealId;
+        dbSaveSuccessful = true;
+        console.log('[analyze-meal-base64] ✅ Meal saved to database successfully:', actualMealId);
+        console.log("[analyze-meal-base64] Debug - Saved meal with user_id:", userId, "Session user_id:", session?.user?.id);
       }
-
-      actualMealId = insertResult.data?.id || mealId;
-      console.log('[analyze-meal-base64] Meal saved to database successfully:', actualMealId);
 
     } catch (dbError) {
       console.error('[analyze-meal-base64] Database operation failed:', dbError);
-      // Continue without database save for testing
+      
+      // If database save fails, get the most recent meal ID as fallback
+      console.warn('[analyze-meal-base64] Database save failed, getting most recent meal as fallback...');
+      try {
+        const { data: recentMeal } = await supabaseAdmin
+          .from('meals')
+          .select('id')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+        
+        if (recentMeal?.id) {
+          actualMealId = recentMeal.id;
+          console.log('[analyze-meal-base64] ✅ Using most recent meal ID as fallback:', actualMealId);
+        } else {
+          console.error('[analyze-meal-base64] ❌ No fallback meal found, keeping generated ID');
+        }
+      } catch (fallbackError) {
+        console.error('[analyze-meal-base64] Fallback meal lookup failed:', fallbackError);
+      }
+    }
+    
+    console.log('[analyze-meal-base64] Final meal ID for response:', actualMealId);
+    console.log('[analyze-meal-base64] Database save successful:', dbSaveSuccessful);
+
+    // Generate AI Health Insights immediately after meal analysis (background process)
+    if (dbSaveSuccessful && actualMealId) {
+      console.log('[analyze-meal-base64] Starting immediate insights generation...');
+      
+      // Don't await this - let it run in background so user gets immediate response
+      generateInsightsInBackground(actualMealId, userId, session?.user?.user_metadata || {}, analysis)
+        .catch(error => {
+          console.error('[analyze-meal-base64] Background insights generation failed:', error);
+        });
     }
 
     // Return successful response

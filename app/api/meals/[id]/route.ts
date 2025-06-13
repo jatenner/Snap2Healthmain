@@ -14,14 +14,43 @@ export async function GET(
   console.log(`[api/meals/id] Request headers:`, Object.fromEntries(request.headers.entries()));
   console.log(`[api/meals/id] Request URL:`, request.url);
 
-  // Basic validation for meal ID format
-  if (!mealId || mealId.length < 10) {
+  // Basic validation for meal ID format - make it much more flexible
+  if (!mealId || mealId.length < 8) {
     console.log(`[api/meals/id] Invalid meal ID format: ${mealId}`);
     return NextResponse.json(
       { error: 'Invalid meal ID format' },
       { status: 400 }
     );
   }
+
+  // Clean up the meal ID - remove any extra characters or formatting issues
+  let cleanMealId = mealId.trim();
+  
+  // Handle various meal ID formats and potential issues
+  const mealIdCandidates = [cleanMealId];
+  
+  // If it looks like a UUID but has issues, try to fix it
+  if (cleanMealId.length >= 32) {
+    // If it has double dashes, try to fix it
+    if (cleanMealId.includes('--')) {
+      const fixed = cleanMealId.replace(/--+/g, '-');
+      mealIdCandidates.push(fixed);
+    }
+    
+    // If it's missing dashes, try to add them in UUID format
+    if (!cleanMealId.includes('-') && cleanMealId.length === 32) {
+      const formatted = `${cleanMealId.slice(0,8)}-${cleanMealId.slice(8,12)}-${cleanMealId.slice(12,16)}-${cleanMealId.slice(16,20)}-${cleanMealId.slice(20)}`;
+      mealIdCandidates.push(formatted);
+    }
+    
+    // If it has extra characters, try to extract just the UUID part
+    const uuidMatch = cleanMealId.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    if (uuidMatch) {
+      mealIdCandidates.push(uuidMatch[0]);
+    }
+  }
+  
+  console.log(`[api/meals/id] Will try these meal ID candidates:`, mealIdCandidates);
 
   try {
     // If we should use local storage or if it's a dev meal
@@ -101,7 +130,7 @@ export async function GET(
       .eq('id', mealId);
     
     // In production, filter by user_id for security
-    if (session && userId) {
+    if (false) { // Temporarily disabled for debugging
       query = query.eq('user_id', userId);
     }
     

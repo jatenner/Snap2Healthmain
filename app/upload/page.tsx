@@ -22,6 +22,7 @@ export default function UploadPage() {
   const [isUsingCamera, setIsUsingCamera] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState('');
+  const [show502Recovery, setShow502Recovery] = useState(false);
   
   const router = useRouter();
   const { user } = useAuth();
@@ -108,31 +109,48 @@ export default function UploadPage() {
         analyzeFormData.append('goal', profile.goal);
       }
 
-      const analyzeResponse = await fetch('/api/analyze-meal-base64', {
-        method: 'POST',
-        body: analyzeFormData,
+      console.log('[Upload] Making request to /api/analyze-meal-base64');
+      console.log('[Upload] FormData contents:', {
+        hasFile: analyzeFormData.has('file'),
+        hasGoal: analyzeFormData.has('goal'),
+        goal: analyzeFormData.get('goal')
       });
 
+      const analyzeResponse = await fetch('/api/analyze-meal-base64?debug=1', {
+        method: 'POST',
+        body: analyzeFormData,
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
+      });
+
+      console.log('[Upload] Response status:', analyzeResponse.status);
+      console.log('[Upload] Response headers:', Object.fromEntries(analyzeResponse.headers.entries()));
+
       if (!analyzeResponse.ok) {
-        const errorData = await analyzeResponse.json().catch(() => ({}));
+        const errorText = await analyzeResponse.text();
+        console.error('[Upload] Error response body:', errorText);
+        
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText };
+        }
+        
         let errorMessage = errorData.error || `Analysis failed: ${analyzeResponse.status}`;
         
         // Handle specific error cases with better user messaging
         if (analyzeResponse.status === 502) {
-          errorMessage = 'Server temporarily unavailable - your analysis may still be processing. Check your meal history in a few moments.';
+          errorMessage = 'Server temporarily unavailable - your analysis may still be processing in the background';
         } else if (analyzeResponse.status === 504) {
           errorMessage = 'Analysis is taking longer than expected - please try again with a smaller image';
+        } else if (analyzeResponse.status === 422) {
+          errorMessage = errorData.error || 'The image could not be analyzed - please try a different image';
         } else if (analyzeResponse.status >= 500) {
           errorMessage = 'Server error - please try again in a few moments';
         }
-        const errorDetails = errorData.details || '';
-        
-        console.error('Analysis failed:', {
-          status: analyzeResponse.status,
-          error: errorMessage,
-          details: errorDetails,
-          debugInfo: errorData.debugInfo
-        });
+        console.error('[Upload] Parsed error:', errorData);
         
         throw new Error(errorMessage);
       }

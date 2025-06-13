@@ -264,138 +264,71 @@ function generateUserPrompt(userProfile: UserProfile): string {
   };
 
   // Generate personalized context based on profile
-  let personalizedContext = "Please provide a comprehensive nutritional analysis considering this individual's profile:\n\n";
+  let personalizedContext = "Please provide a comprehensive nutritional analysis considering this individual's profile:\\n\\n";
   
   if (profileData.age && profileData.gender) {
-    personalizedContext += `Demographics: ${profileData.age}-year-old ${profileData.gender}\n`;
+    personalizedContext += `Demographics: ${profileData.age}-year-old ${profileData.gender}\\n`;
   }
   
   if (profileData.goal || profileData.goal) {
-    const goals = [profileData.goal, profileData.goal].filter(Boolean);
-    personalizedContext += `Primary Goals: ${goals.join(', ')}\n`;
+    const goals = [profileData.goal, profileData.goal].filter(Boolean).join(', ');
+    personalizedContext += `Goals: ${goals}\\n`;
+  }
+  
+  if (profileData.weight && profileData.weight_unit) {
+    personalizedContext += `Weight: ${profileData.weight} ${profileData.weight_unit}\\n`;
   }
   
   if (profileData.activity_level) {
-    personalizedContext += `Activity Level: ${profileData.activity_level}\n`;
+    personalizedContext += `Activity Level: ${profileData.activity_level}\\n`;
   }
   
-  if (profileData.weight && profileData.weight) {
-    personalizedContext += `Physical Stats: ${profileData.weight} ${profileData.weight_unit}\n`;
-  }
-  
-  personalizedContext += "\n";
+  personalizedContext += "\\n";
 
-  return `${personalizedContext}MISSION: Analyze this meal like you're creating a comprehensive nutrition report for this specific individual. I need complete, accurate nutritional insights that cover ALL nutrients present in meaningful amounts.
+  return `You are Dr. Nutrition AI, a world-renowned nutritionist and food scientist. Analyze this meal image with scientific precision and provide comprehensive insights.
 
-CRITICAL ANALYSIS REQUIREMENTS:
-1. **COMPLETE NUTRIENT ANALYSIS**: Include ALL nutrients present in meaningful amounts (>1% DV or >0.5mg/mcg). Be comprehensive - aim for 20+ nutrients minimum.
-2. **PORTION SIZE ACCURACY**: Carefully analyze visual portion sizes. Consider plate size, serving utensils, food density, and compare to standard portion references.
-3. **PRECISE CALCULATIONS**: Base all nutrient amounts on ACTUAL portions visible, not standard serving sizes. Use USDA food composition data accuracy.
-4. **COMPREHENSIVE VITAMINS**: Include ALL vitamins present - A, D, E, K, C, B1, B2, B3, B5, B6, B7, B9, B12, even in smaller amounts.
-5. **COMPLETE MINERALS**: Include ALL minerals present - Calcium, Iron, Magnesium, Phosphorus, Potassium, Sodium, Zinc, Copper, Manganese, Selenium, Iodine, etc.
-6. **PHYTONUTRIENTS**: Identify antioxidants, polyphenols, and plant compounds present.
-7. **NUTRITIONAL COMPLETENESS**: Assess what nutrients are missing and how to improve the meal.
+${personalizedContext}
 
-OUTPUT FORMAT (JSON):
+**CRITICAL INSTRUCTIONS:**
+
+1. **MEAL NAMING**: Provide a natural, appetizing meal name as people would commonly say it:
+   - ✅ GOOD: "Buffalo Wings", "Chicken Caesar Salad", "Beef Stir-Fry", "Chocolate Chip Cookies"
+   - ❌ AVOID: "Wings with Buffalo Sauce", "Salad with Chicken and Caesar", "Stir-Fried Beef with Vegetables"
+   - Use the most common, natural way people refer to the dish
+   - Keep it concise and appetizing (2-4 words typically)
+
+2. **COMPREHENSIVE ANALYSIS**: Provide detailed nutritional breakdown including:
+   - Precise calorie count and macronutrient distribution
+   - Key micronutrients (vitamins, minerals) with amounts and daily value percentages
+   - Beneficial compounds (antioxidants, phytonutrients)
+   - Health benefits and potential concerns
+   - Personalized recommendations based on the user's profile
+
+3. **SCIENTIFIC ACCURACY**: Base all nutritional values on established food databases (USDA, etc.)
+
+4. **PERSONALIZATION**: Tailor insights specifically to the user's age, gender, goals, and activity level
+
+**RESPONSE FORMAT:**
+Return a valid JSON object with this exact structure:
+
+\`\`\`json
 {
-  "mealName": "[Specific meal name based on actual foods seen]",
-  "mealDescription": "[Detailed description of actual foods, portions, and preparation methods visible]",
-  "calories": [precise calorie estimate],
-  "protein": [protein grams],
-  "fat": [fat grams], 
-  "carbs": [carb grams],
-  "fiber": [fiber grams],
-  "foods": ["[exact foods identified]"],
-  "ingredients": ["[specific ingredients and cooking methods observed]"],
+  "meal_name": "Natural meal name (e.g., 'Buffalo Wings', 'Caesar Salad')",
+  "calories": number,
   "macronutrients": [
-    {"name": "Protein", "amount": X, "unit": "g", "percentDailyValue": X},
-    {"name": "Total Carbohydrates", "amount": X, "unit": "g", "percentDailyValue": X},
-    {"name": "Dietary Fiber", "amount": X, "unit": "g", "percentDailyValue": X},
-    {"name": "Total Fat", "amount": X, "unit": "g", "percentDailyValue": X},
-    {"name": "Saturated Fat", "amount": X, "unit": "g", "percentDailyValue": X},
-    {"name": "Unsaturated Fat", "amount": X, "unit": "g", "percentDailyValue": X},
-    {"name": "Sugars", "amount": X, "unit": "g", "percentDailyValue": X},
-    {"name": "Sodium", "amount": X, "unit": "mg", "percentDailyValue": X}
+    {"name": "Protein", "amount": number, "unit": "g", "percentDailyValue": number},
+    {"name": "Carbohydrates", "amount": number, "unit": "g", "percentDailyValue": number},
+    {"name": "Fat", "amount": number, "unit": "g", "percentDailyValue": number}
   ],
   "micronutrients": [
-    // CRITICAL: Include ALL vitamins and minerals present in meaningful amounts (>1% DV). Be comprehensive!
-    // VITAMINS (include all that are present):
-    {"name": "Vitamin A", "amount": X, "unit": "mcg", "percentDailyValue": X},
-    {"name": "Vitamin C", "amount": X, "unit": "mg", "percentDailyValue": X},
-    {"name": "Vitamin D", "amount": X, "unit": "mcg", "percentDailyValue": X},
-    {"name": "Vitamin E", "amount": X, "unit": "mg", "percentDailyValue": X},
-    {"name": "Vitamin K", "amount": X, "unit": "mcg", "percentDailyValue": X},
-    {"name": "Thiamine (B1)", "amount": X, "unit": "mg", "percentDailyValue": X},
-    {"name": "Riboflavin (B2)", "amount": X, "unit": "mg", "percentDailyValue": X},
-    {"name": "Niacin (B3)", "amount": X, "unit": "mg", "percentDailyValue": X},
-    {"name": "Pantothenic Acid (B5)", "amount": X, "unit": "mg", "percentDailyValue": X},
-    {"name": "Pyridoxine (B6)", "amount": X, "unit": "mg", "percentDailyValue": X},
-    {"name": "Biotin (B7)", "amount": X, "unit": "mcg", "percentDailyValue": X},
-    {"name": "Folate (B9)", "amount": X, "unit": "mcg", "percentDailyValue": X},
-    {"name": "Cobalamin (B12)", "amount": X, "unit": "mcg", "percentDailyValue": X},
-    // MINERALS (include all that are present):
-    {"name": "Calcium", "amount": X, "unit": "mg", "percentDailyValue": X},
-    {"name": "Iron", "amount": X, "unit": "mg", "percentDailyValue": X},
-    {"name": "Magnesium", "amount": X, "unit": "mg", "percentDailyValue": X},
-    {"name": "Phosphorus", "amount": X, "unit": "mg", "percentDailyValue": X},
-    {"name": "Potassium", "amount": X, "unit": "mg", "percentDailyValue": X},
-    {"name": "Zinc", "amount": X, "unit": "mg", "percentDailyValue": X},
-    {"name": "Copper", "amount": X, "unit": "mg", "percentDailyValue": X},
-    {"name": "Manganese", "amount": X, "unit": "mg", "percentDailyValue": X},
-    {"name": "Selenium", "amount": X, "unit": "mcg", "percentDailyValue": X},
-    {"name": "Iodine", "amount": X, "unit": "mcg", "percentDailyValue": X}
-    // Only include nutrients actually present - but be comprehensive and include small amounts too
+    {"name": "Vitamin C", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Iron", "amount": number, "unit": "mg", "percentDailyValue": number}
   ],
-  "phytonutrients": [
-    // Include significant antioxidants and plant compounds if present
-    {"name": "Lycopene", "amount": X, "unit": "mg", "significance": "Powerful antioxidant"},
-    {"name": "Beta-Carotene", "amount": X, "unit": "mcg", "significance": "Vitamin A precursor"},
-    {"name": "Lutein", "amount": X, "unit": "mg", "significance": "Eye health support"}
-  ],
-  "personalizedHealthInsights": "COMPREHENSIVE ANALYSIS: For a [age]-year-old [weight]lb individual focused on [specific goal], this meal provides [X] total nutrients with [completeness assessment]. Nutritional strengths: [specific nutrients in good amounts]. Critical gaps: [missing nutrients]. Overall nutritional quality: [assessment]. This meal covers [X]% of daily nutritional needs.",
-  "metabolicInsights": "METABOLIC IMPACT: This meal provides [X] calories with [macro breakdown]. Energy availability: [timeframe]. Key nutrients for performance: [specific vitamins/minerals]. Nutrient synergies: [combinations that enhance absorption]. Optimal timing considerations: [recommendations].",
-  "mealStory": "NUTRITIONAL COMPLETENESS: This meal contains [X] essential nutrients out of [total needed daily]. Strong in: [nutrient categories]. Moderate in: [nutrients]. Low/missing: [specific gaps]. To make this meal nutritionally complete, add: [specific suggestions].",
-  "nutritionalNarrative": "QUALITY ASSESSMENT: Nutritional density score: [X/10]. This meal excels in providing [specific nutrients] which support [health benefits]. However, it lacks [specific nutrients] important for [health functions]. The nutrient profile suggests this is a [meal type assessment] suitable for [timing/goals].",
-  "timeOfDayOptimization": "TIMING RECOMMENDATIONS: Best consumed [time] because [nutritional reasoning]. The [specific nutrients] make this ideal for [pre/post workout/general]. Nutrient absorption optimized by: [specific timing advice].",
-  "expertRecommendations": [
-    "NUTRIENT ENHANCEMENT: Add [specific food] to provide missing [nutrients] and increase overall completeness by [X]%",
-    "ABSORPTION OPTIMIZATION: Combine with [specific food/nutrient] to enhance [nutrient] absorption by up to [X]%",
-    "BALANCE IMPROVEMENT: Include [specific addition] to better balance the [nutrient ratio] for optimal [health benefit]"
-  ],
-  "benefits": [
-    "Excellent source of [specific nutrients] providing [X]% of daily needs",
-    "Contains [nutrients] that work together to support [specific health function]",
-    "Provides [specific nutrient] which is often lacking in typical diets"
-  ],
-  "concerns": [
-    "Limited in [specific nutrients] which are important for [health function]",
-    "Missing [specific vitamins/minerals] that would complement the existing nutrients",
-    "Could benefit from additional [nutrient category] to improve overall balance"
-  ],
-  "suggestions": [
-    "Add [specific food] to provide [missing nutrients] and increase nutritional completeness",
-    "Include [specific ingredient] to enhance [nutrient] content and improve [health benefit]",
-    "Pair with [specific food] to create a more nutritionally complete meal"
-  ],
-  "nutritionalCompleteness": {
-    "totalNutrients": [number of nutrients identified],
-    "vitaminsCount": [number of vitamins present],
-    "mineralsCount": [number of minerals present],
-    "completenessScore": [percentage of nutritional completeness],
-    "missingNutrients": ["[specific missing nutrients]"]
-  },
-  "healthRating": [1-10 rating based on nutritional completeness and quality]
+  "insights": "Comprehensive personalized analysis (500+ words) covering metabolic impact, performance optimization, health benefits, and specific recommendations for this ${profileData.age || 'adult'} ${profileData.gender || 'individual'} with ${profileData.goal || 'health'} goals"
 }
+\`\`\`
 
-CRITICAL SUCCESS FACTORS:
-- Include 20+ nutrients minimum - be comprehensive
-- Accurate portion-based calculations using USDA data
-- Identify ALL vitamins and minerals present, even smaller amounts
-- Assess nutritional completeness and gaps
-- Provide specific suggestions to improve nutritional profile
-- Use scientific accuracy - no generic advice
-
-Focus on creating a complete nutritional picture that rivals professional nutrition analysis software.`;
+Analyze the meal image now and provide the comprehensive nutritional analysis.`;
 }
 
 // Safe parsing of OpenAI response with NO fallback data

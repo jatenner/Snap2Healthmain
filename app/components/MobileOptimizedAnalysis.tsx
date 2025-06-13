@@ -98,6 +98,10 @@ const MobileOptimizedAnalysis: React.FC<MobileOptimizedAnalysisProps> = ({
     const existingInsights = analysisData?.personalized_insights || analysisData?.analysis?.personalized_insights;
     if (existingInsights) {
       setPersonalizedInsights(existingInsights);
+    } else {
+      // Auto-generate insights for mobile
+      console.log('[MobileOptimizedAnalysis] Auto-generating insights...');
+      generatePersonalizedInsights();
     }
   }, [analysisData]);
 
@@ -329,16 +333,15 @@ const MobileOptimizedAnalysis: React.FC<MobileOptimizedAnalysisProps> = ({
                 ) : (
                   <div className="text-center py-12">
                     <div className="mb-4">
-                      <span className="text-4xl">🤖</span>
-                      <h4 className="text-lg font-semibold text-white mb-2">AI Analysis Ready</h4>
-                      <p className="text-gray-400 text-sm mb-6">Get personalized insights about this meal</p>
+                      <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                      <h4 className="text-lg font-semibold text-white mb-2">Generating AI Insights</h4>
+                      <p className="text-gray-400 text-sm mb-6">Analyzing your meal for personalized insights...</p>
                     </div>
-                    <button
-                      onClick={generatePersonalizedInsights}
-                      className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg font-semibold transition-all touch-target"
-                    >
-                      Generate AI Analysis
-                    </button>
+                    <div className="text-xs text-gray-500">
+                      <span className="inline-block animate-pulse">●</span>
+                      <span className="mx-1">Processing data</span>
+                      <span className="inline-block animate-pulse">●</span>
+                    </div>
                   </div>
                 )}
               </div>

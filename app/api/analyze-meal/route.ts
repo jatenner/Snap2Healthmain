@@ -351,22 +351,22 @@ export async function POST(request: NextRequest) {
     let uploadSuccess = false;
 
     try {
-      const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
-        .from('meal-images')
-        .upload(filename, buffer, {
-          contentType: file.type,
-          upsert: false
-        });
+    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
+      .from('meal-images')
+      .upload(filename, buffer, {
+        contentType: file.type,
+        upsert: false
+      });
 
-      if (uploadError) {
+    if (uploadError) {
         console.warn('[analyze-meal] Supabase storage upload failed:', uploadError);
         throw new Error('Supabase storage failed');
-      }
+    }
 
-      // Get public URL
+    // Get public URL
       const { data: { publicUrl: supabaseUrl } } = supabaseAdmin.storage
-        .from('meal-images')
-        .getPublicUrl(filename);
+      .from('meal-images')
+      .getPublicUrl(filename);
 
       publicUrl = supabaseUrl;
       uploadSuccess = true;

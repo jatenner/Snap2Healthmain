@@ -141,7 +141,7 @@ export default function AnalysisPage() {
       // Valid UUIDs are 36 characters with 4 dashes in specific positions
       const isValidUUIDFormat = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawMealId);
       
-      if (!isValidUUIDFormat && true) {
+      if (false) { // Disabled recovery system
         console.log('[AnalysisPage] Original ID failed and contains double dashes, attempting recovery...');
         
         // Get candidate meal IDs to try
@@ -198,59 +198,93 @@ export default function AnalysisPage() {
       }
       
       // If we get here, the original ID failed and recovery didn't work
-      // Create an emergency analysis as a last resort
-      console.log('[AnalysisPage] All recovery attempts failed, creating emergency analysis...');
+      // Create an emergency analysis to ensure the page always works
+      console.log('[AnalysisPage] All lookup methods failed, creating emergency analysis...');
       
-      try {
-        const emergencyResponse = await fetch('/api/meals/emergency-analysis', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            originalMealId: rawMealId,
-            reason: 'meal_not_found'
-          })
-        });
+      const emergencyAnalysis: MealAnalysisData = {
+        id: 'emergency-analysis',
+        mealName: 'Sample Balanced Meal',
+        description: 'A nutritionally balanced meal with lean protein, vegetables, and whole grains.',
+        imageUrl: '/placeholder-meal.jpg',
+        goal: 'General Wellness',
         
-        if (emergencyResponse.ok) {
-          const emergencyData = await emergencyResponse.json();
-          console.log('[AnalysisPage] Emergency analysis created successfully');
-          
-          // Transform the emergency data to match PersonalizedNutritionAnalysis expectations
-          const transformedData: MealAnalysisData = {
-            ...emergencyData,
-            analysis: {
-              calories: emergencyData.calories,
-              totalCalories: emergencyData.calories,
-              macronutrients: emergencyData.macronutrients || [],
-              micronutrients: emergencyData.micronutrients || [],
-              phytonutrients: emergencyData.phytonutrients || [],
-              personalized_insights: emergencyData.personalizedHealthInsights || emergencyData.personalized_insights,
-              insights: emergencyData.personalizedHealthInsights || emergencyData.insights,
-              glycemicImpact: emergencyData.glycemicImpact,
-              inflammatoryPotential: emergencyData.inflammatoryPotential,
-              nutrientDensity: emergencyData.nutrientDensity,
-              suggestions: emergencyData.suggestions || emergencyData.expertRecommendations || [],
-              scientificInsights: emergencyData.scientificInsights || [],
-              goalAlignment: emergencyData.goalAlignment,
-              metabolicInsights: emergencyData.metabolicInsights,
-              nutritionalNarrative: emergencyData.nutritionalNarrative,
-              timeOfDayOptimization: emergencyData.timeOfDayOptimization,
-              mealStory: emergencyData.mealStory
-            }
-          };
-          
-          setAnalysis(transformedData);
-          setLoading(false);
-          return; // Success with emergency analysis
+        // Nutrition data
+        calories: 500,
+        protein: 25,
+        fat: 20,
+        carbs: 45,
+        fiber: 8,
+        
+        macronutrients: [
+          { name: 'Protein', amount: 25, unit: 'g', percentDailyValue: null },
+          { name: 'Total Carbohydrates', amount: 45, unit: 'g', percentDailyValue: null },
+          { name: 'Dietary Fiber', amount: 8, unit: 'g', percentDailyValue: null },
+          { name: 'Total Fat', amount: 20, unit: 'g', percentDailyValue: null }
+        ],
+        
+        micronutrients: [
+          { name: 'Vitamin C', amount: 25, unit: 'mg', percentDailyValue: null },
+          { name: 'Iron', amount: 4, unit: 'mg', percentDailyValue: null },
+          { name: 'Calcium', amount: 200, unit: 'mg', percentDailyValue: null }
+        ],
+        
+        ingredients: ['grilled chicken', 'brown rice', 'steamed broccoli', 'olive oil'],
+        benefits: [
+          'High-quality protein supports muscle maintenance',
+          'Complex carbohydrates provide sustained energy',
+          'Rich in vitamins and minerals for overall health'
+        ],
+        concerns: [
+          'Note: This is sample data shown when original meal analysis is unavailable'
+        ],
+        suggestions: [
+          'Try uploading a new meal for personalized analysis',
+          'Check your meal history for previous analyses',
+          'Ensure good lighting when taking meal photos'
+        ],
+        
+        // Advanced analysis fields
+        personalizedHealthInsights: 'This balanced meal provides excellent nutrition with lean protein, complex carbohydrates, and essential micronutrients. The combination supports sustained energy and overall health.',
+        metabolicInsights: 'The protein content aids in muscle protein synthesis, while the complex carbohydrates provide steady glucose release for sustained energy.',
+        nutritionalNarrative: 'This meal exemplifies balanced nutrition with its combination of lean protein, fiber-rich carbohydrates, and nutrient-dense vegetables.',
+        timeOfDayOptimization: 'This meal is ideal for lunch or dinner, providing sustained energy and satiety for several hours.',
+        mealStory: 'As you consume this meal, the protein will help maintain muscle mass, the carbohydrates will fuel your activities, and the vegetables will provide essential vitamins and antioxidants.',
+        expertRecommendations: [
+          'Consider adding a small portion of healthy fats like avocado',
+          'Include a variety of colorful vegetables for maximum nutrient diversity',
+          'Stay hydrated throughout the day'
+        ],
+        
+        // Analysis object for compatibility
+        analysis: {
+          calories: 500,
+          totalCalories: 500,
+          macronutrients: [
+            { name: 'Protein', amount: 25, unit: 'g', percentDailyValue: null },
+            { name: 'Total Carbohydrates', amount: 45, unit: 'g', percentDailyValue: null },
+            { name: 'Dietary Fiber', amount: 8, unit: 'g', percentDailyValue: null },
+            { name: 'Total Fat', amount: 20, unit: 'g', percentDailyValue: null }
+          ],
+          micronutrients: [
+            { name: 'Vitamin C', amount: 25, unit: 'mg', percentDailyValue: null },
+            { name: 'Iron', amount: 4, unit: 'mg', percentDailyValue: null },
+            { name: 'Calcium', amount: 200, unit: 'mg', percentDailyValue: null }
+          ],
+          personalizedHealthInsights: 'This balanced meal provides excellent nutrition with lean protein, complex carbohydrates, and essential micronutrients.',
+          metabolicInsights: 'The protein content aids in muscle protein synthesis, while complex carbohydrates provide steady energy.',
+          nutritionalNarrative: 'This meal exemplifies balanced nutrition with its combination of lean protein and nutrient-dense vegetables.',
+          timeOfDayOptimization: 'Ideal for lunch or dinner, providing sustained energy and satiety.',
+          mealStory: 'This meal supports muscle maintenance, sustained energy, and provides essential vitamins and antioxidants.',
+          expertRecommendations: ['Consider adding healthy fats', 'Include variety of vegetables', 'Stay hydrated'],
+          suggestions: ['Try uploading a new meal for personalized analysis'],
+          benefits: ['High-quality protein', 'Sustained energy', 'Rich in nutrients'],
+          concerns: ['Sample data - upload your meal for personalized insights'],
+          healthRating: 8
         }
-      } catch (emergencyErr) {
-        console.log('[AnalysisPage] Emergency analysis also failed:', emergencyErr);
-      }
+      };
       
-      // Only show error if even emergency analysis fails
-      setError('Meal analysis not found. This meal may have been deleted or the link is incorrect.');
+      setAnalysis(emergencyAnalysis);
+      setError(`Note: Original meal (${rawMealId}) not found. Showing sample analysis instead. Upload a new meal for personalized insights.`);
       setLoading(false);
     };
 

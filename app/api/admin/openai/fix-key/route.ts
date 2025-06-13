@@ -213,7 +213,7 @@ export async function POST(request: NextRequest) {
     } catch (testErr) {
       console.log('[Timezone Fix] Timezone test query failed (normal in some setups)');
     }
-
+    
     return NextResponse.json({
       success: true,
       message: 'Timezone and memory configuration completed',
