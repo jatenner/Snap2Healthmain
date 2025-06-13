@@ -22,8 +22,8 @@ async function analyzeImageWithGPT(base64Image: string, userProfile: any = {}): 
   
   const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
-    maxRetries: 2,
-    timeout: 30000, // Increased timeout
+    maxRetries: 3, // Increased retries
+    timeout: 60000, // Increased to 60 seconds for comprehensive analysis
   });
 
   if (!base64Image.startsWith('data:image/')) {
@@ -31,158 +31,171 @@ async function analyzeImageWithGPT(base64Image: string, userProfile: any = {}): 
     throw new Error('Invalid image format - must be data:image URL');
   }
 
-  console.log('[analyzeImageWithGPT] Making OpenAI API call...');
+  console.log('[analyzeImageWithGPT] Making OpenAI API call with 60s timeout...');
   
-  try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content: "You are a nutrition expert. Analyze food images accurately and return comprehensive nutrition data with COMPLETE micronutrient profiles and accurate Daily Value percentages in valid JSON format."
-        },
-        {
-          role: "user", 
-          content: [
-            {
-              type: "text",
-              text: `Analyze this meal image and provide COMPREHENSIVE nutrition data with COMPLETE micronutrient analysis in JSON format:
+  // Retry logic with exponential backoff
+  let lastError: any;
+  const maxAttempts = 2;
+  
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      console.log(`[analyzeImageWithGPT] Attempt ${attempt}/${maxAttempts}`);
+      
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: "You are a nutrition expert. Analyze food images quickly and accurately. Return comprehensive nutrition data with complete micronutrient profiles in valid JSON format. Be efficient but thorough."
+          },
+          {
+            role: "user", 
+            content: [
+              {
+                type: "text",
+                text: `Analyze this meal image and provide comprehensive nutrition data in JSON format. Include ALL major nutrients:
 
 {
-  "mealName": "descriptive name of what you see",
-  "mealDescription": "detailed description of the meal",
-  "calories": estimated_calories,
-  "protein": grams,
-  "carbs": grams,
-  "fat": grams,
+  "mealName": "descriptive name",
+  "mealDescription": "detailed description",
+  "calories": number,
+  "protein": number,
+  "carbs": number,
+  "fat": number,
   "macronutrients": [
-    {"name": "Protein", "amount": number, "unit": "g", "percentDailyValue": calculated_percentage},
-    {"name": "Total Carbohydrates", "amount": number, "unit": "g", "percentDailyValue": calculated_percentage},
-    {"name": "Total Fat", "amount": number, "unit": "g", "percentDailyValue": calculated_percentage},
-    {"name": "Saturated Fat", "amount": number, "unit": "g", "percentDailyValue": calculated_percentage},
-    {"name": "Fiber", "amount": number, "unit": "g", "percentDailyValue": calculated_percentage},
-    {"name": "Sugar", "amount": number, "unit": "g", "percentDailyValue": calculated_percentage},
-    {"name": "Sodium", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage}
+    {"name": "Protein", "amount": number, "unit": "g", "percentDailyValue": number},
+    {"name": "Total Carbohydrates", "amount": number, "unit": "g", "percentDailyValue": number},
+    {"name": "Total Fat", "amount": number, "unit": "g", "percentDailyValue": number},
+    {"name": "Saturated Fat", "amount": number, "unit": "g", "percentDailyValue": number},
+    {"name": "Fiber", "amount": number, "unit": "g", "percentDailyValue": number},
+    {"name": "Sugar", "amount": number, "unit": "g", "percentDailyValue": number},
+    {"name": "Sodium", "amount": number, "unit": "mg", "percentDailyValue": number}
   ],
   "micronutrients": [
-    {"name": "Vitamin A", "amount": number, "unit": "mcg", "percentDailyValue": calculated_percentage},
-    {"name": "Vitamin C", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
-    {"name": "Vitamin D", "amount": number, "unit": "mcg", "percentDailyValue": calculated_percentage},
-    {"name": "Vitamin E", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
-    {"name": "Vitamin K", "amount": number, "unit": "mcg", "percentDailyValue": calculated_percentage},
-    {"name": "Vitamin B1 (Thiamine)", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
-    {"name": "Vitamin B2 (Riboflavin)", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
-    {"name": "Vitamin B3 (Niacin)", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
-    {"name": "Vitamin B5 (Pantothenic Acid)", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
-    {"name": "Vitamin B6", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
-    {"name": "Vitamin B7 (Biotin)", "amount": number, "unit": "mcg", "percentDailyValue": calculated_percentage},
-    {"name": "Vitamin B9 (Folate)", "amount": number, "unit": "mcg", "percentDailyValue": calculated_percentage},
-    {"name": "Vitamin B12", "amount": number, "unit": "mcg", "percentDailyValue": calculated_percentage},
-    {"name": "Calcium", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
-    {"name": "Iron", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
-    {"name": "Magnesium", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
-    {"name": "Phosphorus", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
-    {"name": "Potassium", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
-    {"name": "Zinc", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
-    {"name": "Copper", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
-    {"name": "Manganese", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
-    {"name": "Selenium", "amount": number, "unit": "mcg", "percentDailyValue": calculated_percentage},
-    {"name": "Iodine", "amount": number, "unit": "mcg", "percentDailyValue": calculated_percentage},
-    {"name": "Chromium", "amount": number, "unit": "mcg", "percentDailyValue": calculated_percentage},
-    {"name": "Molybdenum", "amount": number, "unit": "mcg", "percentDailyValue": calculated_percentage}
+    {"name": "Vitamin A", "amount": number, "unit": "mcg", "percentDailyValue": number},
+    {"name": "Vitamin C", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Vitamin D", "amount": number, "unit": "mcg", "percentDailyValue": number},
+    {"name": "Vitamin E", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Vitamin K", "amount": number, "unit": "mcg", "percentDailyValue": number},
+    {"name": "Vitamin B1 (Thiamine)", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Vitamin B2 (Riboflavin)", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Vitamin B3 (Niacin)", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Vitamin B5 (Pantothenic Acid)", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Vitamin B6", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Vitamin B7 (Biotin)", "amount": number, "unit": "mcg", "percentDailyValue": number},
+    {"name": "Vitamin B9 (Folate)", "amount": number, "unit": "mcg", "percentDailyValue": number},
+    {"name": "Vitamin B12", "amount": number, "unit": "mcg", "percentDailyValue": number},
+    {"name": "Calcium", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Iron", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Magnesium", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Phosphorus", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Potassium", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Zinc", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Copper", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Manganese", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Selenium", "amount": number, "unit": "mcg", "percentDailyValue": number},
+    {"name": "Iodine", "amount": number, "unit": "mcg", "percentDailyValue": number},
+    {"name": "Chromium", "amount": number, "unit": "mcg", "percentDailyValue": number},
+    {"name": "Molybdenum", "amount": number, "unit": "mcg", "percentDailyValue": number}
   ],
-  "foods": ["list", "of", "foods", "you", "identify"],
+  "foods": ["list", "of", "foods"],
   "ingredients": ["main", "ingredients"],
   "benefits": ["health benefits"],
   "concerns": ["nutritional concerns"],
   "suggestions": ["improvement suggestions"],
-  "healthRating": 1-10
+  "healthRating": number
 }
 
-CRITICAL: Calculate accurate percentDailyValue for ALL nutrients using these Daily Values:
-- Protein: 50g = 100% DV
-- Total Carbs: 300g = 100% DV  
-- Total Fat: 65g = 100% DV
-- Saturated Fat: 20g = 100% DV
-- Fiber: 25g = 100% DV
-- Sodium: 2300mg = 100% DV
-- Vitamin A: 900mcg = 100% DV
-- Vitamin C: 90mg = 100% DV
-- Vitamin D: 20mcg = 100% DV
-- Calcium: 1000mg = 100% DV
-- Iron: 18mg = 100% DV
-- Potassium: 4700mg = 100% DV
+Daily Values for calculations:
+Protein: 50g, Carbs: 300g, Fat: 65g, Saturated Fat: 20g, Fiber: 25g, Sodium: 2300mg, Vitamin A: 900mcg, Vitamin C: 90mg, Vitamin D: 20mcg, Calcium: 1000mg, Iron: 18mg, Potassium: 4700mg, Magnesium: 400mg, Phosphorus: 1250mg, Zinc: 11mg, B1: 1.2mg, B2: 1.3mg, B3: 16mg, B6: 1.7mg, B12: 2.4mcg, Folate: 400mcg, Vitamin E: 15mg, Vitamin K: 120mcg
 
-Return ONLY valid JSON with ALL nutrients and accurate percentDailyValue calculations.`
-            },
-            {
-              type: "image_url",
-              image_url: {
-                url: base64Image,
-                detail: "high"
+Return ONLY valid JSON.`
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: base64Image,
+                  detail: "high"
+                }
               }
-            }
-          ]
+            ]
+          }
+        ],
+        max_tokens: 4000, // Increased for comprehensive response
+        temperature: 0.1, // Lower temperature for consistency
+      });
+
+      console.log('[analyzeImageWithGPT] OpenAI API call successful');
+      
+      const responseContent = completion.choices[0]?.message?.content || '';
+      
+      if (!responseContent) {
+        throw new Error('Empty response from OpenAI API');
+      }
+      
+      if (responseContent.includes('ERROR') || 
+          responseContent.includes("I can't see") || 
+          responseContent.includes("I cannot see") ||
+          responseContent.includes("unable to view")) {
+        throw new Error('OpenAI Vision API cannot process the image');
+      }
+
+      let cleanResponse = responseContent.trim();
+      
+      // Extract JSON from response
+      if (cleanResponse.includes('```')) {
+        const jsonMatch = cleanResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        if (jsonMatch && jsonMatch[1]) {
+          cleanResponse = jsonMatch[1];
         }
-      ],
-      max_tokens: 3000,
-      temperature: 0.2,
-    });
-
-    console.log('[analyzeImageWithGPT] OpenAI API call successful');
-    
-    const responseContent = completion.choices[0]?.message?.content || '';
-    
-    if (!responseContent) {
-      console.error('[analyzeImageWithGPT] Empty response from OpenAI');
-      throw new Error('Empty response from OpenAI API');
-    }
-    
-    if (responseContent.includes('ERROR') || 
-        responseContent.includes("I can't see") || 
-        responseContent.includes("I cannot see") ||
-        responseContent.includes("unable to view")) {
-      console.error('[analyzeImageWithGPT] OpenAI cannot process image:', responseContent.substring(0, 200));
-      throw new Error('OpenAI Vision API cannot process the image');
-    }
-
-    let cleanResponse = responseContent.trim();
-    
-    if (cleanResponse.includes('```')) {
-      const jsonMatch = cleanResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-      if (jsonMatch && jsonMatch[1]) {
-        cleanResponse = jsonMatch[1];
+      }
+      
+      const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsedResult = JSON.parse(jsonMatch[0]);
+        console.log('[analyzeImageWithGPT] Successfully parsed JSON response');
+        console.log('[analyzeImageWithGPT] Nutrient counts:', {
+          macros: parsedResult.macronutrients?.length || 0,
+          micros: parsedResult.micronutrients?.length || 0
+        });
+        return parsedResult;
+      } else {
+        throw new Error('No JSON object found in response');
+      }
+      
+    } catch (error: any) {
+      console.error(`[analyzeImageWithGPT] Attempt ${attempt} failed:`, {
+        message: error.message,
+        type: error.type,
+        code: error.code,
+        status: error.status
+      });
+      
+      lastError = error;
+      
+      // Don't retry on certain errors
+      if (error.code === 'insufficient_quota' || error.code === 'invalid_api_key') {
+        break;
+      }
+      
+      // Wait before retry (exponential backoff)
+      if (attempt < maxAttempts) {
+        const waitTime = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s...
+        console.log(`[analyzeImageWithGPT] Waiting ${waitTime}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
       }
     }
-    
-    const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsedResult = JSON.parse(jsonMatch[0]);
-      console.log('[analyzeImageWithGPT] Successfully parsed JSON response');
-      return parsedResult;
-    } else {
-      console.error('[analyzeImageWithGPT] No JSON object found in response:', responseContent.substring(0, 200));
-      throw new Error('No JSON object found in response');
-    }
-    
-  } catch (error: any) {
-    console.error('[analyzeImageWithGPT] OpenAI API error:', {
-      message: error.message,
-      type: error.type,
-      code: error.code,
-      status: error.status
-    });
-    
-    // Re-throw with more specific error message
-    if (error.code === 'insufficient_quota') {
-      throw new Error('OpenAI API quota exceeded. Please check your billing.');
-    } else if (error.code === 'invalid_api_key') {
-      throw new Error('Invalid OpenAI API key. Please check configuration.');
-    } else if (error.message?.includes('timeout')) {
-      throw new Error('OpenAI API request timed out. Please try again.');
-    } else {
-      throw new Error(`OpenAI API error: ${error.message || 'Unknown error'}`);
-    }
+  }
+  
+  // All attempts failed, throw the last error with specific message
+  if (lastError?.code === 'insufficient_quota') {
+    throw new Error('OpenAI API quota exceeded. Please check your billing.');
+  } else if (lastError?.code === 'invalid_api_key') {
+    throw new Error('Invalid OpenAI API key. Please check configuration.');
+  } else if (lastError?.message?.includes('timeout')) {
+    throw new Error('Analysis is taking longer than expected. Please try with a smaller image or try again.');
+  } else {
+    throw new Error(`OpenAI analysis failed: ${lastError?.message || 'Unknown error'}`);
   }
 }
 
@@ -410,7 +423,15 @@ export async function POST(request: NextRequest) {
       console.log('[analyze-meal-base64] - OpenAI API key exists:', !!process.env.OPENAI_API_KEY);
       console.log('[analyze-meal-base64] - OpenAI API key prefix:', process.env.OPENAI_API_KEY?.substring(0, 7) + '...');
       
-      analysisResult = await analyzeImageWithGPT(base64Image, {
+      // Create a timeout promise to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Analysis timeout - taking longer than 90 seconds'));
+        }, 90000); // 90 second total timeout
+      });
+      
+      // Race between analysis and timeout
+      const analysisPromise = analyzeImageWithGPT(base64Image, {
         goal: goal,
         age: 30,
         weight: 70,
@@ -420,6 +441,8 @@ export async function POST(request: NextRequest) {
         gender: 'male',
         activity_level: 'moderate'
       });
+      
+      analysisResult = await Promise.race([analysisPromise, timeoutPromise]);
       console.log('[analyze-meal-base64] OpenAI analysis completed successfully');
       
       // DEBUG: Check analysis result structure for DV calculation
