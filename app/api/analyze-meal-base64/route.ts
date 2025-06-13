@@ -22,19 +22,19 @@ async function analyzeImageWithGPT(base64Image: string, userProfile: any = {}): 
     throw new Error('Invalid image format - must be data:image URL');
   }
 
-  const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY }); const completion = await openaiClient.chat.completions.create({
+  const completion = await openai.chat.completions.create({
     model: "gpt-4o",
     messages: [
       {
         role: "system",
-        content: "You are a nutrition expert. Analyze food images accurately and return comprehensive nutrition data in valid JSON format."
+        content: "You are a nutrition expert. Analyze food images accurately and return comprehensive nutrition data with COMPLETE micronutrient profiles and accurate Daily Value percentages in valid JSON format."
       },
       {
         role: "user", 
         content: [
           {
             type: "text",
-            text: `Analyze this meal image and provide accurate nutrition data in JSON format:
+            text: `Analyze this meal image and provide COMPREHENSIVE nutrition data with COMPLETE micronutrient analysis in JSON format:
 
 {
   "mealName": "descriptive name of what you see",
@@ -44,14 +44,40 @@ async function analyzeImageWithGPT(base64Image: string, userProfile: any = {}): 
   "carbs": grams,
   "fat": grams,
   "macronutrients": [
-    {"name": "Protein", "amount": number, "unit": "g", "percentDailyValue": null},
-    {"name": "Total Carbohydrates", "amount": number, "unit": "g", "percentDailyValue": null},
-    {"name": "Total Fat", "amount": number, "unit": "g", "percentDailyValue": null}
+    {"name": "Protein", "amount": number, "unit": "g", "percentDailyValue": calculated_percentage},
+    {"name": "Total Carbohydrates", "amount": number, "unit": "g", "percentDailyValue": calculated_percentage},
+    {"name": "Total Fat", "amount": number, "unit": "g", "percentDailyValue": calculated_percentage},
+    {"name": "Saturated Fat", "amount": number, "unit": "g", "percentDailyValue": calculated_percentage},
+    {"name": "Fiber", "amount": number, "unit": "g", "percentDailyValue": calculated_percentage},
+    {"name": "Sugar", "amount": number, "unit": "g", "percentDailyValue": calculated_percentage},
+    {"name": "Sodium", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage}
   ],
   "micronutrients": [
-    {"name": "Iron", "amount": number, "unit": "mg", "percentDailyValue": null},
-    {"name": "Vitamin C", "amount": number, "unit": "mg", "percentDailyValue": null},
-    {"name": "Calcium", "amount": number, "unit": "mg", "percentDailyValue": null}
+    {"name": "Vitamin A", "amount": number, "unit": "mcg", "percentDailyValue": calculated_percentage},
+    {"name": "Vitamin C", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
+    {"name": "Vitamin D", "amount": number, "unit": "mcg", "percentDailyValue": calculated_percentage},
+    {"name": "Vitamin E", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
+    {"name": "Vitamin K", "amount": number, "unit": "mcg", "percentDailyValue": calculated_percentage},
+    {"name": "Vitamin B1 (Thiamine)", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
+    {"name": "Vitamin B2 (Riboflavin)", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
+    {"name": "Vitamin B3 (Niacin)", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
+    {"name": "Vitamin B5 (Pantothenic Acid)", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
+    {"name": "Vitamin B6", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
+    {"name": "Vitamin B7 (Biotin)", "amount": number, "unit": "mcg", "percentDailyValue": calculated_percentage},
+    {"name": "Vitamin B9 (Folate)", "amount": number, "unit": "mcg", "percentDailyValue": calculated_percentage},
+    {"name": "Vitamin B12", "amount": number, "unit": "mcg", "percentDailyValue": calculated_percentage},
+    {"name": "Calcium", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
+    {"name": "Iron", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
+    {"name": "Magnesium", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
+    {"name": "Phosphorus", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
+    {"name": "Potassium", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
+    {"name": "Zinc", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
+    {"name": "Copper", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
+    {"name": "Manganese", "amount": number, "unit": "mg", "percentDailyValue": calculated_percentage},
+    {"name": "Selenium", "amount": number, "unit": "mcg", "percentDailyValue": calculated_percentage},
+    {"name": "Iodine", "amount": number, "unit": "mcg", "percentDailyValue": calculated_percentage},
+    {"name": "Chromium", "amount": number, "unit": "mcg", "percentDailyValue": calculated_percentage},
+    {"name": "Molybdenum", "amount": number, "unit": "mcg", "percentDailyValue": calculated_percentage}
   ],
   "foods": ["list", "of", "foods", "you", "identify"],
   "ingredients": ["main", "ingredients"],
@@ -61,7 +87,21 @@ async function analyzeImageWithGPT(base64Image: string, userProfile: any = {}): 
   "healthRating": 1-10
 }
 
-Return ONLY valid JSON.`
+CRITICAL: Calculate accurate percentDailyValue for ALL nutrients using these Daily Values:
+- Protein: 50g = 100% DV
+- Total Carbs: 300g = 100% DV  
+- Total Fat: 65g = 100% DV
+- Saturated Fat: 20g = 100% DV
+- Fiber: 25g = 100% DV
+- Sodium: 2300mg = 100% DV
+- Vitamin A: 900mcg = 100% DV
+- Vitamin C: 90mg = 100% DV
+- Vitamin D: 20mcg = 100% DV
+- Calcium: 1000mg = 100% DV
+- Iron: 18mg = 100% DV
+- Potassium: 4700mg = 100% DV
+
+Return ONLY valid JSON with ALL nutrients and accurate percentDailyValue calculations.`
           },
           {
             type: "image_url",
@@ -73,7 +113,7 @@ Return ONLY valid JSON.`
         ]
       }
     ],
-    max_tokens: 2000,
+    max_tokens: 3000,
     temperature: 0.2,
   });
 
