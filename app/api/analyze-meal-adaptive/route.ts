@@ -284,7 +284,7 @@ class AdaptiveAnalysisEngine {
       else if (hour >= 21 && hour <= 23) categories.push('late-dinner');
       else categories.push('night-eating');
     });
-    return Array.from(new Set(categories));
+    return Array.from(new Set<string>(categories));
   }
 
   // Generate personalized analysis prompt based on user patterns
@@ -365,10 +365,17 @@ async function performAdaptiveAnalysis(
   // Generate personalized prompt
   const personalizedPrompt = await adaptiveEngine.generatePersonalizedPrompt(userPatterns, userProfile);
   
+  // Ensure we have at least one image variation
+  if (!imageVariations || imageVariations.length === 0 || !imageVariations[0]) {
+    throw new Error('No image variations available for analysis');
+  }
+  
+  const primaryImage = imageVariations[0];
+  
   // Analyze with primary image and personalized prompt
   try {
     const analysis = await analyzeWithPersonalizedPrompt(
-      imageVariations[0], 
+      primaryImage, 
       personalizedPrompt, 
       userProfile
     );

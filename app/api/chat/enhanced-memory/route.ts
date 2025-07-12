@@ -136,7 +136,7 @@ class UserMemorySystem {
   }
 
   private calculateMealFrequency(meals: any[]): string {
-    const daysWithMeals = new Set(meals.map(meal => 
+    const daysWithMeals = new Set<string>(meals.map(meal => 
       new Date(meal.created_at).toDateString()
     )).size;
     

@@ -313,7 +313,7 @@ function calculateAccuracyImprovement(original: any, corrected: any, learningDat
 }
 
 function getCorrectionTypeStats(corrections: any[]): any {
-  const stats = {
+  const stats: { [key: string]: number } = {
     food_identification: 0,
     portion_size: 0,
     nutrition_values: 0,
@@ -321,8 +321,10 @@ function getCorrectionTypeStats(corrections: any[]): any {
   };
   
   corrections.forEach(correction => {
+    if (!correction) return;
+    
     const type = correction.correctionType || 'general';
-    if (stats.hasOwnProperty(type)) {
+    if (type in stats) {
       stats[type]++;
     } else {
       stats.general++;
