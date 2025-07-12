@@ -5,6 +5,8 @@ import { ClientAuthProvider } from './components/client/ClientAuthProvider'
 import { ProfileProvider } from './lib/profile-context'
 import { NavBarWithAuth } from './components/NavBarWithAuth'
 import dynamic from 'next/dynamic'
+import ErrorBoundaryWrapper from './components/ErrorBoundaryWrapper'
+import ClientProviders from './components/client/ClientProviders'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -34,22 +36,26 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <ClientAuthProvider>
-          <ProfileProvider>
-            <div className="min-h-screen bg-slate-900">
-              <NavBarWithAuth />
-              
-              {/* Main Content with proper padding for fixed header */}
-              <main className="pt-16">
-                {children}
-              </main>
-              
-              {/* Global AI Chat Widget */}
-              <GlobalAIChat />
-              
-            </div>
-          </ProfileProvider>
-        </ClientAuthProvider>
+        <ErrorBoundaryWrapper>
+          <ClientProviders>
+            <ClientAuthProvider>
+              <ProfileProvider>
+                <div className="min-h-screen bg-slate-900">
+                  <NavBarWithAuth />
+                  
+                  {/* Main Content with proper padding for fixed header */}
+                  <main className="pt-16">
+                    {children}
+                  </main>
+                  
+                  {/* Global AI Chat Widget */}
+                  <GlobalAIChat />
+                  
+                </div>
+              </ProfileProvider>
+            </ClientAuthProvider>
+          </ClientProviders>
+        </ErrorBoundaryWrapper>
       </body>
     </html>
   )

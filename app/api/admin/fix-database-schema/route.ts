@@ -1,109 +1,131 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-export async function GET(request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    console.log('[fix-database-schema] Checking current meals table schema...');
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    console.log('🔧 Starting database schema fix...');
     
-    // Get the current table structure
-    const { data: columns, error: schemaError } = await supabaseAdmin
+    // Step 1: Check current table structure
+    const { data: columns, error: columnsError } = await supabase
       .from('information_schema.columns')
       .select('column_name, data_type, is_nullable')
       .eq('table_name', 'meals')
       .eq('table_schema', 'public');
-    
-    if (schemaError) {
-      console.error('[fix-database-schema] Error getting schema:', schemaError);
-      return NextResponse.json({ error: 'Failed to get schema', details: schemaError }, { status: 500 });
-    }
-    
-    console.log('[fix-database-schema] Current columns:', columns);
-    
-    // Expected columns based on the code
-    const expectedColumns = [
-      'id', 'user_id', 'meal_name', 'image_url', 'calories', 'protein', 'fat', 'carbs',
-      'macronutrients', 'micronutrients', 'ingredients', 'benefits', 'concerns', 
-      'suggestions', 'analysis', 'personalized_insights', 'goal', 'created_at', 'updated_at'
-    ];
-    
-    const existingColumns = columns?.map(col => col.column_name) || [];
-    const missingColumns = expectedColumns.filter(col => !existingColumns.includes(col));
-    const extraColumns = existingColumns.filter(col => !expectedColumns.includes(col));
-    
-    return NextResponse.json({
-      success: true,
-      currentColumns: existingColumns,
-      expectedColumns,
-      missingColumns,
-      extraColumns,
-      schemaMatches: missingColumns.length === 0,
-      recommendations: missingColumns.length > 0 ? [
-        'Some expected columns are missing from the meals table',
-        'This may cause database insertion failures',
-        'Consider adding missing columns or updating the code to match the schema'
-      ] : ['Schema looks good!']
-    });
-    
-  } catch (error) {
-    console.error('[fix-database-schema] Error:', error);
-    return NextResponse.json({ error: 'Failed to check schema', details: error }, { status: 500 });
-  }
-}
 
-export async function POST(request: NextRequest) {
-  try {
-    const { action } = await request.json();
-    
-    if (action === 'create_missing_columns') {
-      console.log('[fix-database-schema] Creating missing columns...');
-      
-      // Add missing columns with appropriate types
-      const alterQueries = [
-        'ALTER TABLE meals ADD COLUMN IF NOT EXISTS meal_name TEXT',
-        'ALTER TABLE meals ADD COLUMN IF NOT EXISTS image_url TEXT',
-        'ALTER TABLE meals ADD COLUMN IF NOT EXISTS calories INTEGER',
-        'ALTER TABLE meals ADD COLUMN IF NOT EXISTS protein REAL',
-        'ALTER TABLE meals ADD COLUMN IF NOT EXISTS fat REAL',
-        'ALTER TABLE meals ADD COLUMN IF NOT EXISTS carbs REAL',
-        'ALTER TABLE meals ADD COLUMN IF NOT EXISTS macronutrients JSONB',
-        'ALTER TABLE meals ADD COLUMN IF NOT EXISTS micronutrients JSONB',
-        'ALTER TABLE meals ADD COLUMN IF NOT EXISTS ingredients TEXT[]',
-        'ALTER TABLE meals ADD COLUMN IF NOT EXISTS benefits TEXT[]',
-        'ALTER TABLE meals ADD COLUMN IF NOT EXISTS concerns TEXT[]',
-        'ALTER TABLE meals ADD COLUMN IF NOT EXISTS suggestions TEXT[]',
-        'ALTER TABLE meals ADD COLUMN IF NOT EXISTS analysis JSONB',
-        'ALTER TABLE meals ADD COLUMN IF NOT EXISTS personalized_insights TEXT',
-        'ALTER TABLE meals ADD COLUMN IF NOT EXISTS goal TEXT',
-        'ALTER TABLE meals ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()',
-        'ALTER TABLE meals ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()'
-      ];
-      
-      const results = [];
-      for (const query of alterQueries) {
-        try {
-          const { error } = await supabaseAdmin.rpc('exec_sql', { sql: query });
-          results.push({ query, success: !error, error: error?.message });
-        } catch (err) {
-          results.push({ query, success: false, error: err });
-        }
-      }
-      
-      return NextResponse.json({
-        success: true,
-        message: 'Attempted to create missing columns',
-        results
-      });
+    if (columnsError) {
+      console.error('Error checking columns:', columnsError);
+      return NextResponse.json({ error: 'Failed to check table structure' }, { status: 500 });
     }
+
+    console.log('Current columns:', columns);
+
+    // Step 2: Add missing columns using individual ALTER statements
+    const fixes = [];
     
-    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
-    
+    // Check if foods column exists
+    const hasFoods = columns?.some(col => col.column_name === 'foods');
+    if (!hasFoods) {
+      try {
+        const { error } = await supabase.rpc('exec_sql', {
+          sql: 'ALTER TABLE public.meals ADD COLUMN foods TEXT[]'
+        });
+        if (error) throw error;
+        fixes.push('Added foods column');
+      } catch (error) {
+        console.log('Foods column might already exist or error:', error);
+      }
+    }
+
+    // Check if raw_analysis column exists
+    const hasRawAnalysis = columns?.some(col => col.column_name === 'raw_analysis');
+    if (!hasRawAnalysis) {
+      try {
+        const { error } = await supabase.rpc('exec_sql', {
+          sql: 'ALTER TABLE public.meals ADD COLUMN raw_analysis TEXT'
+        });
+        if (error) throw error;
+        fixes.push('Added raw_analysis column');
+      } catch (error) {
+        console.log('Raw_analysis column might already exist or error:', error);
+      }
+    }
+
+    // Check if description column exists
+    const hasDescription = columns?.some(col => col.column_name === 'description');
+    if (!hasDescription) {
+      try {
+        const { error } = await supabase.rpc('exec_sql', {
+          sql: 'ALTER TABLE public.meals ADD COLUMN description TEXT'
+        });
+        if (error) throw error;
+        fixes.push('Added description column');
+      } catch (error) {
+        console.log('Description column might already exist or error:', error);
+      }
+    }
+
+    // Step 3: Fix user_id column type if needed
+    const userIdColumn = columns?.find(col => col.column_name === 'user_id');
+    if (userIdColumn && userIdColumn.data_type === 'uuid') {
+      try {
+        const { error } = await supabase.rpc('exec_sql', {
+          sql: 'ALTER TABLE public.meals ALTER COLUMN user_id TYPE TEXT'
+        });
+        if (error) throw error;
+        fixes.push('Fixed user_id column type from UUID to TEXT');
+      } catch (error) {
+        console.log('User_id column type fix error:', error);
+      }
+    }
+
+    // Step 4: Test with a simple insert
+    const testMeal = {
+      user_id: 'test-user-' + Date.now(),
+      meal_name: 'Test Meal',
+      foods: ['Apple', 'Banana'],
+      raw_analysis: 'Test analysis',
+      description: 'Test description'
+    };
+
+    const { data: insertData, error: insertError } = await supabase
+      .from('meals')
+      .insert(testMeal)
+      .select();
+
+    if (insertError) {
+      console.error('Test insert failed:', insertError);
+      return NextResponse.json({ 
+        error: 'Test insert failed', 
+        details: insertError.message,
+        fixes: fixes 
+      }, { status: 500 });
+    }
+
+    // Clean up test data
+    if (insertData && insertData[0]) {
+      await supabase
+        .from('meals')
+        .delete()
+        .eq('id', insertData[0].id);
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Database schema fixed successfully!',
+      fixes: fixes,
+      testResult: 'Insert/delete test passed'
+    });
+
   } catch (error) {
-    console.error('[fix-database-schema] Error:', error);
-    return NextResponse.json({ error: 'Failed to fix schema', details: error }, { status: 500 });
+    console.error('Schema fix error:', error);
+    return NextResponse.json({ 
+      error: 'Schema fix failed', 
+      details: error instanceof Error ? error.message : 'Unknown error' 
+    }, { status: 500 });
   }
 } 
