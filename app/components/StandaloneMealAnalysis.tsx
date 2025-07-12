@@ -1091,9 +1091,11 @@ export default function StandaloneMealAnalysis({
           <div className="text-red-400 p-4">{error}</div>
         ) : mealData ? (
           <EnhancedMealAnalysisDisplay 
-            mealData={mealData}
-            userProfile={effectiveProfile || undefined}
-            className="text-gray-200"
+            analysis={mealData}
+            mealId={mealId || ''}
+            onAnalysisUpdate={(updatedAnalysis) => {
+              setMealData(updatedAnalysis);
+            }}
           />
         ) : (
           renderUploadForm()
@@ -1137,9 +1139,11 @@ export default function StandaloneMealAnalysis({
         ) : mealData ? (
           <div className="space-y-6">
             <EnhancedMealAnalysisDisplay 
-              mealData={mealData}
-              userProfile={effectiveProfile || undefined}
-              className="bg-gray-900 text-gray-200"
+              analysis={mealData}
+              mealId={mealId || ''}
+              onAnalysisUpdate={(updatedAnalysis) => {
+                setMealData(updatedAnalysis);
+              }}
             />
             
             {/* Action buttons */}

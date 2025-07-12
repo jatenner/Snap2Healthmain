@@ -312,7 +312,7 @@ function calculateAccuracyImprovement(original: any, corrected: any, learningDat
   return metrics;
 }
 
-function getCorrectionTypeStats(corrections: any[]): any {
+function getCorrectionTypeStats(corrections: any[]): { [key: string]: number } {
   const stats: { [key: string]: number } = {
     food_identification: 0,
     portion_size: 0,
@@ -324,10 +324,10 @@ function getCorrectionTypeStats(corrections: any[]): any {
     if (!correction) return;
     
     const type = correction.correctionType || 'general';
-    if (type in stats) {
+    if (stats[type] !== undefined) {
       stats[type]++;
     } else {
-      stats.general++;
+      stats['general']++;
     }
   });
   

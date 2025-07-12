@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Input } from '@/app/components/ui/input';
@@ -18,30 +19,45 @@ interface MealCorrectionInterfaceProps {
   onClose: () => void;
 }
 
+interface CorrectionData {
+  mealName: any;
+  calories: any;
+  protein: any;
+  carbs: any;
+  fat: any;
+  identifiedFoods: any;
+  ingredients: any;
+  benefits: any;
+  concerns: any;
+  suggestions: any;
+  [key: string]: any;
+}
+
 export default function MealCorrectionInterface({
   mealId,
   originalAnalysis,
   onCorrectionSaved,
   onClose
 }: MealCorrectionInterfaceProps) {
-  const [corrections, setCorrections] = useState({
-    mealName: originalAnalysis.mealName || '',
-    calories: originalAnalysis.calories || 0,
-    protein: originalAnalysis.macronutrients?.find((m: any) => m.name.toLowerCase().includes('protein'))?.amount || 0,
-    carbs: originalAnalysis.macronutrients?.find((m: any) => m.name.toLowerCase().includes('carb'))?.amount || 0,
-    fat: originalAnalysis.macronutrients?.find((m: any) => m.name.toLowerCase().includes('fat'))?.amount || 0,
-    identifiedFoods: originalAnalysis.identifiedFoods || [],
-    ingredients: originalAnalysis.ingredients || [],
-    benefits: originalAnalysis.benefits || [],
-    concerns: originalAnalysis.concerns || [],
-    suggestions: originalAnalysis.suggestions || []
+  const [corrections, setCorrections] = useState<CorrectionData>({
+    mealName: originalAnalysis?.mealName || '',
+    calories: originalAnalysis?.calories || 0,
+    protein: originalAnalysis?.protein || 0,
+    carbs: originalAnalysis?.carbs || 0,
+    fat: originalAnalysis?.fat || 0,
+    identifiedFoods: originalAnalysis?.identifiedFoods || [],
+    ingredients: originalAnalysis?.ingredients || [],
+    benefits: originalAnalysis?.benefits || [],
+    concerns: originalAnalysis?.concerns || [],
+    suggestions: originalAnalysis?.suggestions || []
   });
-
-  const [correctionType, setCorrectionType] = useState('general');
+  
   const [feedback, setFeedback] = useState('');
   const [satisfaction, setSatisfaction] = useState(3);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState('basic');
+  
+  const supabase = createClientComponentClient();
 
   const handleInputChange = (field: string, value: any) => {
     setCorrections(prev => ({
@@ -50,11 +66,11 @@ export default function MealCorrectionInterface({
     }));
   };
 
-  const handleArrayChange = (field: string, index: number, value: string) => {
+  const handleArrayChange = (field: string, index: number, value: any) => {
     setCorrections(prev => ({
       ...prev,
-      [field]: prev[field].map((item: any, i: number) => 
-        i === index ? (typeof item === 'string' ? value : { ...item, name: value }) : item
+      [field]: prev[field].map((item: any, i: number) =>
+        i === index ? (typeof item === 'object' ? { ...item, name: value } : value) : item
       )
     }));
   };
@@ -96,9 +112,8 @@ export default function MealCorrectionInterface({
     return changes;
   };
 
-  const submitCorrections = async () => {
+  const handleSubmit = async () => {
     setIsSubmitting(true);
-    
     try {
       const response = await fetch('/api/meal-correction', {
         method: 'POST',
@@ -108,34 +123,59 @@ export default function MealCorrectionInterface({
         body: JSON.stringify({
           mealId,
           corrections,
-          correctionType,
-          feedback: {
-            comment: feedback,
-            satisfaction,
-            changes: calculateChanges()
-          },
-          originalAnalysis,
-          correctedAnalysis: corrections
+          feedback,
+          satisfaction,
+          originalAnalysis
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to save corrections');
+      if (response.ok) {
+        const result = await response.json();
+        onCorrectionSaved(result);
+        onClose();
+      } else {
+        console.error('Failed to save corrections');
       }
-
-      const result = await response.json();
-      
-      toast.success('Corrections saved! This will help improve future analysis.');
-      onCorrectionSaved(corrections);
-      onClose();
-      
     } catch (error) {
-      console.error('Failed to save corrections:', error);
-      toast.error('Failed to save corrections. Please try again.');
+      console.error('Error saving corrections:', error);
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const renderArrayField = (field: string, title: string, placeholder: string) => (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label className="text-sm font-medium">{title}</Label>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => addArrayItem(field)}
+        >
+          Add {title.slice(0, -1)}
+        </Button>
+      </div>
+      {corrections[field].map((item: any, index: number) => (
+        <div key={index} className="flex items-center space-x-2">
+          <Input
+            value={typeof item === 'object' ? item.name : item}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleArrayChange(field, index, e.target.value)}
+            placeholder={placeholder}
+            className="flex-1"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => removeArrayItem(field, index)}
+          >
+            Remove
+          </Button>
+        </div>
+      ))}
+    </div>
+  );
 
   const changes = calculateChanges();
 
@@ -167,261 +207,174 @@ export default function MealCorrectionInterface({
             </div>
           )}
         </CardHeader>
-
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="basic">Basic Info</TabsTrigger>
               <TabsTrigger value="nutrition">Nutrition</TabsTrigger>
               <TabsTrigger value="foods">Foods</TabsTrigger>
-              <TabsTrigger value="feedback">Feedback</TabsTrigger>
+              <TabsTrigger value="insights">Insights</TabsTrigger>
             </TabsList>
-
+            
             <TabsContent value="basic" className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
+                <div className="space-y-2">
                   <Label htmlFor="mealName">Meal Name</Label>
                   <Input
                     id="mealName"
                     value={corrections.mealName}
-                    onChange={(e) => handleInputChange('mealName', e.target.value)}
-                    placeholder="Enter correct meal name"
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('mealName', e.target.value)}
+                    placeholder="Enter the correct meal name"
                   />
                 </div>
                 
-                <div>
+                <div className="space-y-2">
                   <Label htmlFor="calories">Calories</Label>
                   <Input
                     id="calories"
                     type="number"
                     value={corrections.calories}
-                    onChange={(e) => handleInputChange('calories', parseInt(e.target.value) || 0)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('calories', parseInt(e.target.value) || 0)}
                     placeholder="Enter correct calories"
                   />
                 </div>
               </div>
-
-              <div>
-                <Label htmlFor="correctionType">What type of correction is this?</Label>
-                <select
-                  id="correctionType"
-                  value={correctionType}
-                  onChange={(e) => setCorrectionType(e.target.value)}
-                  className="w-full mt-1 p-2 border rounded-md"
-                >
-                  <option value="general">General correction</option>
-                  <option value="food_identification">Food identification</option>
-                  <option value="portion_size">Portion size</option>
-                  <option value="nutrition_values">Nutrition values</option>
-                  <option value="meal_name">Meal name</option>
-                </select>
-              </div>
             </TabsContent>
-
+            
             <TabsContent value="nutrition" className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
+                <div className="space-y-2">
                   <Label htmlFor="protein">Protein (g)</Label>
                   <Input
                     id="protein"
                     type="number"
                     step="0.1"
                     value={corrections.protein}
-                    onChange={(e) => handleInputChange('protein', parseFloat(e.target.value) || 0)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('protein', parseFloat(e.target.value) || 0)}
+                    placeholder="Protein in grams"
                   />
                 </div>
                 
-                <div>
-                  <Label htmlFor="carbs">Carbohydrates (g)</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="carbs">Carbs (g)</Label>
                   <Input
                     id="carbs"
                     type="number"
                     step="0.1"
                     value={corrections.carbs}
-                    onChange={(e) => handleInputChange('carbs', parseFloat(e.target.value) || 0)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('carbs', parseFloat(e.target.value) || 0)}
+                    placeholder="Carbs in grams"
                   />
                 </div>
                 
-                <div>
+                <div className="space-y-2">
                   <Label htmlFor="fat">Fat (g)</Label>
                   <Input
                     id="fat"
                     type="number"
                     step="0.1"
                     value={corrections.fat}
-                    onChange={(e) => handleInputChange('fat', parseFloat(e.target.value) || 0)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('fat', parseFloat(e.target.value) || 0)}
+                    placeholder="Fat in grams"
                   />
                 </div>
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label>Benefits</Label>
-                  <div className="space-y-2">
-                    {corrections.benefits.map((benefit: string, index: number) => (
-                      <div key={index} className="flex gap-2">
-                        <Input
-                          value={benefit}
-                          onChange={(e) => handleArrayChange('benefits', index, e.target.value)}
-                          placeholder="Health benefit"
-                        />
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => removeArrayItem('benefits', index)}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => addArrayItem('benefits')}
-                    >
-                      Add Benefit
-                    </Button>
-                  </div>
-                </div>
-
-                <div>
-                  <Label>Concerns</Label>
-                  <div className="space-y-2">
-                    {corrections.concerns.map((concern: string, index: number) => (
-                      <div key={index} className="flex gap-2">
-                        <Input
-                          value={concern}
-                          onChange={(e) => handleArrayChange('concerns', index, e.target.value)}
-                          placeholder="Health concern"
-                        />
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => removeArrayItem('concerns', index)}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => addArrayItem('concerns')}
-                    >
-                      Add Concern
-                    </Button>
-                  </div>
-                </div>
-              </div>
             </TabsContent>
-
+            
             <TabsContent value="foods" className="space-y-4">
-              <div>
-                <Label>Identified Foods</Label>
+              {renderArrayField('benefits', 'Benefits', 'Enter a health benefit')}
+              
+              <div className="border-t pt-4">
+                {renderArrayField('concerns', 'Concerns', 'Enter a health concern')}
+              </div>
+              
+              <div className="border-t pt-4">
                 <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium">Identified Foods</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => addArrayItem('identifiedFoods')}
+                    >
+                      Add Food
+                    </Button>
+                  </div>
                   {corrections.identifiedFoods.map((food: any, index: number) => (
-                    <div key={index} className="flex gap-2 items-center">
+                    <div key={index} className="flex items-center space-x-2">
                       <Input
-                        value={typeof food === 'string' ? food : food.name}
-                        onChange={(e) => handleArrayChange('identifiedFoods', index, e.target.value)}
+                        value={food.name || food}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleArrayChange('identifiedFoods', index, e.target.value)}
                         placeholder="Food name"
                         className="flex-1"
                       />
-                      <Badge variant="secondary">
-                        {typeof food === 'object' ? `${Math.round(food.confidence * 100)}%` : 'N/A'}
-                      </Badge>
                       <Button
+                        type="button"
                         variant="outline"
                         size="sm"
                         onClick={() => removeArrayItem('identifiedFoods', index)}
                       >
-                        <X className="h-4 w-4" />
+                        Remove
                       </Button>
                     </div>
                   ))}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => addArrayItem('identifiedFoods')}
-                  >
-                    Add Food
-                  </Button>
                 </div>
               </div>
-
-              <div>
-                <Label>Ingredients</Label>
+              
+              <div className="border-t pt-4">
                 <div className="space-y-2">
-                  {corrections.ingredients.map((ingredient: string, index: number) => (
-                    <div key={index} className="flex gap-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium">Ingredients</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => addArrayItem('ingredients')}
+                    >
+                      Add Ingredient
+                    </Button>
+                  </div>
+                  {corrections.ingredients.map((ingredient: any, index: number) => (
+                    <div key={index} className="flex items-center space-x-2">
                       <Input
                         value={ingredient}
-                        onChange={(e) => handleArrayChange('ingredients', index, e.target.value)}
-                        placeholder="Ingredient"
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleArrayChange('ingredients', index, e.target.value)}
+                        placeholder="Ingredient name"
+                        className="flex-1"
                       />
                       <Button
+                        type="button"
                         variant="outline"
                         size="sm"
                         onClick={() => removeArrayItem('ingredients', index)}
                       >
-                        <X className="h-4 w-4" />
+                        Remove
                       </Button>
                     </div>
                   ))}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => addArrayItem('ingredients')}
-                  >
-                    Add Ingredient
-                  </Button>
                 </div>
               </div>
             </TabsContent>
-
-            <TabsContent value="feedback" className="space-y-4">
-              <div>
-                <Label htmlFor="satisfaction">How satisfied are you with the original analysis?</Label>
-                <div className="flex items-center gap-2 mt-2">
-                  {[1, 2, 3, 4, 5].map((rating) => (
-                    <Button
-                      key={rating}
-                      variant={satisfaction === rating ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setSatisfaction(rating)}
-                    >
-                      {rating}
-                    </Button>
-                  ))}
-                  <span className="text-sm text-gray-600 ml-2">
-                    {satisfaction <= 2 ? 'Poor' : satisfaction <= 3 ? 'Fair' : satisfaction <= 4 ? 'Good' : 'Excellent'}
-                  </span>
+            
+            <TabsContent value="insights" className="space-y-4">
+              {renderArrayField('suggestions', 'Suggestions', 'Enter a suggestion')}
+              
+              <div className="border-t pt-4">
+                <div className="space-y-2">
+                  <Label htmlFor="feedback">Additional Feedback</Label>
+                  <Textarea
+                    id="feedback"
+                    value={feedback}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFeedback(e.target.value)}
+                    placeholder="Any additional feedback to help improve our analysis..."
+                    className="min-h-[100px]"
+                  />
                 </div>
-              </div>
-
-              <div>
-                <Label htmlFor="feedback">Additional feedback (optional)</Label>
-                <Textarea
-                  id="feedback"
-                  value={feedback}
-                  onChange={(e) => setFeedback(e.target.value)}
-                  placeholder="What was wrong with the analysis? How can we improve?"
-                  rows={4}
-                />
-              </div>
-
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <h4 className="font-medium text-blue-900 mb-2">How this helps:</h4>
-                <ul className="text-sm text-blue-800 space-y-1">
-                  <li>• Your corrections train the AI to be more accurate</li>
-                  <li>• The system learns your personal food preferences</li>
-                  <li>• Future analyses will be more personalized</li>
-                  <li>• Helps improve the experience for all users</li>
-                </ul>
               </div>
             </TabsContent>
           </Tabs>
-
+          
           <div className="flex justify-between items-center mt-6 pt-4 border-t">
             <div className="text-sm text-gray-600">
               {changes.length > 0 ? (
@@ -442,7 +395,7 @@ export default function MealCorrectionInterface({
                 Cancel
               </Button>
               <Button 
-                onClick={submitCorrections} 
+                onClick={handleSubmit} 
                 disabled={isSubmitting || changes.length === 0}
                 className="flex items-center gap-2"
               >
