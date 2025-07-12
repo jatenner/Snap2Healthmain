@@ -324,10 +324,10 @@ function getCorrectionTypeStats(corrections: any[]): { [key: string]: number } {
     if (!correction) return;
     
     const type = correction.correctionType || 'general';
-    if (stats[type] !== undefined) {
-      stats[type]++;
+    if (type in stats) {
+      stats[type] = (stats[type] || 0) + 1;
     } else {
-      stats['general']++;
+      stats['general'] = (stats['general'] || 0) + 1;
     }
   });
   
@@ -338,15 +338,15 @@ function identifyImprovementAreas(corrections: any[]): string[] {
   const stats = getCorrectionTypeStats(corrections);
   const areas = [];
   
-  if (stats.food_identification > 2) {
+  if ((stats.food_identification || 0) > 2) {
     areas.push('Food identification needs improvement');
   }
   
-  if (stats.portion_size > 2) {
+  if ((stats.portion_size || 0) > 2) {
     areas.push('Portion size estimation needs refinement');
   }
   
-  if (stats.nutrition_values > 2) {
+  if ((stats.nutrition_values || 0) > 2) {
     areas.push('Nutritional value calculations need adjustment');
   }
   
