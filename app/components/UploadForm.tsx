@@ -233,8 +233,8 @@ export default function UploadForm() {
         headers.set('x-authenticated', 'true');
       }
       
-      // Enhanced fetch with explicit headers
-      const response = await fetch('/api/analyze-meal-base64', {
+      // Enhanced fetch with explicit headers - using new adaptive analysis API
+      const response = await fetch('/api/analyze-meal-adaptive', {
         method: 'POST',
         body: formData,
         credentials: 'include', // Include cookies
