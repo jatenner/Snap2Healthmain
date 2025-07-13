@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { user } } = await supabase.auth.getUser();
     
     const body = await request.json();
     console.log('[generate-personalized-insights] Received payload for meal:', body.mealId || body.mealData?.id);
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Extract user profile data
-    const sessionUser = session?.user?.user_metadata || {};
+    const sessionUser = user?.user_metadata || {};
     const firstName = sessionUser.firstName || userProfile?.firstName || 'there';
     const age = parseInt(sessionUser.age || userProfile?.age) || 25;
     const weight = parseInt(sessionUser.weight || userProfile?.weight) || 225;

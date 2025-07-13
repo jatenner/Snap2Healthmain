@@ -11,16 +11,16 @@ export async function POST(request: NextRequest) {
   try {
     const { createClient: createServerClient } = await import('../../lib/supabase/server');
     const supabase = createServerClient();
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { user } } = await supabase.auth.getUser();
     
-    if (!session?.user?.id) {
+    if (!user?.id) {
       return NextResponse.json({
         success: false,
         error: 'Authentication required'
       }, { status: 401 });
     }
     
-    const userId = session.user.id;
+    const userId = user.id;
     const body = await request.json();
     const { 
       mealId, 
@@ -225,16 +225,16 @@ export async function GET(request: NextRequest) {
   try {
     const { createClient: createServerClient } = await import('../../lib/supabase/server');
     const supabase = createServerClient();
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { user } } = await supabase.auth.getUser();
     
-    if (!session?.user?.id) {
+    if (!user?.id) {
       return NextResponse.json({
         success: false,
         error: 'Authentication required'
       }, { status: 401 });
     }
     
-    const userId = session.user.id;
+    const userId = user.id;
     const url = new URL(request.url);
     const mealId = url.searchParams.get('mealId');
     

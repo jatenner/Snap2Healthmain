@@ -68,12 +68,12 @@ export async function GET(
 
     const supabase = createServerClient();
     
-    // Get the user session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    // Get the user with proper authentication
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
     
-    if (sessionError) {
-      console.error('[api/meals/id] Error getting session:', sessionError);
-      return NextResponse.json({ error: 'Failed to get session' }, { status: 500 });
+    if (userError) {
+      console.error('[api/meals/id] Error getting user:', userError);
+      return NextResponse.json({ error: 'Failed to authenticate user' }, { status: 500 });
     }
 
     // Debug environment variables
@@ -87,24 +87,24 @@ export async function GET(
     const allowBypass = true; // Temporarily disable auth for debugging
     
     console.log('[api/meals/id] Auth check:', { 
-      hasSession: !!session, 
+      hasUser: !!user, 
       allowBypass, 
-      willBypass: !session && allowBypass 
+      willBypass: !user && allowBypass 
     });
     
-    // In development mode or with bypass, allow access without session for testing
-    if (!session && !allowBypass) {
-      console.log('[api/meals/id] ❌ Access denied - no session and no bypass allowed');
+    // In development mode or with bypass, allow access without user for testing
+    if (!user && !allowBypass) {
+      console.log('[api/meals/id] ❌ Access denied - no user and no bypass allowed');
       return NextResponse.json(
         { error: 'Unauthorized - You must be logged in to view meals' },
         { status: 401 }
       );
     }
     
-    if (!session && allowBypass) {
+    if (!user && allowBypass) {
       console.log('[api/meals/id] ✅ Allowing access via development bypass');
-    } else if (session) {
-      console.log('[api/meals/id] ✅ Allowing access via valid session');
+    } else if (user) {
+      console.log('[api/meals/id] ✅ Allowing access via valid user');
     }
     
     // Create admin client to bypass RLS policies for read operations
@@ -120,7 +120,7 @@ export async function GET(
       }
     );
     
-    const userId = session?.user?.id;
+    const userId = user?.id;
     console.log(`[api/meals/id] Fetching meal ${mealId} for user ${userId || 'development-mode'}`);
     
     // Fetch the meal from Supabase using admin client
