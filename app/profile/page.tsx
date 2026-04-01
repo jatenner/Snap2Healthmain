@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../components/client/ClientAuthProvider';
+import AuthGate from '../components/AuthGate';
 import { useProfile } from '../lib/profile-context';
 import { useRouter } from 'next/navigation';
 import { Button } from '../components/ui/button';
@@ -84,7 +85,7 @@ export default function ProfilePage() {
   }
 
   if (!user) {
-    return null; // Let the useEffect handle redirect instead of showing error
+    return <AuthGate>{null}</AuthGate>;
   }
 
   const handleInputChange = (field: string, value: string) => {

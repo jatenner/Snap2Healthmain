@@ -7,6 +7,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from '../components/client/ClientAuthProvider';
+import AuthGate from '../components/AuthGate';
 import { createClient } from '../lib/supabase/client';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -300,24 +301,7 @@ export default function MealHistoryPage() {
   }, []);
 
   if (!user) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
-        <Card className="max-w-md mx-auto bg-slate-800/50 backdrop-blur-xl border-slate-700/50">
-          <CardContent className="p-8 text-center">
-            <div className="w-16 h-16 bg-blue-600/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Utensils className="h-8 w-8 text-blue-400" />
-            </div>
-            <h2 className="text-xl font-semibold text-slate-100 mb-2">Sign In Required</h2>
-            <p className="text-slate-400 mb-6">Please sign in to view your meal history</p>
-            <Link href="/login">
-              <Button className="bg-blue-600 hover:bg-blue-700">
-                Sign In
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    return <AuthGate>{null}</AuthGate>;
   }
 
   if (loading) {

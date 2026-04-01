@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '../../components/client/ClientAuthProvider';
 import PersonalizedNutritionAnalysis from '../../components/PersonalizedNutritionAnalysis';
+import AuthGate from '../../components/AuthGate';
 import Link from 'next/link';
 
 interface MealAnalysisData {
@@ -361,6 +362,7 @@ export default function AnalysisPage() {
   }
 
   return (
+    <AuthGate>
     <div className="min-h-screen bg-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
@@ -392,5 +394,6 @@ export default function AnalysisPage() {
         />
       </div>
     </div>
+    </AuthGate>
   );
 } 

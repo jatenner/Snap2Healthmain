@@ -13,6 +13,7 @@ import { Label } from '../components/ui/label';
 import { Upload, Camera, Image as ImageIcon, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import FoodUpload from '../components/FoodUpload';
+import AuthGate from '../components/AuthGate';
 
 export default function UploadPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -178,6 +179,7 @@ export default function UploadPage() {
   };
 
   return (
+    <AuthGate>
     <div className="min-h-screen bg-gray-900 text-white">
       <div className="container mx-auto py-8 px-4">
         <div className="max-w-4xl mx-auto">
@@ -325,5 +327,6 @@ export default function UploadPage() {
         </div>
       </div>
     </div>
+    </AuthGate>
   );
 } 
