@@ -20,7 +20,7 @@ export default function SignUpPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      router.push('/upload');
+      router.push('/');
     }
   }, [isAuthenticated, router]);
 

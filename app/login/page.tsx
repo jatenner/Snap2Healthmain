@@ -2,25 +2,27 @@
 
 import React, { useState, FormEvent, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '../components/client/ClientAuthProvider';
 import { createClient, shouldUseMockAuth } from '../lib/supabase/client';
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get('redirectTo') || '/';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   const { user, isLoading, isAuthenticated } = useAuth();
   const useMockAuth = shouldUseMockAuth();
 
   useEffect(() => {
     if (isAuthenticated) {
-      router.push('/upload');
+      router.push(redirectTo);
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, router, redirectTo]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -39,7 +41,7 @@ export default function LoginPage() {
         if (email === 'demo@snap2health.com' && password === 'demo123') {
           console.log('Development login successful for:', email);
           // Trigger a page refresh to update auth state
-          window.location.href = '/upload';
+          window.location.href = redirectTo;
         } else {
           setError('For demo mode, use: demo@snap2health.com / demo123');
         }
@@ -55,7 +57,7 @@ export default function LoginPage() {
           setError(authError.message);
         } else if (data.user) {
           console.log('Login successful:', data.user.email);
-          router.push('/upload');
+          router.push(redirectTo);
         }
       }
     } catch (err: any) {
@@ -83,9 +85,18 @@ export default function LoginPage() {
           </div>
           <h1 className="text-3xl font-bold text-white">Sign In</h1>
           <p className="mt-2 text-gray-400">
-            {useMockAuth ? 'Demo Mode - No Database Required' : 'Access your Snap2Health account'}
+            {useMockAuth ? 'Demo Mode - No Database Required' : 'Sign in to track your nutrition'}
           </p>
         </div>
+
+        {redirectTo !== '/' && !useMockAuth && (
+          <div className="p-3 bg-blue-900/50 border border-blue-700 rounded-md text-blue-300 text-sm">
+            Please sign in to continue. Don&apos;t have an account?{' '}
+            <Link href="/signup" className="font-medium text-blue-400 hover:text-blue-300 underline">
+              Create one for free
+            </Link>
+          </div>
+        )}
 
         {useMockAuth && (
           <div className="p-3 bg-yellow-900/50 border border-yellow-700 rounded-md text-yellow-300 text-sm">
@@ -98,18 +109,11 @@ export default function LoginPage() {
             <p className="mb-2">{error}</p>
             {error.includes('Invalid login credentials') && (
               <div className="mt-3 pt-3 border-t border-red-700">
-                <p className="text-red-200 text-xs mb-2">This error can mean:</p>
+                <p className="text-red-200 text-xs mb-2">This could mean:</p>
                 <ul className="text-red-200 text-xs space-y-1 list-disc list-inside">
                   <li>Wrong password</li>
-                  <li>Email not verified yet</li>
-                  <li>Account doesn't exist</li>
+                  <li>Account doesn&apos;t exist -- <Link href="/signup" className="text-blue-400 underline">create one</Link></li>
                 </ul>
-                <Link 
-                  href={`/debug-auth?email=${encodeURIComponent(email)}`}
-                  className="inline-block mt-2 text-xs text-blue-400 hover:text-blue-300 underline"
-                >
-                  🔍 Diagnose this issue
-                </Link>
               </div>
             )}
           </div>
@@ -218,11 +222,6 @@ export default function LoginPage() {
           </div>
         )}
 
-        {!useMockAuth && (
-          <div className="mt-4 p-3 bg-green-900/50 border border-green-700 rounded-md text-center">
-            <p className="text-xs text-green-300">✅ Connected to Supabase</p>
-          </div>
-        )}
       </div>
     </div>
   );
