@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { useAuth } from '@/components/client/ClientAuthProvider';
-import PersonalizedNutritionAnalysis from '@/components/PersonalizedNutritionAnalysis';
+import { useAuth } from '../../components/client/ClientAuthProvider';
+import PersonalizedNutritionAnalysis from '../../components/PersonalizedNutritionAnalysis';
 import Link from 'next/link';
 
 interface MealAnalysisData {
