@@ -1,4 +1,9 @@
-// Personalized, actionable nutrient insights for athletic performance
+// Personalized, goal-aware nutrient descriptions
+
+import { categorizeGoal } from './insights-generator';
+import type { GoalCategory } from './insights-generator';
+
+export { type GoalCategory };
 
 export interface Nutrient {
   name: string;
@@ -11,109 +16,161 @@ export interface Nutrient {
   personalizedDV?: number;
 }
 
-// Helper function to filter out nutrients with zero or near-zero values
 export const filterRelevantNutrients = (nutrients: Nutrient[] = []): Nutrient[] => {
-  return nutrients.filter(nutrient => {
-    // Keep nutrient if it has a meaningful amount
-    return nutrient.amount > 0 && nutrient.amount > 0.01; // Filter out trace amounts
-  });
+  return nutrients.filter(nutrient => nutrient.amount > 0.01);
 };
 
-// Personalized, actionable nutrient insights for athletic performance
-export const getNutrientDescription = (name: string): string => {
-  const descriptions: Record<string, string> = {
-    // Macronutrients - Athletic performance focused
-    'protein': 'Perfect for muscle recovery and growth after your workouts. At 225 lbs with athletic goals, you need plenty of quality protein to maintain and build lean mass.',
-    'carbohydrates': 'Fuel for high-intensity training and brain power. This amount will help replenish muscle glycogen stores and keep your energy steady.',
-    'fat': 'Essential for hormone production (including testosterone), joint health, and absorbing fat-soluble vitamins. Quality fats support recovery and reduce exercise-induced inflammation.',
-    'fiber': 'Helps with satiety and digestive health. Good fiber intake supports steady energy levels and helps your body efficiently use all the nutrients from this meal.',
-    'sugar': 'Quick energy that can be useful around workouts, but watch total daily intake. Natural sugars from whole foods are better than processed sources.',
-    'sodium': 'Critical for hydration and muscle function, especially if you sweat a lot during training. This amount helps maintain proper electrolyte balance.',
-    'saturated fat': 'Some is necessary for hormone production, but balance with unsaturated fats. From quality sources like grass-fed meat, it supports testosterone levels.',
-    'trans fat': 'Avoid completely - these artificial fats increase inflammation and impair recovery. Check labels on processed foods.',
-    'unsaturated fat': 'Anti-inflammatory fats that support recovery, heart health, and brain function. Great for athletes who train intensely.',
-    'cholesterol': 'Your body needs some for hormone production. Dietary cholesterol has minimal impact on blood cholesterol for most active people.',
-    'calories': 'Energy to fuel your training and recovery. At your size and activity level, adequate calories prevent muscle loss and support performance.',
-    
-    // Vitamins - Performance and recovery focused
-    'vitamin a': 'Supports immune function and vision - important when training hard as intense exercise can temporarily suppress immunity.',
-    'vitamin c': 'Powerful antioxidant that reduces exercise-induced oxidative stress and supports collagen synthesis for joint health.',
-    'vitamin d': 'The hormone vitamin that supports testosterone production, bone health, and muscle function. Many athletes are deficient, especially in winter.',
-    'vitamin e': 'Protects cell membranes from exercise-induced damage. Works with other antioxidants to reduce inflammation from intense training.',
-    'vitamin k': 'Essential for bone health and blood clotting. Important for athletes at risk of stress fractures or training injuries.',
-    'vitamin b1': 'Converts carbs to energy for your workouts. Needs increase with higher carb intake and intense training.',
-    'vitamin b2': 'Key for energy production and red blood cell formation. Helps your body efficiently use oxygen during exercise.',
-    'vitamin b3': 'Supports energy metabolism and may help with recovery. Can improve blood flow and reduce exercise-induced fatigue.',
-    'vitamin b5': 'Essential for converting fats and carbs into usable energy. Supports adrenal function during training stress.',
-    'vitamin b6': 'Critical for protein metabolism and neurotransmitter production. Helps with mood regulation and recovery from training stress.',
-    'vitamin b7': 'Supports energy metabolism and protein synthesis. Important for athletes with high protein needs.',
-    'vitamin b9': 'Essential for red blood cell production and DNA repair. Important for recovery and adaptation to training.',
-    'vitamin b12': 'Critical for energy production and nervous system function. Deficiency can significantly impact training performance.',
-    
-    // Minerals - Athletic performance context
-    'calcium': 'Essential for bone health and muscle contractions. Important for preventing stress fractures and optimizing muscle function.',
-    'iron': 'Carries oxygen to your muscles. Even mild deficiency can severely impact endurance and training capacity.',
-    'potassium': 'Key electrolyte for muscle function and blood pressure regulation. Lost in sweat during intense training.',
-    'magnesium': 'Critical for muscle function, energy production, and sleep quality. Many athletes are deficient, leading to cramps and poor recovery.',
-    'zinc': 'Supports testosterone production, immune function, and protein synthesis. Lost in sweat and crucial for male athletes.',
-    'phosphorus': 'Works with calcium for bone health and energy storage. Important for high-intensity, explosive movements.',
-    'selenium': 'Antioxidant that protects against exercise-induced oxidative damage. Supports thyroid function and metabolism.',
-    'iodine': 'Essential for thyroid hormones that regulate metabolism and energy levels. Important for maintaining training intensity.',
-    'copper': 'Supports iron absorption and collagen formation. Important for joint health and oxygen transport.',
-    'manganese': 'Supports bone formation and wound healing. Important for athletes at risk of overuse injuries.',
-    'chromium': 'May improve insulin sensitivity and help with body composition goals. Can support better nutrient partitioning.',
-    'molybdenum': 'Helps process amino acids from your protein intake. Works behind the scenes to support protein metabolism.'
-  };
-  
-  const exactMatch = descriptions[name.toLowerCase()];
-  if (exactMatch) return exactMatch;
-  
-  // Check for partial matches with athletic context
-  const lowercaseName = name.toLowerCase();
-  
-  if (lowercaseName.includes('vitamin b') || lowercaseName.match(/b\d+/) || lowercaseName.includes('b vitamin')) {
-    return 'B-complex vitamins work together to convert food into energy and support nervous system function - critical for athletic performance and recovery.';
-  }
-  
-  if (lowercaseName.includes('vitamin')) {
-    return 'Essential micronutrient that supports optimal body function and athletic performance. Make sure you\'re getting enough through whole foods.';
-  }
-  
-  // Check for mineral partial matches with athletic context
-  const minerals = ['iron', 'calcium', 'zinc', 'magnesium', 'potassium', 'sodium', 'copper', 'manganese', 'selenium'];
-  for (const mineral of minerals) {
-    if (lowercaseName.includes(mineral)) {
-      return descriptions[mineral] || 'Essential mineral that supports athletic performance, recovery, and overall health. Important for active individuals.';
+// Base descriptions (general audience, no athlete assumptions)
+const BASE_DESCRIPTIONS: Record<string, string> = {
+  // Macronutrients
+  'protein': 'Builds and repairs tissues, supports immune function, and helps you feel full between meals.',
+  'carbohydrates': 'Your body\'s preferred energy source. Fuels your brain, muscles, and daily activities.',
+  'fat': 'Essential for hormone production, vitamin absorption, and cell health. Choose healthy sources.',
+  'fiber': 'Supports digestive health, blood sugar control, and helps you stay full longer.',
+  'sugar': 'Provides quick energy. Natural sugars from whole foods are preferable to added sugars.',
+  'sodium': 'Regulates fluid balance and nerve function. Most people should limit intake to 2300mg/day.',
+  'saturated fat': 'Limit intake for heart health. Found in animal fats, full-fat dairy, and coconut oil.',
+  'trans fat': 'Avoid completely -- increases inflammation and heart disease risk.',
+  'unsaturated fat': 'Heart-healthy fats that reduce inflammation. Found in olive oil, nuts, and fish.',
+  'cholesterol': 'Used to make hormones and cell membranes. Dietary impact varies by individual.',
+  'calories': 'Energy to fuel your daily activities and bodily functions.',
+
+  // Vitamins
+  'vitamin a': 'Keeps your eyes healthy for good vision, especially at night. Also supports immune function and skin health.',
+  'vitamin c': 'Powerful antioxidant that supports immune function, skin health, and iron absorption.',
+  'vitamin d': 'Supports bone health, immune function, and mood. Many people are deficient, especially in winter.',
+  'vitamin e': 'Protects cells from damage and supports immune function and skin health.',
+  'vitamin k': 'Essential for blood clotting and bone health.',
+  'vitamin b1': 'Converts carbohydrates into energy. Important for nerve and muscle function.',
+  'vitamin b2': 'Helps produce energy and supports healthy skin and red blood cells.',
+  'vitamin b3': 'Supports energy metabolism, skin health, and nervous system function.',
+  'vitamin b5': 'Helps convert food into energy. Supports hormone production.',
+  'vitamin b6': 'Important for protein metabolism, brain function, and immune health.',
+  'vitamin b7': 'Supports healthy hair, skin, nails, and energy metabolism.',
+  'vitamin b9': 'Essential for cell division and DNA synthesis. Especially important during pregnancy.',
+  'vitamin b12': 'Critical for nerve function, red blood cell formation, and energy production.',
+
+  // Minerals
+  'calcium': 'Essential for strong bones, muscle function, and nerve signaling.',
+  'iron': 'Carries oxygen throughout your body. Deficiency causes fatigue and weakness.',
+  'potassium': 'Regulates blood pressure, fluid balance, and muscle contractions.',
+  'magnesium': 'Supports muscle and nerve function, energy production, and sleep quality.',
+  'zinc': 'Supports immune function, wound healing, and protein synthesis.',
+  'phosphorus': 'Works with calcium for strong bones and teeth. Supports energy storage.',
+  'selenium': 'Antioxidant that supports thyroid function and protects against cell damage.',
+  'iodine': 'Essential for thyroid hormones that regulate metabolism.',
+  'copper': 'Supports iron absorption, collagen formation, and immune function.',
+  'manganese': 'Supports bone formation, blood clotting, and metabolism.',
+  'chromium': 'May help regulate blood sugar and support insulin function.',
+  'molybdenum': 'Helps process amino acids and supports enzyme function.',
+};
+
+// Goal-specific addendums for key nutrients
+const GOAL_ADDENDUMS: Record<string, Partial<Record<GoalCategory, string>>> = {
+  'protein': {
+    weight_loss: 'Higher protein helps preserve muscle during caloric deficit and increases satiety.',
+    muscle_building: 'Aim for 1.6-2.2g per kg of bodyweight daily to maximize muscle protein synthesis.',
+    athletic_performance: 'Supports muscle recovery after training. Time intake around workouts for best results.',
+  },
+  'carbohydrates': {
+    weight_loss: 'Choose complex carbs with fiber to maintain energy while managing calories.',
+    muscle_building: 'Adequate carbs fuel intense workouts and support muscle glycogen replenishment.',
+    athletic_performance: 'Your primary training fuel. Time carb-rich meals around exercise for peak performance.',
+  },
+  'fat': {
+    weight_loss: 'Calorie-dense (9 cal/g) -- moderate intake, but don\'t eliminate. Needed for hormones.',
+    muscle_building: 'Supports testosterone production. Include healthy fat sources daily.',
+  },
+  'fiber': {
+    weight_loss: 'Your best friend for appetite control. Aim for 25-35g daily.',
+    disease_management: 'Helps manage blood sugar and cholesterol levels.',
+  },
+  'sodium': {
+    disease_management: 'If managing blood pressure or heart health, aim for under 1500mg/day.',
+    athletic_performance: 'Lost through sweat -- you may need more than sedentary individuals.',
+  },
+  'iron': {
+    weight_loss: 'Caloric restriction can reduce iron intake. Monitor for fatigue.',
+    athletic_performance: 'Intense training increases iron needs. Critical for oxygen delivery to muscles.',
+  },
+  'calcium': {
+    weight_loss: 'Dairy calcium may support fat metabolism. Keep intake adequate during deficits.',
+    athletic_performance: 'Prevents stress fractures and supports muscle contraction.',
+  },
+  'vitamin d': {
+    muscle_building: 'Supports muscle function and may support testosterone levels.',
+    disease_management: 'Supports immune function and may reduce inflammation.',
+  },
+  'magnesium': {
+    athletic_performance: 'Commonly low in athletes. Supports recovery, sleep, and prevents cramping.',
+    general_wellness: 'Supports 300+ enzyme reactions. Many people don\'t get enough.',
+  },
+};
+
+/**
+ * Get a nutrient description tailored to the user's goal
+ */
+export const getNutrientDescription = (name: string, goalText?: string): string => {
+  const lowName = name.toLowerCase();
+  const goalCategory = goalText ? categorizeGoal(goalText) : 'general_wellness';
+
+  // Find base description
+  let base = BASE_DESCRIPTIONS[lowName];
+  if (!base) {
+    // Partial match
+    for (const [key, desc] of Object.entries(BASE_DESCRIPTIONS)) {
+      if (lowName.includes(key) || key.includes(lowName)) {
+        base = desc;
+        break;
+      }
     }
   }
-  
-  return 'Important nutrient that supports your training goals and overall performance. Consider tracking your intake to optimize results.';
+  if (!base) {
+    if (lowName.includes('vitamin b') || lowName.match(/b\d+/)) {
+      base = 'B-complex vitamin that helps convert food into energy and supports nervous system function.';
+    } else if (lowName.includes('vitamin')) {
+      base = 'Essential vitamin that supports optimal body function and health.';
+    } else {
+      base = 'Important nutrient that supports your overall health.';
+    }
+  }
+
+  // Add goal-specific addendum
+  for (const [key, addendums] of Object.entries(GOAL_ADDENDUMS)) {
+    if (lowName.includes(key)) {
+      const addendum = addendums[goalCategory as GoalCategory];
+      if (addendum) {
+        return `${base} ${addendum}`;
+      }
+      break;
+    }
+  }
+
+  return base;
 };
 
-// Enhanced nutrient descriptions with personalized insights
+/**
+ * Enhanced description with DV context
+ */
 export const getEnhancedNutrientDescription = (nutrient: Nutrient, userGoal?: string): string => {
-  const baseDescription = getNutrientDescription(nutrient.name);
-  const amount = nutrient.amount;
+  const baseDescription = getNutrientDescription(nutrient.name, userGoal);
   const dv = nutrient.percentDailyValue;
-  
+
   let insight = '';
-  
-  // Add personalized insights based on amount and athletic goals
+
   if (dv && dv > 0) {
     if (dv >= 100) {
-      insight = ` Excellent! This meal covers your full daily needs and then some - great for supporting your athletic performance.`;
+      insight = ` This meal covers your full daily needs (${Math.round(dv)}%).`;
     } else if (dv >= 50) {
-      insight = ` Solid contribution! This meal provides over half your daily needs (${Math.round(dv)}%).`;
+      insight = ` Good -- this meal provides ${Math.round(dv)}% of your daily target.`;
     } else if (dv >= 25) {
-      insight = ` Good amount here - this meal provides ${Math.round(dv)}% of your daily target.`;
+      insight = ` This meal contributes ${Math.round(dv)}% of your daily target.`;
     } else if (dv >= 10) {
-      insight = ` This meal contributes ${Math.round(dv)}% toward your daily goal. Consider adding more sources throughout the day.`;
-    } else if (dv < 10 && dv > 0) {
-      insight = ` Small contribution (${Math.round(dv)}%). Look for other meals to meet your athletic needs.`;
+      insight = ` Modest amount (${Math.round(dv)}% DV). Look for more sources in other meals.`;
+    } else {
+      insight = ` Small amount (${Math.round(dv)}% DV). Consider supplementing from other foods.`;
     }
-  } else if (amount === 0) {
-    insight = ` Missing from this meal. Consider adding foods rich in this nutrient to support your training goals.`;
   }
-  
+
   return baseDescription + insight;
-}; 
+};

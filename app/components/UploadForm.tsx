@@ -234,7 +234,7 @@ export default function UploadForm() {
       }
       
       // Enhanced fetch with explicit headers - using new adaptive analysis API
-      const response = await fetch('/api/analyze-meal-adaptive', {
+      const response = await fetch('/api/analyze-meal', {
         method: 'POST',
         body: formData,
         credentials: 'include', // Include cookies

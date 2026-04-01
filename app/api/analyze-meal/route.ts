@@ -12,94 +12,190 @@ const supabaseAdmin = createClient(
 
 // Simple inline OpenAI function to avoid import issues
 async function analyzeImageWithGPT(base64Image: string, userProfile: any = {}): Promise<any> {
+  console.log('[analyzeImageWithGPT] Starting analysis...');
+  
+  // Check API key first
+  if (!process.env.OPENAI_API_KEY) {
+    console.error('[analyzeImageWithGPT] No OpenAI API key found');
+    throw new Error('OpenAI API key not configured');
+  }
+  
   const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
-    maxRetries: 0,
-    timeout: 15000,
+    maxRetries: 3, // Increased retries
+    timeout: 60000, // Increased to 60 seconds for comprehensive analysis
   });
 
   if (!base64Image.startsWith('data:image/')) {
+    console.error('[analyzeImageWithGPT] Invalid image format:', base64Image.substring(0, 50));
     throw new Error('Invalid image format - must be data:image URL');
   }
 
-  const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY }); const completion = await openaiClient.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      {
-        role: "system",
-        content: "You are a nutrition expert. Analyze food images accurately and return comprehensive nutrition data in valid JSON format."
-      },
-      {
-        role: "user", 
-        content: [
+  console.log('[analyzeImageWithGPT] Making OpenAI API call with 60s timeout...');
+  
+  // Retry logic with exponential backoff
+  let lastError: any;
+  const maxAttempts = 2;
+  
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      console.log(`[analyzeImageWithGPT] Attempt ${attempt}/${maxAttempts}`);
+      
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
           {
-            type: "text",
-            text: `Analyze this meal image and provide accurate nutrition data in JSON format:
+            role: "system",
+            content: "You are a nutrition expert. Analyze food images quickly and accurately. Return comprehensive nutrition data with complete micronutrient profiles in valid JSON format. Be efficient but thorough."
+          },
+          {
+            role: "user", 
+            content: [
+              {
+                type: "text",
+                text: `Analyze this meal image and provide comprehensive nutrition data in JSON format. Include ALL major nutrients:
 
 {
-  "mealName": "descriptive name of what you see",
-  "mealDescription": "detailed description of the meal",
-  "calories": estimated_calories,
-  "protein": grams,
-  "carbs": grams,
-  "fat": grams,
+  "mealName": "descriptive name",
+  "mealDescription": "detailed description",
+  "calories": number,
+  "protein": number,
+  "carbs": number,
+  "fat": number,
   "macronutrients": [
-    {"name": "Protein", "amount": number, "unit": "g", "percentDailyValue": null},
-    {"name": "Total Carbohydrates", "amount": number, "unit": "g", "percentDailyValue": null},
-    {"name": "Total Fat", "amount": number, "unit": "g", "percentDailyValue": null}
+    {"name": "Protein", "amount": number, "unit": "g", "percentDailyValue": number},
+    {"name": "Total Carbohydrates", "amount": number, "unit": "g", "percentDailyValue": number},
+    {"name": "Total Fat", "amount": number, "unit": "g", "percentDailyValue": number},
+    {"name": "Saturated Fat", "amount": number, "unit": "g", "percentDailyValue": number},
+    {"name": "Fiber", "amount": number, "unit": "g", "percentDailyValue": number},
+    {"name": "Sugar", "amount": number, "unit": "g", "percentDailyValue": number},
+    {"name": "Sodium", "amount": number, "unit": "mg", "percentDailyValue": number}
   ],
   "micronutrients": [
-    {"name": "Iron", "amount": number, "unit": "mg", "percentDailyValue": null},
-    {"name": "Vitamin C", "amount": number, "unit": "mg", "percentDailyValue": null},
-    {"name": "Calcium", "amount": number, "unit": "mg", "percentDailyValue": null}
+    {"name": "Vitamin A", "amount": number, "unit": "mcg", "percentDailyValue": number},
+    {"name": "Vitamin C", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Vitamin D", "amount": number, "unit": "mcg", "percentDailyValue": number},
+    {"name": "Vitamin E", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Vitamin K", "amount": number, "unit": "mcg", "percentDailyValue": number},
+    {"name": "Vitamin B1 (Thiamine)", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Vitamin B2 (Riboflavin)", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Vitamin B3 (Niacin)", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Vitamin B5 (Pantothenic Acid)", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Vitamin B6", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Vitamin B7 (Biotin)", "amount": number, "unit": "mcg", "percentDailyValue": number},
+    {"name": "Vitamin B9 (Folate)", "amount": number, "unit": "mcg", "percentDailyValue": number},
+    {"name": "Vitamin B12", "amount": number, "unit": "mcg", "percentDailyValue": number},
+    {"name": "Calcium", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Iron", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Magnesium", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Phosphorus", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Potassium", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Zinc", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Copper", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Manganese", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Selenium", "amount": number, "unit": "mcg", "percentDailyValue": number},
+    {"name": "Iodine", "amount": number, "unit": "mcg", "percentDailyValue": number},
+    {"name": "Chromium", "amount": number, "unit": "mcg", "percentDailyValue": number},
+    {"name": "Molybdenum", "amount": number, "unit": "mcg", "percentDailyValue": number}
   ],
-  "foods": ["list", "of", "foods", "you", "identify"],
+  "foods": ["list", "of", "foods"],
   "ingredients": ["main", "ingredients"],
   "benefits": ["health benefits"],
   "concerns": ["nutritional concerns"],
   "suggestions": ["improvement suggestions"],
-  "healthRating": 1-10
+  "healthRating": number
 }
 
+Daily Values for calculations:
+Protein: 50g, Carbs: 300g, Fat: 65g, Saturated Fat: 20g, Fiber: 25g, Sodium: 2300mg, Vitamin A: 900mcg, Vitamin C: 90mg, Vitamin D: 20mcg, Calcium: 1000mg, Iron: 18mg, Potassium: 4700mg, Magnesium: 400mg, Phosphorus: 1250mg, Zinc: 11mg, B1: 1.2mg, B2: 1.3mg, B3: 16mg, B6: 1.7mg, B12: 2.4mcg, Folate: 400mcg, Vitamin E: 15mg, Vitamin K: 120mcg
+
 Return ONLY valid JSON.`
-          },
-          {
-            type: "image_url",
-            image_url: {
-              url: base64Image,
-              detail: "high"
-            }
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: base64Image,
+                  detail: "high"
+                }
+              }
+            ]
           }
-        ]
+        ],
+        max_tokens: 4000, // Increased for comprehensive response
+        temperature: 0.1, // Lower temperature for consistency
+      });
+
+      console.log('[analyzeImageWithGPT] OpenAI API call successful');
+      
+      const responseContent = completion.choices[0]?.message?.content || '';
+      
+      if (!responseContent) {
+        throw new Error('Empty response from OpenAI API');
       }
-    ],
-    max_tokens: 2000,
-    temperature: 0.2,
-  });
+      
+      if (responseContent.includes('ERROR') || 
+          responseContent.includes("I can't see") || 
+          responseContent.includes("I cannot see") ||
+          responseContent.includes("unable to view")) {
+        throw new Error('OpenAI Vision API cannot process the image');
+      }
 
-  const responseContent = completion.choices[0]?.message?.content || '';
-  
-  if (responseContent.includes('ERROR') || 
-      responseContent.includes("I can't see") || 
-      responseContent.includes("I cannot see") ||
-      responseContent.includes("unable to view")) {
-    throw new Error('OpenAI Vision API cannot process the image');
-  }
-
-  let cleanResponse = responseContent.trim();
-  
-  if (cleanResponse.includes('```')) {
-    const jsonMatch = cleanResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    if (jsonMatch && jsonMatch[1]) {
-      cleanResponse = jsonMatch[1];
+      let cleanResponse = responseContent.trim();
+      
+      // Extract JSON from response
+      if (cleanResponse.includes('```')) {
+        const jsonMatch = cleanResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        if (jsonMatch && jsonMatch[1]) {
+          cleanResponse = jsonMatch[1];
+        }
+      }
+      
+      const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsedResult = JSON.parse(jsonMatch[0]);
+        console.log('[analyzeImageWithGPT] Successfully parsed JSON response');
+        console.log('[analyzeImageWithGPT] Nutrient counts:', {
+          macros: parsedResult.macronutrients?.length || 0,
+          micros: parsedResult.micronutrients?.length || 0
+        });
+        return parsedResult;
+      } else {
+        throw new Error('No JSON object found in response');
+      }
+      
+    } catch (error: any) {
+      console.error(`[analyzeImageWithGPT] Attempt ${attempt} failed:`, {
+        message: error.message,
+        type: error.type,
+        code: error.code,
+        status: error.status
+      });
+      
+      lastError = error;
+      
+      // Don't retry on certain errors
+      if (error.code === 'insufficient_quota' || error.code === 'invalid_api_key') {
+        break;
+      }
+      
+      // Wait before retry (exponential backoff)
+      if (attempt < maxAttempts) {
+        const waitTime = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s...
+        console.log(`[analyzeImageWithGPT] Waiting ${waitTime}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
     }
   }
   
-  const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    return JSON.parse(jsonMatch[0]);
+  // All attempts failed, throw the last error with specific message
+  if (lastError?.code === 'insufficient_quota') {
+    throw new Error('OpenAI API quota exceeded. Please check your billing.');
+  } else if (lastError?.code === 'invalid_api_key') {
+    throw new Error('Invalid OpenAI API key. Please check configuration.');
+  } else if (lastError?.message?.includes('timeout')) {
+    throw new Error('Analysis is taking longer than expected. Please try with a smaller image or try again.');
   } else {
-    throw new Error('No JSON object found in response');
+    throw new Error(`OpenAI analysis failed: ${lastError?.message || 'Unknown error'}`);
   }
 }
 
@@ -198,11 +294,12 @@ Keep each section 2-3 sentences, focus on actionable health insights.`;
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('[analyze-meal-base64] 🚀 Starting meal analysis with base64 approach...');
-    console.log('[analyze-meal-base64] Request headers:', Object.fromEntries(request.headers.entries()));
-    console.log('[analyze-meal-base64] Request URL:', request.url);
-    console.log('[analyze-meal-base64] Request method:', request.method);
-    console.log('[analyze-meal-base64] User-Agent:', request.headers.get('user-agent'));
+    console.log('[analyze-meal] 🚀 Starting meal analysis with base64 approach...');
+    console.log('[analyze-meal] Environment check - OpenAI key exists:', !!process.env.OPENAI_API_KEY);
+    console.log('[analyze-meal] Request headers:', Object.fromEntries(request.headers.entries()));
+    console.log('[analyze-meal] Request URL:', request.url);
+    console.log('[analyze-meal] Request method:', request.method);
+    console.log('[analyze-meal] User-Agent:', request.headers.get('user-agent'));
     
     // Get user session for proper user_id using server client
     const { createClient: createServerClient } = await import('../../lib/supabase/server');
@@ -210,7 +307,7 @@ export async function POST(request: NextRequest) {
     
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
-    console.log('[analyze-meal-base64] Session debug:', {
+    console.log('[analyze-meal] Session debug:', {
       hasSession: !!session,
       sessionError: sessionError?.message,
       userId: session?.user?.id,
@@ -229,7 +326,7 @@ export async function POST(request: NextRequest) {
       }, { status: 401 });
     }
     
-    console.log('[analyze-meal-base64] User session:', { 
+    console.log('[analyze-meal] User session:', { 
       hasSession: !!session, 
       userId: userId,
       userEmail: session?.user?.email 
@@ -241,7 +338,7 @@ export async function POST(request: NextRequest) {
     const mealName = (formData.get('mealName') as string) || 'Analyzed Meal';
     const goal = (formData.get('goal') as string) || 'General Wellness';
 
-    console.log('[analyze-meal-base64] Form data parsed:', {
+    console.log('[analyze-meal] Form data parsed:', {
       hasFile: !!file,
       fileType: file?.type,
       fileSize: file?.size,
@@ -271,14 +368,14 @@ export async function POST(request: NextRequest) {
     const mimeType = file.type || 'image/jpeg';
     const base64Image = `data:${mimeType};base64,${base64Data}`;
     
-    console.log('[analyze-meal-base64] File converted to base64, length:', base64Image.length);
+    console.log('[analyze-meal] File converted to base64, length:', base64Image.length);
 
     // Create unique filename for storage
     const timestamp = Date.now();
     const randomId = Math.random().toString(36).substring(2, 9);
     const filename = `base64-test/${timestamp}-${randomId}-${file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`;
     
-    console.log('[analyze-meal-base64] Uploading image to storage:', filename);
+    console.log('[analyze-meal] Uploading image to storage:', filename);
 
     // Upload to Supabase storage
     let publicUrl: string;
@@ -291,7 +388,7 @@ export async function POST(request: NextRequest) {
         });
 
       if (uploadError) {
-        console.warn('[analyze-meal-base64] Supabase storage upload failed:', uploadError);
+        console.warn('[analyze-meal] Supabase storage upload failed:', uploadError);
         throw new Error('Supabase storage failed');
       }
 
@@ -301,10 +398,10 @@ export async function POST(request: NextRequest) {
         .getPublicUrl(filename);
 
       publicUrl = supabaseUrl;
-      console.log('[analyze-meal-base64] Image uploaded to Supabase successfully:', publicUrl);
+      console.log('[analyze-meal] Image uploaded to Supabase successfully:', publicUrl);
 
     } catch (storageError) {
-      console.warn('[analyze-meal-base64] Supabase storage unavailable, using data URL fallback');
+      console.warn('[analyze-meal] Supabase storage unavailable, using data URL fallback');
       publicUrl = base64Image;
     }
 
@@ -312,19 +409,29 @@ export async function POST(request: NextRequest) {
     const mealId = uuidv4();
 
     // Run OpenAI analysis with base64 image
-    console.log('[analyze-meal-base64] Running OpenAI analysis with base64 image...');
+    console.log('[analyze-meal] Running OpenAI analysis with base64 image...');
     
     let analysisResult: any;
     try {
       // Debug logging for image format
-      console.log('[analyze-meal-base64] About to call analyzeImageWithGPT with:');
-      console.log('[analyze-meal-base64] - Image starts with data:image/:', base64Image.startsWith('data:image/'));
-      console.log('[analyze-meal-base64] - Image contains base64:', base64Image.includes('base64,'));
-      console.log('[analyze-meal-base64] - Image length:', base64Image.length);
-      console.log('[analyze-meal-base64] - Image prefix (first 50 chars):', base64Image.substring(0, 50));
-      console.log('[analyze-meal-base64] - MIME type detected:', mimeType);
+      console.log('[analyze-meal] About to call analyzeImageWithGPT with:');
+      console.log('[analyze-meal] - Image starts with data:image/:', base64Image.startsWith('data:image/'));
+      console.log('[analyze-meal] - Image contains base64:', base64Image.includes('base64,'));
+      console.log('[analyze-meal] - Image length:', base64Image.length);
+      console.log('[analyze-meal] - Image prefix (first 50 chars):', base64Image.substring(0, 50));
+      console.log('[analyze-meal] - MIME type detected:', mimeType);
+      console.log('[analyze-meal] - OpenAI API key exists:', !!process.env.OPENAI_API_KEY);
+      console.log('[analyze-meal] - OpenAI API key prefix:', process.env.OPENAI_API_KEY?.substring(0, 7) + '...');
       
-      analysisResult = await analyzeImageWithGPT(base64Image, {
+      // Create a timeout promise to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Analysis timeout - taking longer than 90 seconds'));
+        }, 90000); // 90 second total timeout
+      });
+      
+      // Race between analysis and timeout
+      const analysisPromise = analyzeImageWithGPT(base64Image, {
         goal: goal,
         age: 30,
         weight: 70,
@@ -334,10 +441,12 @@ export async function POST(request: NextRequest) {
         gender: 'male',
         activity_level: 'moderate'
       });
-      console.log('[analyze-meal-base64] OpenAI analysis completed successfully');
+      
+      analysisResult = await Promise.race([analysisPromise, timeoutPromise]);
+      console.log('[analyze-meal] OpenAI analysis completed successfully');
       
       // DEBUG: Check analysis result structure for DV calculation
-      console.log('[analyze-meal-base64] Analysis result structure check:', {
+      console.log('[analyze-meal] Analysis result structure check:', {
         hasMacros: !!(analysisResult as any)?.macronutrients,
         hasMicros: !!(analysisResult as any)?.micronutrients,
         macroCount: Array.isArray((analysisResult as any)?.macronutrients) ? (analysisResult as any).macronutrients.length : 0,
@@ -346,16 +455,16 @@ export async function POST(request: NextRequest) {
       });
       
       // ✅ CRITICAL FIX: Calculate personalized daily values and add them to nutrients
-      console.log('[analyze-meal-base64] 🎯 Starting DV% calculation process...');
-      console.log('[analyze-meal-base64] Analysis result type:', typeof analysisResult);
-      console.log('[analyze-meal-base64] Analysis result keys:', Object.keys(analysisResult as any || {}));
+      console.log('[analyze-meal] 🎯 Starting DV% calculation process...');
+      console.log('[analyze-meal] Analysis result type:', typeof analysisResult);
+      console.log('[analyze-meal] Analysis result keys:', Object.keys(analysisResult as any || {}));
       
       if (analysisResult && typeof analysisResult === 'object') {
-        console.log('[analyze-meal-base64] ✅ Valid analysis result found - proceeding with DV calculation');
+        console.log('[analyze-meal] ✅ Valid analysis result found - proceeding with DV calculation');
         
         // Get full user profile from session metadata for DV calculation
         const sessionMetadata = session?.user?.user_metadata || {};
-        console.log('[analyze-meal-base64] Session metadata for DV calculation:', {
+        console.log('[analyze-meal] Session metadata for DV calculation:', {
           age: sessionMetadata.age,
           weight: sessionMetadata.weight,
           gender: sessionMetadata.gender,
@@ -374,7 +483,7 @@ export async function POST(request: NextRequest) {
           goal: sessionMetadata.defaultGoal || goal
         };
       
-        console.log('[analyze-meal-base64] 📊 Profile for DV calculation:', fullUserProfile);
+        console.log('[analyze-meal] 📊 Profile for DV calculation:', fullUserProfile);
         
         // Find nutrients in all possible locations with robust checking
         let macronutrients = null;
@@ -407,7 +516,7 @@ export async function POST(request: NextRequest) {
           }
         }
         
-        console.log('[analyze-meal-base64] 🔍 Nutrient search results:', {
+        console.log('[analyze-meal] 🔍 Nutrient search results:', {
           macroFound: !!macronutrients,
           microFound: !!micronutrients,
           macroCount: Array.isArray(macronutrients) ? macronutrients.length : 0,
@@ -416,13 +525,13 @@ export async function POST(request: NextRequest) {
         
         // Calculate DV% for macronutrients
         if (macronutrients && Array.isArray(macronutrients) && macronutrients.length > 0) {
-          console.log('[analyze-meal-base64] 🧮 Processing macronutrients for DV calculation...');
+          console.log('[analyze-meal] 🧮 Processing macronutrients for DV calculation...');
           
           const updatedMacros = macronutrients.map((nutrient: any, index: number) => {
             const originalDV = nutrient.percentDailyValue;
             const personalizedDV = calculatePersonalizedDV(nutrient, fullUserProfile);
             
-            console.log(`[analyze-meal-base64] 📈 Macro ${index + 1} - ${nutrient.name}:`, {
+            console.log(`[analyze-meal] 📈 Macro ${index + 1} - ${nutrient.name}:`, {
               amount: nutrient.amount,
               unit: nutrient.unit,
               originalDV: originalDV,
@@ -445,20 +554,20 @@ export async function POST(request: NextRequest) {
             (analysisResult as any).nutrients.macronutrients = updatedMacros;
           }
           
-          console.log('[analyze-meal-base64] ✅ Macronutrients DV% updated successfully');
+          console.log('[analyze-meal] ✅ Macronutrients DV% updated successfully');
         } else {
-          console.log('[analyze-meal-base64] ⚠️ No macronutrients found for DV calculation');
+          console.log('[analyze-meal] ⚠️ No macronutrients found for DV calculation');
         }
         
         // Calculate DV% for micronutrients  
         if (micronutrients && Array.isArray(micronutrients) && micronutrients.length > 0) {
-          console.log('[analyze-meal-base64] 🧮 Processing micronutrients for DV calculation...');
+          console.log('[analyze-meal] 🧮 Processing micronutrients for DV calculation...');
           
           const updatedMicros = micronutrients.map((nutrient: any, index: number) => {
             const originalDV = nutrient.percentDailyValue;
             const personalizedDV = calculatePersonalizedDV(nutrient, fullUserProfile);
             
-            console.log(`[analyze-meal-base64] 📈 Micro ${index + 1} - ${nutrient.name}:`, {
+            console.log(`[analyze-meal] 📈 Micro ${index + 1} - ${nutrient.name}:`, {
               amount: nutrient.amount,
               unit: nutrient.unit,
               originalDV: originalDV,
@@ -480,17 +589,17 @@ export async function POST(request: NextRequest) {
             (analysisResult as any).nutrients.micronutrients = updatedMicros;
           }
           
-          console.log('[analyze-meal-base64] ✅ Micronutrients DV% updated successfully');
+          console.log('[analyze-meal] ✅ Micronutrients DV% updated successfully');
         } else {
-          console.log('[analyze-meal-base64] ⚠️ No micronutrients found for DV calculation');
+          console.log('[analyze-meal] ⚠️ No micronutrients found for DV calculation');
         }
         
-        console.log('[analyze-meal-base64] 🎉 DV% calculation process completed successfully');
+        console.log('[analyze-meal] 🎉 DV% calculation process completed successfully');
       } else {
-        console.log('[analyze-meal-base64] ❌ Invalid analysis result - skipping DV calculation');
+        console.log('[analyze-meal] ❌ Invalid analysis result - skipping DV calculation');
       }
     } catch (openaiError: any) {
-      console.error('[analyze-meal-base64] OpenAI analysis failed:', openaiError);
+      console.error('[analyze-meal] OpenAI analysis failed:', openaiError);
       
       // Provide specific error messages based on the type of OpenAI error
       let errorMessage = 'OpenAI vision analysis failed to process your meal image';
@@ -557,8 +666,8 @@ export async function POST(request: NextRequest) {
     let dbSaveSuccessful = false;
     
     try {
-      console.log('[analyze-meal-base64] Attempting to save meal to database...');
-      console.log('[analyze-meal-base64] Meal record keys:', Object.keys(mealRecord));
+      console.log('[analyze-meal] Attempting to save meal to database...');
+      console.log('[analyze-meal] Meal record keys:', Object.keys(mealRecord));
       
       const insertResult = await supabaseAdmin
         .from('meals')
@@ -567,8 +676,8 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (insertResult.error) {
-        console.error('[analyze-meal-base64] Database insertion failed:', insertResult.error);
-        console.error('[analyze-meal-base64] Error details:', {
+        console.error('[analyze-meal] Database insertion failed:', insertResult.error);
+        console.error('[analyze-meal] Error details:', {
           code: insertResult.error.code,
           message: insertResult.error.message,
           details: insertResult.error.details,
@@ -576,7 +685,7 @@ export async function POST(request: NextRequest) {
         });
         
         // If database save fails, get the most recent meal ID as fallback
-        console.warn('[analyze-meal-base64] Database save failed, getting most recent meal as fallback...');
+        console.warn('[analyze-meal] Database save failed, getting most recent meal as fallback...');
         try {
           const { data: recentMeal } = await supabaseAdmin
             .from('meals')
@@ -587,25 +696,25 @@ export async function POST(request: NextRequest) {
           
           if (recentMeal?.id) {
             actualMealId = recentMeal.id;
-            console.log('[analyze-meal-base64] ✅ Using most recent meal ID as fallback:', actualMealId);
+            console.log('[analyze-meal] ✅ Using most recent meal ID as fallback:', actualMealId);
           } else {
-            console.error('[analyze-meal-base64] ❌ No fallback meal found, keeping generated ID');
+            console.error('[analyze-meal] ❌ No fallback meal found, keeping generated ID');
           }
         } catch (fallbackError) {
-          console.error('[analyze-meal-base64] Fallback meal lookup failed:', fallbackError);
+          console.error('[analyze-meal] Fallback meal lookup failed:', fallbackError);
         }
       } else {
         actualMealId = insertResult.data?.id || mealId;
         dbSaveSuccessful = true;
-        console.log('[analyze-meal-base64] ✅ Meal saved to database successfully:', actualMealId);
-        console.log("[analyze-meal-base64] Debug - Saved meal with user_id:", userId, "Session user_id:", session?.user?.id);
+        console.log('[analyze-meal] ✅ Meal saved to database successfully:', actualMealId);
+        console.log("[analyze-meal] Debug - Saved meal with user_id:", userId, "Session user_id:", session?.user?.id);
       }
 
     } catch (dbError) {
-      console.error('[analyze-meal-base64] Database operation failed:', dbError);
+      console.error('[analyze-meal] Database operation failed:', dbError);
       
       // If database save fails, get the most recent meal ID as fallback
-      console.warn('[analyze-meal-base64] Database save failed, getting most recent meal as fallback...');
+      console.warn('[analyze-meal] Database save failed, getting most recent meal as fallback...');
       try {
         const { data: recentMeal } = await supabaseAdmin
           .from('meals')
@@ -616,31 +725,31 @@ export async function POST(request: NextRequest) {
         
         if (recentMeal?.id) {
           actualMealId = recentMeal.id;
-          console.log('[analyze-meal-base64] ✅ Using most recent meal ID as fallback:', actualMealId);
+          console.log('[analyze-meal] ✅ Using most recent meal ID as fallback:', actualMealId);
         } else {
-          console.error('[analyze-meal-base64] ❌ No fallback meal found, keeping generated ID');
+          console.error('[analyze-meal] ❌ No fallback meal found, keeping generated ID');
         }
       } catch (fallbackError) {
-        console.error('[analyze-meal-base64] Fallback meal lookup failed:', fallbackError);
+        console.error('[analyze-meal] Fallback meal lookup failed:', fallbackError);
       }
     }
     
-    console.log('[analyze-meal-base64] Final meal ID for response:', actualMealId);
-    console.log('[analyze-meal-base64] Database save successful:', dbSaveSuccessful);
+    console.log('[analyze-meal] Final meal ID for response:', actualMealId);
+    console.log('[analyze-meal] Database save successful:', dbSaveSuccessful);
 
     // Generate AI Health Insights immediately after meal analysis (background process)
     if (dbSaveSuccessful && actualMealId) {
-      console.log('[analyze-meal-base64] Starting immediate insights generation...');
+      console.log('[analyze-meal] Starting immediate insights generation...');
       
       // Don't await this - let it run in background so user gets immediate response
       generateInsightsInBackground(actualMealId, userId, session?.user?.user_metadata || {}, analysis)
         .catch(error => {
-          console.error('[analyze-meal-base64] Background insights generation failed:', error);
+          console.error('[analyze-meal] Background insights generation failed:', error);
         });
     }
 
     // Return successful response
-    console.log('[analyze-meal-base64] 🎉 Analysis completed successfully');
+    console.log('[analyze-meal] 🎉 Analysis completed successfully');
     return NextResponse.json({
       success: true,
       mealId: actualMealId,
@@ -671,7 +780,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('[analyze-meal-base64] Unexpected error:', error);
+    console.error('[analyze-meal] Unexpected error:', error);
     return NextResponse.json({
       success: false,
       error: 'An unexpected error occurred during meal analysis',

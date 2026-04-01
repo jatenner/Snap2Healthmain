@@ -276,7 +276,7 @@ export default function EnhancedMealAnalysisDisplay({
             </Card>
           )}
 
-          {/* Benefits and Concerns */}
+          {/* Benefits and Concerns - with quantification and severity */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {analysis.benefits && analysis.benefits.length > 0 && (
               <Card>
@@ -284,13 +284,23 @@ export default function EnhancedMealAnalysisDisplay({
                   <CardTitle className="text-green-600">Benefits</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ul className="space-y-2">
-                    {analysis.benefits.map((benefit: string, index: number) => (
-                      <li key={index} className="text-sm flex items-start gap-2">
-                        <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                        {benefit}
-                      </li>
-                    ))}
+                  <ul className="space-y-3">
+                    {analysis.benefits.map((benefit: string, index: number) => {
+                      const quantified = quantifyBenefit(benefit, analysis);
+                      return (
+                        <li key={index} className="text-sm border-l-2 border-green-500/40 pl-3">
+                          <div className="flex items-start gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                            <div>
+                              <span>{benefit}</span>
+                              {quantified && (
+                                <span className="text-green-400 text-xs block mt-0.5">{quantified}</span>
+                              )}
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </CardContent>
               </Card>
@@ -302,13 +312,27 @@ export default function EnhancedMealAnalysisDisplay({
                   <CardTitle className="text-amber-600">Considerations</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ul className="space-y-2">
-                    {analysis.concerns.map((concern: string, index: number) => (
-                      <li key={index} className="text-sm flex items-start gap-2">
-                        <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
-                        {concern}
-                      </li>
-                    ))}
+                  <ul className="space-y-3">
+                    {analysis.concerns.map((concern: string, index: number) => {
+                      const severity = getConcernSeverity(concern, analysis);
+                      const action = getConcernAction(concern);
+                      const borderColor = severity === 'critical' ? 'border-red-500/60' : severity === 'warning' ? 'border-amber-500/60' : 'border-blue-500/40';
+                      const IconComponent = severity === 'critical' ? AlertCircle : AlertCircle;
+                      const iconColor = severity === 'critical' ? 'text-red-500' : severity === 'warning' ? 'text-amber-500' : 'text-blue-400';
+                      return (
+                        <li key={index} className={`text-sm border-l-2 ${borderColor} pl-3`}>
+                          <div className="flex items-start gap-2">
+                            <IconComponent className={`h-4 w-4 ${iconColor} mt-0.5 flex-shrink-0`} />
+                            <div>
+                              <span>{concern}</span>
+                              {action && (
+                                <span className="text-gray-400 text-xs block mt-0.5">{action}</span>
+                              )}
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </CardContent>
               </Card>
@@ -410,4 +434,77 @@ export default function EnhancedMealAnalysisDisplay({
       )}
     </div>
   );
+}
+
+// --- Helper functions for quantified benefits and concern severity ---
+
+function findNutrientAmount(analysis: any, keyword: string): { amount: number; unit: string } | null {
+  const allNutrients = [
+    ...(analysis.macronutrients || []),
+    ...(analysis.micronutrients || []),
+  ];
+  const match = allNutrients.find((n: any) => n.name?.toLowerCase().includes(keyword));
+  if (match && match.amount > 0) return { amount: match.amount, unit: match.unit || 'g' };
+  return null;
+}
+
+function quantifyBenefit(benefit: string, analysis: any): string | null {
+  const b = benefit.toLowerCase();
+  if (b.includes('protein')) {
+    const n = findNutrientAmount(analysis, 'protein');
+    if (n) return `${n.amount}${n.unit} protein in this meal`;
+  }
+  if (b.includes('fiber')) {
+    const n = findNutrientAmount(analysis, 'fiber');
+    if (n) return `${n.amount}${n.unit} fiber (${Math.round(n.amount / 25 * 100)}% of daily target)`;
+  }
+  if (b.includes('vitamin c')) {
+    const n = findNutrientAmount(analysis, 'vitamin c');
+    if (n) return `${n.amount}${n.unit} Vitamin C`;
+  }
+  if (b.includes('iron')) {
+    const n = findNutrientAmount(analysis, 'iron');
+    if (n) return `${n.amount}${n.unit} iron`;
+  }
+  if (b.includes('calcium')) {
+    const n = findNutrientAmount(analysis, 'calcium');
+    if (n) return `${n.amount}${n.unit} calcium`;
+  }
+  if (b.includes('omega') || b.includes('healthy fat')) {
+    const n = findNutrientAmount(analysis, 'fat');
+    if (n) return `${n.amount}${n.unit} total fat`;
+  }
+  if (b.includes('low calorie') || b.includes('light')) {
+    if (analysis.calories) return `${analysis.calories} calories`;
+  }
+  return null;
+}
+
+function getConcernSeverity(concern: string, analysis: any): 'info' | 'warning' | 'critical' {
+  const c = concern.toLowerCase();
+  // Critical: sodium over 1000mg, trans fat present, sugar over 30g
+  if (c.includes('trans fat')) return 'critical';
+  const sodium = findNutrientAmount(analysis, 'sodium');
+  if (c.includes('sodium') && sodium && sodium.amount > 1000) return 'critical';
+  const sugar = findNutrientAmount(analysis, 'sugar');
+  if (c.includes('sugar') && sugar && sugar.amount > 30) return 'critical';
+
+  // Warning: high sodium, high saturated fat, high sugar, high calorie
+  if (c.includes('high') || c.includes('excess') || c.includes('too much')) return 'warning';
+  if (c.includes('sodium') || c.includes('saturated') || c.includes('sugar') || c.includes('calorie')) return 'warning';
+
+  return 'info';
+}
+
+function getConcernAction(concern: string): string | null {
+  const c = concern.toLowerCase();
+  if (c.includes('sodium') || c.includes('salt')) return 'Balance with potassium-rich foods like bananas or sweet potatoes.';
+  if (c.includes('saturated fat')) return 'Swap for unsaturated fats (olive oil, avocado, nuts).';
+  if (c.includes('sugar')) return 'Pair with fiber or protein to slow absorption.';
+  if (c.includes('calorie') || c.includes('high-calorie')) return 'Balance with lighter meals for the rest of the day.';
+  if (c.includes('fiber') && c.includes('low')) return 'Add vegetables, whole grains, or legumes.';
+  if (c.includes('protein') && c.includes('low')) return 'Add lean protein like chicken, fish, eggs, or legumes.';
+  if (c.includes('cholesterol')) return 'Limit to 300mg/day. Balance with fiber-rich foods.';
+  if (c.includes('processed') || c.includes('artificial')) return 'Choose whole, minimally processed alternatives.';
+  return null;
 } 

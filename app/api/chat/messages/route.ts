@@ -566,44 +566,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Final check - reject if no authentication
+    // Reject if no authentication
     if (!authenticatedUser && !user_id) {
-      console.log('[Chat Messages API] ❌ No authentication available');
-      
-      // In development, try to use a fallback test user if completely no auth
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[Chat Messages API] 🔧 Development mode: attempting fallback to your account...');
-        
-        // Try to find your account by email
-        try {
-          const { data: { users }, error: lookupError } = await supabase.auth.admin.listUsers();
-          const yourAccount = users?.find(u => u.email === 'jatenner@gmail.com' || u.email?.includes('jatenner'));
-          
-          if (yourAccount) {
-            user_id = yourAccount.id;
-            authenticatedUser = yourAccount;
-            authMethod = 'development_fallback';
-            console.log('[Chat Messages API] 🎯 Development fallback: Using your account:', {
-              id: yourAccount.id,
-              email: yourAccount.email
-            });
-          }
-        } catch (fallbackError) {
-          console.log('[Chat Messages API] ❌ Development fallback failed:', fallbackError);
-        }
-      }
-      
-      // If still no authentication after fallback
-      if (!authenticatedUser && !user_id) {
-        return NextResponse.json({ 
-          error: 'Authentication required. Please sign in to use the AI chat.',
-          debug: {
-            cookiesReceived: allCookies.length,
-            authMethod: 'none',
-            isDevelopment: process.env.NODE_ENV === 'development'
-          }
-        }, { status: 401 });
-      }
+      return NextResponse.json({
+        error: 'Authentication required. Please sign in to use the AI chat.'
+      }, { status: 401 });
     }
 
     console.log('[Chat Messages API] 🔐 Final auth status:', {
@@ -974,81 +941,103 @@ ${recentMeals.slice(0, 5).map((meal, index) =>
       totalMealsAnalyzed: enhancedContext?.mealAnalysis?.totalMeals || 0
     });
 
-    // Get AI response with enhanced context
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o', // Using the more intelligent model instead of mini
+    // Stream AI response with SSE
+    const stream = await openai.chat.completions.create({
+      model: 'gpt-4o',
       messages: [
         { role: 'system', content: selectedSystemPrompt },
         ...contextMessages,
         { role: 'user', content }
       ],
-      temperature: 0.8, // Slightly more creative for human-like responses
-      max_tokens: userWantsSimple ? 200 : userWantsDetail ? 1000 : 600, // More generous token limits
+      temperature: 0.8,
+      max_tokens: userWantsSimple ? 200 : userWantsDetail ? 1000 : 600,
+      stream: true,
     });
 
-    const aiResponse = completion.choices[0]?.message?.content || 'I apologize, but I could not process your request at this time.';
+    const encoder = new TextEncoder();
 
-    // Save AI response with context metadata
-    const { data: assistantMessage } = await supabase
-      .from('chat_messages')
-      .insert({
-        conversation_id,
-        role: 'assistant',
-        content: aiResponse,
-        message_metadata: {
-          timestamp: new Date().toISOString(),
-          meal_context: currentMealData ? currentMealData.id : null,
-          response_style: responseStyle,
-          personalization_data: {
-            user_profile_available: !!combinedProfile,
-            learning_profile_available: !!learningProfile,
-            meal_history_count: recentMeals?.length || 0,
-            current_meal_analyzed: !!currentMealData
+    const readable = new ReadableStream({
+      async start(controller) {
+        let fullResponse = '';
+
+        try {
+          for await (const chunk of stream) {
+            const delta = chunk.choices[0]?.delta?.content || '';
+            if (delta) {
+              fullResponse += delta;
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: delta })}\n\n`));
+            }
           }
+
+          // Send done signal
+          controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
+          controller.close();
+
+          // After stream completes, save to database (fire-and-forget)
+          const aiResponse = fullResponse || 'I apologize, but I could not process your request at this time.';
+
+          // Save AI response
+          await supabase
+            .from('chat_messages')
+            .insert({
+              conversation_id,
+              role: 'assistant',
+              content: aiResponse,
+              message_metadata: {
+                timestamp: new Date().toISOString(),
+                meal_context: currentMealData ? currentMealData.id : null,
+                response_style: responseStyle,
+                personalization_data: {
+                  user_profile_available: !!combinedProfile,
+                  learning_profile_available: !!learningProfile,
+                  meal_history_count: recentMeals?.length || 0,
+                  current_meal_analyzed: !!currentMealData
+                }
+              }
+            });
+
+          // Update conversation timestamp
+          await supabase
+            .from('chat_conversations')
+            .update({ updated_at: new Date().toISOString() })
+            .eq('id', conversation_id);
+
+          // Learn from this interaction
+          if (learningProfile && Object.keys(learningInsights).some(key => (learningInsights as any)[key].length > 0)) {
+            const updatedLearningData = {
+              ...learningProfile.learning_data,
+              last_chat_topic: content.substring(0, 100),
+              chat_count: (learningProfile.learning_data?.chat_count || 0) + 1,
+              last_interaction: new Date().toISOString(),
+              discovered_insights: {
+                ...learningProfile.learning_data?.discovered_insights,
+                ...learningInsights
+              }
+            };
+
+            await supabase
+              .from('user_learning_profile')
+              .update({
+                learning_data: updatedLearningData,
+                updated_at: new Date().toISOString()
+              })
+              .eq('user_id', user_id);
+          }
+        } catch (streamError) {
+          console.error('[Chat Messages API] Stream error:', streamError);
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Stream interrupted' })}\n\n`));
+          controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
+          controller.close();
         }
-      })
-      .select()
-      .single();
-
-    // Update conversation timestamp
-    await supabase
-      .from('chat_conversations')
-      .update({ updated_at: new Date().toISOString() })
-      .eq('id', conversation_id);
-
-    // Learn from this interaction - update user learning profile
-    if (learningProfile && Object.keys(learningInsights).some(key => (learningInsights as any)[key].length > 0)) {
-      const updatedLearningData = {
-        ...learningProfile.learning_data,
-        last_chat_topic: content.substring(0, 100),
-        chat_count: (learningProfile.learning_data?.chat_count || 0) + 1,
-        last_interaction: new Date().toISOString(),
-        discovered_insights: {
-          ...learningProfile.learning_data?.discovered_insights,
-          ...learningInsights
-        }
-      };
-
-      await supabase
-        .from('user_learning_profile')
-        .update({ 
-          learning_data: updatedLearningData,
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', user_id);
-    }
-
-    return NextResponse.json({
-      message: aiResponse,
-      conversationId: conversation_id,
-      userMessage,
-      assistantMessage,
-      learningInsights: learningInsights,
-      metadata: {
-        response_style: responseStyle,
-        meal_context: currentMealData ? currentMealData.id : null,
-        user_profile_available: !!combinedProfile
       }
+    });
+
+    return new Response(readable, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
     });
 
   } catch (error) {

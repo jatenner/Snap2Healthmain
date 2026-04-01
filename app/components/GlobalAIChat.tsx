@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from './client/ClientAuthProvider';
+import { BarChart2, Target, Lightbulb, Search, Utensils, BookOpen } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -25,43 +26,43 @@ interface PageContext {
   currentPage?: string;
 }
 
-// Enhanced quick action buttons with emojis and better categorization
+// Quick action buttons with lucide icons for accessibility
 const enhancedQuickActions = [
-  { 
-    label: "📊 My Nutrition Trends", 
+  {
+    label: "Nutrition Trends",
     action: "Show me my nutrition patterns and progress over the last week",
     category: "analysis",
-    icon: "📈"
+    IconComponent: BarChart2,
   },
-  { 
-    label: "🎯 Goal Check", 
+  {
+    label: "Goal Check",
     action: "How is this meal aligned with my goals?",
     category: "goals",
-    icon: "🏆"
+    IconComponent: Target,
   },
-  { 
-    label: "💡 Quick Tips", 
+  {
+    label: "Quick Tips",
     action: "Give me 3 quick actionable tips based on my recent meals",
     category: "tips",
-    icon: "⚡"
+    IconComponent: Lightbulb,
   },
-  { 
-    label: "🔍 Compare Meals", 
+  {
+    label: "Compare Meals",
     action: "How does this meal compare to my usual intake?",
     category: "analysis",
-    icon: "⚖️"
+    IconComponent: Search,
   },
-  { 
-    label: "🥗 What to Eat Next", 
+  {
+    label: "What to Eat Next",
     action: "What should I eat for my next meal based on my nutrition today?",
     category: "recommendations",
-    icon: "🍽️"
+    IconComponent: Utensils,
   },
-  { 
-    label: "📚 Detailed Analysis", 
+  {
+    label: "Detailed Analysis",
     action: "Give me detailed analysis and explanation of my nutrition",
     category: "analysis",
-    icon: "🔬"
+    IconComponent: BookOpen,
   },
 ];
 
@@ -496,21 +497,48 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
         throw new Error(`API Error: ${response.status} - ${errorText}`);
       }
 
-      const data = await response.json();
-      console.log('[Chat] Received response:', data);
-      
+      // Stream the response via SSE
+      const assistantMsgId = Date.now().toString();
       const assistantMessage: Message = {
-        id: Date.now().toString(),
+        id: assistantMsgId,
         role: 'assistant',
-        content: data.message || data.response || 'Sorry, I encountered an error processing your request.',
+        content: '',
         timestamp: new Date(),
-        metadata: data.metadata,
       };
-
       setMessages(prev => [...prev, assistantMessage]);
-      
-      if (data.conversationId && !conversationId) {
-        setConversationId(data.conversationId);
+      setIsLoading(false); // Stop spinner, show typing
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (reader) {
+        let fullContent = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const text = decoder.decode(value, { stream: true });
+          const lines = text.split('\n');
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const payload = line.slice(6).trim();
+              if (payload === '[DONE]') break;
+              try {
+                const parsed = JSON.parse(payload);
+                if (parsed.content) {
+                  fullContent += parsed.content;
+                  // Update the assistant message in place
+                  setMessages(prev =>
+                    prev.map(m => m.id === assistantMsgId ? { ...m, content: fullContent } : m)
+                  );
+                }
+              } catch {
+                // Skip unparseable lines
+              }
+            }
+          }
+        }
       }
       
     } catch (error) {
@@ -655,12 +683,12 @@ CURRENT PAGE CONTEXT: ${getCurrentPageContext()}`;
               disabled={isLoading}
               className="group flex items-center space-x-3 p-3 bg-gradient-to-r from-white to-gray-50 hover:from-blue-50 hover:to-indigo-50 border border-gray-200 hover:border-blue-300 rounded-xl transition-all duration-200 hover:shadow-md transform hover:scale-[1.02] text-left disabled:opacity-50"
             >
-              <div className="text-2xl group-hover:scale-110 transition-transform duration-200">
-                {actionObj.icon}
+              <div className="flex-shrink-0 group-hover:scale-110 transition-transform duration-200">
+                <actionObj.IconComponent className="w-5 h-5 text-blue-500 group-hover:text-blue-600" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-gray-900 group-hover:text-blue-900 truncate">
-                  {actionObj.label.replace(/^[📊🎯💡🔍🥗📚]\s*/, '')}
+                  {actionObj.label}
                 </div>
                 <div className="text-xs text-gray-500 group-hover:text-blue-600 line-clamp-2">
                   Click to ask

@@ -1,56 +1,88 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
 
-// Define public routes that don't require authentication
+// Routes that don't require authentication
 const publicRoutes = [
-  // Public pages
   '/login',
   '/signup',
+  '/simple-login',
+  '/simple-signup',
+  '/signup-fixed',
   '/',
-  
-  // Public API endpoints
   '/api/ping',
   '/api/health',
-  '/api/public',
+  '/api/system-status',
   '/api/auth',
-  
-  // Static assets
+  '/auth',
   '/favicon.ico',
   '/logo.svg',
-  '/_next',
-  '/public'
 ];
+
+function isPublicRoute(path: string): boolean {
+  return publicRoutes.some(route => path === route || path.startsWith(route + '/'));
+}
+
+function isStaticAsset(path: string): boolean {
+  return (
+    path.startsWith('/_next/') ||
+    path.startsWith('/images/') ||
+    path.startsWith('/uploads/') ||
+    path.startsWith('/static/') ||
+    path.includes('.')
+  );
+}
 
 export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
-  
-  // Always allow access to public routes
-  if (publicRoutes.some(route => path.startsWith(route))) {
-    console.log(`[Middleware] Public route accessed: ${path}`);
+
+  // Always allow public routes and static assets
+  if (isPublicRoute(path) || isStaticAsset(path)) {
     return NextResponse.next();
   }
-  
-  // Always allow access to static files
-  if (path.includes('_next/') || 
-      path.includes('.') || 
-      path.startsWith('/images/') ||
-      path.startsWith('/uploads/') ||
-      path.startsWith('/static/')) {
-    return NextResponse.next();
+
+  // Create a response to pass to the Supabase client (for cookie handling)
+  let response = NextResponse.next({
+    request: { headers: req.headers },
+  });
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return req.cookies.get(name)?.value;
+        },
+        set(name: string, value: string, options: any) {
+          req.cookies.set({ name, value, ...options });
+          response.cookies.set({ name, value, ...options });
+        },
+        remove(name: string, options: any) {
+          req.cookies.set({ name, value: '', ...options });
+          response.cookies.set({ name, value: '', ...options });
+        },
+      },
+    }
+  );
+
+  // Refresh the session (this also validates it)
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // If no user and this is a protected page (not API), redirect to login
+  if (!user && !path.startsWith('/api/')) {
+    const loginUrl = new URL('/login', req.url);
+    loginUrl.searchParams.set('redirectTo', path);
+    return NextResponse.redirect(loginUrl);
   }
-  
-  // For development, be more permissive
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`[Middleware] Development mode - allowing access to: ${path}`);
-    return NextResponse.next();
-  }
-  
-  // In production, you might want to add more sophisticated auth checking here
-  return NextResponse.next();
+
+  // For API routes without a user, let the route handler return 401
+  // (this allows the route to provide a proper JSON error response)
+  return response;
 }
 
 export const config = {
   matcher: [
     '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
-}; 
+};

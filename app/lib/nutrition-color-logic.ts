@@ -7,6 +7,10 @@ export interface NutrientColorEvaluation {
   bgColor: string;
   textColorClass: string;
   recommendation: string;
+  /** Lucide icon name for colorblind-accessible status indication */
+  icon: 'check-circle' | 'minus-circle' | 'alert-triangle' | 'alert-circle' | 'circle';
+  /** Screen reader label */
+  ariaLabel: string;
 }
 
 // Nutrients that should be limited (not maximized)
@@ -39,7 +43,9 @@ export function getNutrientColorEvaluation(
         statusLabel: 'High',
         bgColor: 'bg-red-900/20 border-red-500/30',
         textColorClass: 'text-red-400',
-        recommendation: 'Consider reducing intake - above recommended limit'
+        recommendation: 'Consider reducing intake - above recommended limit',
+        icon: 'alert-circle',
+        ariaLabel: `${nutrientName}: High - above recommended limit (${Math.round(percentDailyValue)}% DV)`,
       };
     } else if (percentDailyValue >= 40) {
       return {
@@ -47,7 +53,9 @@ export function getNutrientColorEvaluation(
         statusLabel: 'Moderate',
         bgColor: 'bg-orange-900/20 border-orange-500/30',
         textColorClass: 'text-orange-400',
-        recommendation: 'Approaching limit - monitor intake'
+        recommendation: 'Approaching limit - monitor intake',
+        icon: 'alert-triangle',
+        ariaLabel: `${nutrientName}: Moderate - approaching limit (${Math.round(percentDailyValue)}% DV)`,
       };
     } else if (percentDailyValue >= 20) {
       return {
@@ -55,7 +63,9 @@ export function getNutrientColorEvaluation(
         statusLabel: 'Moderate',
         bgColor: 'bg-yellow-900/20 border-yellow-500/30',
         textColorClass: 'text-yellow-400',
-        recommendation: 'Moderate level - within healthy range'
+        recommendation: 'Moderate level - within healthy range',
+        icon: 'minus-circle',
+        ariaLabel: `${nutrientName}: Moderate - within healthy range (${Math.round(percentDailyValue)}% DV)`,
       };
     } else {
       return {
@@ -63,7 +73,9 @@ export function getNutrientColorEvaluation(
         statusLabel: 'Good',
         bgColor: 'bg-green-900/20 border-green-500/30',
         textColorClass: 'text-green-400',
-        recommendation: 'Good - well below limit'
+        recommendation: 'Good - well below limit',
+        icon: 'check-circle',
+        ariaLabel: `${nutrientName}: Good - well below limit (${Math.round(percentDailyValue)}% DV)`,
       };
     }
   } else {
@@ -74,7 +86,9 @@ export function getNutrientColorEvaluation(
         statusLabel: 'Excellent',
         bgColor: 'bg-green-900/20 border-green-500/30',
         textColorClass: 'text-green-400',
-        recommendation: 'Excellent - meets or exceeds target'
+        recommendation: 'Excellent - meets or exceeds target',
+        icon: 'check-circle',
+        ariaLabel: `${nutrientName}: Excellent - meets or exceeds daily target (${Math.round(percentDailyValue)}% DV)`,
       };
     } else if (percentDailyValue >= 50) {
       return {
@@ -82,7 +96,9 @@ export function getNutrientColorEvaluation(
         statusLabel: 'Good',
         bgColor: 'bg-green-900/20 border-green-500/30',
         textColorClass: 'text-green-300',
-        recommendation: 'Good - substantial contribution'
+        recommendation: 'Good - substantial contribution',
+        icon: 'check-circle',
+        ariaLabel: `${nutrientName}: Good - substantial contribution (${Math.round(percentDailyValue)}% DV)`,
       };
     } else if (percentDailyValue >= 25) {
       return {
@@ -90,7 +106,9 @@ export function getNutrientColorEvaluation(
         statusLabel: 'Adequate',
         bgColor: 'bg-yellow-900/20 border-yellow-500/30',
         textColorClass: 'text-yellow-400',
-        recommendation: 'Adequate - could be higher for optimal health'
+        recommendation: 'Adequate - could be higher for optimal health',
+        icon: 'minus-circle',
+        ariaLabel: `${nutrientName}: Adequate (${Math.round(percentDailyValue)}% DV)`,
       };
     } else if (percentDailyValue >= 10) {
       return {
@@ -98,7 +116,9 @@ export function getNutrientColorEvaluation(
         statusLabel: 'Low',
         bgColor: 'bg-orange-900/20 border-orange-500/30',
         textColorClass: 'text-orange-400',
-        recommendation: 'Low - consider increasing intake'
+        recommendation: 'Low - consider increasing intake',
+        icon: 'alert-triangle',
+        ariaLabel: `${nutrientName}: Low - consider increasing intake (${Math.round(percentDailyValue)}% DV)`,
       };
     } else if (percentDailyValue > 0) {
       return {
@@ -106,7 +126,9 @@ export function getNutrientColorEvaluation(
         statusLabel: 'Very Low',
         bgColor: 'bg-red-900/20 border-red-500/30',
         textColorClass: 'text-red-400',
-        recommendation: 'Very low - significantly below target'
+        recommendation: 'Very low - significantly below target',
+        icon: 'alert-circle',
+        ariaLabel: `${nutrientName}: Very low - significantly below target (${Math.round(percentDailyValue)}% DV)`,
       };
     } else {
       return {
@@ -114,7 +136,9 @@ export function getNutrientColorEvaluation(
         statusLabel: 'Unknown',
         bgColor: 'bg-white/5 border-white/10',
         textColorClass: 'text-gray-400',
-        recommendation: 'Data not available'
+        recommendation: 'Data not available',
+        icon: 'circle',
+        ariaLabel: `${nutrientName}: Data not available`,
       };
     }
   }

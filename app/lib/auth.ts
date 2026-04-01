@@ -1,26 +1,21 @@
 import { NextRequest } from 'next/server';
+import { createClient } from './supabase/server';
 
 /**
- * Simple utility to simulate retrieving user ID from a session
- * In a real app, this would verify authentication and return the actual user ID
+ * Extract the authenticated user ID from the Supabase session.
+ * Returns { userId, error } -- userId is null if not authenticated.
  */
 export async function getUserIdFromSession(request: NextRequest) {
-  // For demo purposes, we're returning a mock user ID
-  // In a real app, you would:
-  // 1. Extract the session token from cookies or authorization header
-  // 2. Verify the token with your auth provider
-  // 3. Return the authenticated user ID
-  
-  // Mock implementation
-  return {
-    userId: 'user-123',
-    error: null
-  };
-}
+  try {
+    const supabase = createClient(request);
+    const { data: { user }, error } = await supabase.auth.getUser();
 
-// Temporary simplified auth options
-export const authOptions = {
-  // This is just a placeholder
-  providers: [],
-  secret: process.env.NEXTAUTH_SECRET || 'development-secret',
-}; 
+    if (error || !user) {
+      return { userId: null, error: error?.message || 'Not authenticated' };
+    }
+
+    return { userId: user.id, error: null };
+  } catch (err) {
+    return { userId: null, error: 'Failed to verify authentication' };
+  }
+}

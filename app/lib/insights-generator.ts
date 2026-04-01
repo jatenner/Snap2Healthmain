@@ -1,8 +1,8 @@
 /**
  * Enhanced Insights Generator for meal analysis
- * 
- * This module provides functions to generate laser-focused, tactical insights
- * from meal analysis data, focused on measurable performance outcomes.
+ *
+ * Generates personalized, goal-aware insights from meal analysis data.
+ * Adapts recommendations based on the user's health goal category.
  */
 
 interface UserProfile {
@@ -21,198 +21,271 @@ interface UserProfile {
   [key: string]: any;
 }
 
+export type GoalCategory = 'weight_loss' | 'muscle_building' | 'athletic_performance' | 'disease_management' | 'general_wellness';
+
 /**
- * Generate tactical, performance-focused insights based on analysis data and user profile
+ * Map free-text goal to a structured category
+ */
+export function categorizeGoal(goalText: string): GoalCategory {
+  const g = (goalText || '').toLowerCase();
+  if (g.includes('weight loss') || g.includes('lose weight') || g.includes('fat loss') || g.includes('slim') || g.includes('lean')) return 'weight_loss';
+  if (g.includes('muscle') || g.includes('bulk') || g.includes('strength') || g.includes('gain')) return 'muscle_building';
+  if (g.includes('performance') || g.includes('athletic') || g.includes('endurance') || g.includes('sport')) return 'athletic_performance';
+  if (g.includes('diabetes') || g.includes('heart') || g.includes('cholesterol') || g.includes('blood pressure') || g.includes('kidney') || g.includes('hypertension')) return 'disease_management';
+  return 'general_wellness';
+}
+
+const GOAL_LABELS: Record<GoalCategory, string> = {
+  weight_loss: 'Weight Management',
+  muscle_building: 'Muscle Building',
+  athletic_performance: 'Athletic Performance',
+  disease_management: 'Health Management',
+  general_wellness: 'General Wellness',
+};
+
+/**
+ * Generate personalized, goal-aware insights based on analysis data and user profile
  */
 export function generateMealInsights(mealData: any, userProfile?: UserProfile): string {
   try {
     const insights: string[] = [];
-    
-    // Get user specifics for tactical analysis
+
     const age = userProfile?.age || 30;
     const weight = userProfile?.weight || 70;
     const height = userProfile?.height || 175;
     const gender = userProfile?.gender || 'unknown';
     const activityLevel = userProfile?.activity_level || 'moderate';
-    const goal = mealData.goal || userProfile?.goal || "performance optimization";
+    const goalText = mealData.goal || userProfile?.goal || 'general wellness';
+    const goalCategory = categorizeGoal(goalText);
     const calories = mealData.calories || mealData.analysis?.calories || 0;
-    
-    // Calculate BMR and daily needs for context
+    const healthConditions = userProfile?.health_conditions || [];
+
     const bmr = calculateBMR(age, weight, height, gender);
     const dailyCalories = calculateDailyCalories(bmr, activityLevel);
     const mealPercentage = Math.round((calories / dailyCalories) * 100);
-    
-    // TACTICAL HEADER
-    insights.push(`# 🎯 PERFORMANCE NUTRITION ANALYSIS`);
-    insights.push(`**Athlete Profile:** ${age}yr ${gender} | ${weight}kg | ${activityLevel} activity | Goal: ${goal}`);
-    insights.push(`**Meal Impact:** ${calories} kcal (${mealPercentage}% of ${Math.round(dailyCalories)} daily target)`);
+
+    // HEADER - adapts to goal
+    insights.push(`# Nutrition Analysis`);
+    insights.push(`**Focus:** ${GOAL_LABELS[goalCategory]} | ${activityLevel} activity`);
+    insights.push(`**Meal Impact:** ${calories} kcal (${mealPercentage}% of ~${Math.round(dailyCalories)} daily target)`);
     insights.push('');
-    
-    // CRITICAL METABOLIC INSIGHTS
+
+    // MACRO ANALYSIS
     const macros = mealData.macronutrients || mealData.analysis?.macronutrients || [];
-      const protein = macros.find((m: any) => m.name.toLowerCase().includes('protein'));
-      const carbs = macros.find((m: any) => m.name.toLowerCase().includes('carb'));
-      const fat = macros.find((m: any) => m.name.toLowerCase().includes('fat'));
-      
-    insights.push(`## ⚡ IMMEDIATE METABOLIC IMPACT`);
-    
-    if (protein && carbs && fat) {
+    const protein = macros.find((m: any) => m.name.toLowerCase().includes('protein'));
+    const carbs = macros.find((m: any) => m.name.toLowerCase().includes('carb'));
+    const fat = macros.find((m: any) => m.name.toLowerCase().includes('fat'));
+
+    insights.push(`## Macro Breakdown`);
+
+    if (protein && carbs && fat && calories > 0) {
       const proteinRatio = (protein.amount * 4 / calories * 100).toFixed(0);
       const carbRatio = (carbs.amount * 4 / calories * 100).toFixed(0);
       const fatRatio = (fat.amount * 9 / calories * 100).toFixed(0);
-      
-      insights.push(`**Macro Split:** ${proteinRatio}P/${carbRatio}C/${fatRatio}F`);
-      
-      // Specific performance insights based on ratios
-      if (goal.toLowerCase().includes('muscle') || goal.toLowerCase().includes('strength')) {
+      insights.push(`**Macro Split:** ${proteinRatio}P / ${carbRatio}C / ${fatRatio}F`);
+
+      // Goal-specific macro analysis
+      if (goalCategory === 'weight_loss') {
+        if (protein.amount >= 25) {
+          insights.push(`- **Protein:** ${protein.amount}g -- good for satiety and preserving muscle during a deficit`);
+        } else {
+          insights.push(`- **Protein:** ${protein.amount}g -- aim for 25-35g per meal to stay full and protect muscle`);
+        }
+        if (calories > dailyCalories * 0.4) {
+          insights.push(`- **Calorie note:** This meal is ${mealPercentage}% of your daily target. Balance with lighter meals.`);
+        }
+        const fiber = macros.find((m: any) => m.name.toLowerCase().includes('fiber'));
+        if (fiber && fiber.amount >= 5) {
+          insights.push(`- **Fiber:** ${fiber.amount}g -- excellent for fullness and blood sugar control`);
+        }
+      } else if (goalCategory === 'muscle_building') {
         const proteinPerKg = protein.amount / weight;
         if (proteinPerKg >= 0.25) {
-          insights.push(`✅ **Protein Hit:** ${protein.amount}g (${proteinPerKg.toFixed(1)}g/kg) - optimal for muscle protein synthesis`);
+          insights.push(`- **Protein:** ${protein.amount}g (${proteinPerKg.toFixed(1)}g/kg) -- optimal for muscle protein synthesis`);
         } else {
-          insights.push(`⚠️ **Protein Gap:** Only ${protein.amount}g (${proteinPerKg.toFixed(1)}g/kg) - add ${Math.round((0.25 * weight) - protein.amount)}g more protein for optimal MPS`);
+          insights.push(`- **Protein gap:** ${protein.amount}g (${proteinPerKg.toFixed(1)}g/kg) -- add ~${Math.round((0.25 * weight) - protein.amount)}g more protein`);
         }
-      }
-      
-      if (goal.toLowerCase().includes('performance') || goal.toLowerCase().includes('athletic')) {
+        if (calories < dailyCalories * 0.2) {
+          insights.push(`- **Calorie note:** Only ${mealPercentage}% of daily target. You may need a larger meal or extra snack to support growth.`);
+        }
+      } else if (goalCategory === 'athletic_performance') {
         if (carbs.amount >= 30) {
-          insights.push(`✅ **Carb Timing:** ${carbs.amount}g carbs = sufficient glycogen replenishment for ${activityLevel} training`);
+          insights.push(`- **Carbs:** ${carbs.amount}g -- sufficient glycogen replenishment for ${activityLevel} training`);
         } else {
-          insights.push(`⚠️ **Carb Deficit:** ${carbs.amount}g insufficient for performance - target ${Math.round(weight * 0.5)}g for optimal glycogen`);
+          insights.push(`- **Carbs:** ${carbs.amount}g -- consider adding carbs for optimal energy (target ~${Math.round(weight * 0.5)}g per meal)`);
+        }
+        if (protein.amount >= 20) {
+          insights.push(`- **Protein:** ${protein.amount}g -- supports recovery for 3-4 hours`);
+        }
+      } else if (goalCategory === 'disease_management') {
+        const sodium = macros.find((m: any) => m.name.toLowerCase().includes('sodium'));
+        const sugar = macros.find((m: any) => m.name.toLowerCase().includes('sugar'));
+        const satFat = macros.find((m: any) => m.name.toLowerCase().includes('saturated'));
+        if (sodium && sodium.amount > 600) {
+          insights.push(`- **Sodium:** ${sodium.amount}mg -- high for one meal. Daily limit is 1500-2300mg for heart health.`);
+        }
+        if (sugar && sugar.amount > 15) {
+          insights.push(`- **Sugar:** ${sugar.amount}g -- monitor blood sugar impact. Pair with fiber/protein to slow absorption.`);
+        }
+        if (satFat && satFat.amount > 7) {
+          insights.push(`- **Saturated fat:** ${satFat.amount}g -- elevated. Swap for unsaturated fats where possible.`);
+        }
+      } else {
+        // General wellness
+        insights.push(`- **Protein:** ${protein.amount}g | **Carbs:** ${carbs.amount}g | **Fat:** ${fat.amount}g`);
+        if (protein.amount < 15) {
+          insights.push(`- Consider adding a protein source for better nutrient balance`);
         }
       }
-      
-      // Fat analysis for hormone production
-      if (fat.amount < 10) {
-        insights.push(`🚨 **Fat Critical:** Only ${fat.amount}g fat - insufficient for hormone production and fat-soluble vitamin absorption`);
-      } else if (fat.amount > 25) {
-        insights.push(`⚠️ **Fat Heavy:** ${fat.amount}g fat may slow digestion - consider timing relative to training`);
+
+      // Universal fat checks
+      if (fat.amount < 10 && goalCategory !== 'weight_loss') {
+        insights.push(`- **Low fat:** ${fat.amount}g -- needed for hormone production and vitamin absorption`);
       }
     }
-    
+
     insights.push('');
-    
-    // PRECISION TIMING RECOMMENDATIONS
-    insights.push(`## ⏰ TACTICAL TIMING`);
-    
-    if (goal.toLowerCase().includes('performance') || goal.toLowerCase().includes('athletic')) {
-      insights.push(`**Pre-Workout Window:** Consume 2-3 hours before training for optimal energy availability`);
-      insights.push(`**Post-Workout Window:** If eaten within 30min post-training, will maximize recovery and adaptation`);
-      
-      if (protein && protein.amount >= 20) {
-        insights.push(`**MPS Trigger:** ${protein.amount}g protein = optimal muscle protein synthesis for 3-4 hours`);
-      }
-      
-      if (carbs && carbs.amount >= 30) {
-        insights.push(`**Glycogen Replenishment:** ${carbs.amount}g carbs = 60-90 minutes of glycogen restoration`);
-      }
-    }
-    
-    insights.push('');
-    
-    // MICRONUTRIENT PERFORMANCE GAPS
+
+    // MICRONUTRIENT HIGHLIGHTS
     const micros = mealData.micronutrients || mealData.analysis?.micronutrients || [];
-    insights.push(`## 🔬 PERFORMANCE MICRONUTRIENTS`);
-    
-    // Find key performance nutrients
-    const vitaminD = micros.find((m: any) => m.name.toLowerCase().includes('vitamin d'));
-    const iron = micros.find((m: any) => m.name.toLowerCase().includes('iron'));
-    const magnesium = micros.find((m: any) => m.name.toLowerCase().includes('magnesium'));
-    const vitB12 = micros.find((m: any) => m.name.toLowerCase().includes('b12'));
-    
-    if (vitaminD && vitaminD.percentDailyValue < 25) {
-      insights.push(`🚨 **Vitamin D Critical:** ${vitaminD.amount}${vitaminD.unit} (${vitaminD.percentDailyValue}% DV) - insufficient for testosterone production and recovery`);
+    if (micros.length > 0) {
+      insights.push(`## Key Nutrients`);
+
+      const vitaminD = micros.find((m: any) => m.name.toLowerCase().includes('vitamin d'));
+      const iron = micros.find((m: any) => m.name.toLowerCase().includes('iron'));
+      const magnesium = micros.find((m: any) => m.name.toLowerCase().includes('magnesium'));
+      const calcium = micros.find((m: any) => m.name.toLowerCase().includes('calcium'));
+      const potassium = micros.find((m: any) => m.name.toLowerCase().includes('potassium'));
+
+      // Highlight standouts (>30% DV)
+      const standouts = micros.filter((m: any) => m.percentDailyValue > 30).slice(0, 3);
+      if (standouts.length > 0) {
+        standouts.forEach((n: any) => {
+          insights.push(`- **${n.name}:** ${n.amount}${n.unit} (${n.percentDailyValue}% DV) -- ${getNutrientBenefit(n.name, goalCategory)}`);
+        });
+      }
+
+      // Flag deficiencies (<15% DV)
+      const gaps = micros.filter((m: any) => m.percentDailyValue > 0 && m.percentDailyValue < 15).slice(0, 2);
+      if (gaps.length > 0) {
+        gaps.forEach((n: any) => {
+          insights.push(`- **${n.name}:** ${n.amount}${n.unit} (${n.percentDailyValue}% DV) -- low. ${getNutrientFoodSource(n.name)}`);
+        });
+      }
+
+      insights.push('');
     }
-    
-    if (iron && iron.percentDailyValue > 50) {
-      insights.push(`✅ **Iron Loaded:** ${iron.amount}${iron.unit} (${iron.percentDailyValue}% DV) - excellent for oxygen transport and endurance`);
-    }
-    
-    if (magnesium && magnesium.percentDailyValue < 20) {
-      insights.push(`⚠️ **Magnesium Gap:** ${magnesium.amount}${magnesium.unit} (${magnesium.percentDailyValue}% DV) - add 200mg for muscle function and sleep quality`);
-    }
-    
-    insights.push('');
-    
-    // TACTICAL IMPROVEMENTS
-    insights.push(`## 🎯 IMMEDIATE UPGRADES`);
-    
-    const suggestions = mealData.suggestions || mealData.analysis?.suggestions || [];
-    const expertRecs = mealData.expertRecommendations || [];
-    
-    // Add specific, measurable recommendations
-    if (goal.toLowerCase().includes('muscle') || goal.toLowerCase().includes('strength')) {
-      insights.push(`**Muscle Optimization:**`);
-      insights.push(`- Add 5g creatine monohydrate post-meal for 15-20% strength gains`);
-      insights.push(`- Include 3g leucine to maximize mTOR activation`);
-      insights.push(`- Time meal within 2hrs of training for optimal protein synthesis`);
-    }
-    
-    if (goal.toLowerCase().includes('performance') || goal.toLowerCase().includes('athletic')) {
-      insights.push(`**Performance Enhancement:**`);
-      insights.push(`- Add 200mg caffeine 45min pre-training for 3-5% power output increase`);
-      insights.push(`- Include 3-5g beta-alanine for muscular endurance`);
-      insights.push(`- Follow with 500ml water + electrolytes within 15min`);
-    }
-    
-    // Add expert recommendations if available
-    if (expertRecs.length > 0) {
-      insights.push(`**Expert Recommendations:**`);
-      expertRecs.slice(0, 3).forEach((rec: string) => {
-        insights.push(`- ${rec}`);
-      });
-    }
-    
-    insights.push('');
-    
-    // PERFORMANCE PREDICTION
-    insights.push(`## 📊 PERFORMANCE PREDICTION`);
-    
-    const healthRating = mealData.healthRating || 7;
-    insights.push(`**Overall Score:** ${healthRating}/10 for ${goal}`);
-    
-    if (healthRating >= 8) {
-      insights.push(`🔥 **Elite Level:** This meal composition will support peak performance and recovery`);
-    } else if (healthRating >= 6) {
-      insights.push(`💪 **Solid Foundation:** Good meal with room for tactical improvements`);
-    } else {
-      insights.push(`⚠️ **Needs Work:** Several optimization opportunities to maximize results`);
-    }
-    
-    // Specific performance outcomes based on the meal
-    if (calories >= dailyCalories * 0.25) {
-      insights.push(`**Energy Duration:** Sustained energy for 3-4 hours of ${activityLevel} activity`);
-    }
-    
-    if (protein && protein.amount >= 25) {
-      insights.push(`**Recovery Impact:** Muscle protein synthesis elevated for 3-4 hours post-consumption`);
-    }
-    
-    insights.push('');
-    
-    // NEXT LEVEL STRATEGY
-    insights.push(`## 🚀 NEXT LEVEL STRATEGY`);
-    insights.push(`For your ${goal} goals:`);
-    
-    if (goal.toLowerCase().includes('muscle')) {
-      insights.push(`- Replicate this meal pattern 4-5x daily with ${Math.round(dailyCalories/4)} kcal each`);
+
+    // ACTIONABLE RECOMMENDATIONS
+    insights.push(`## Recommendations`);
+
+    if (goalCategory === 'weight_loss') {
+      insights.push(`- Prioritize high-volume, low-calorie foods (vegetables, lean proteins) to stay full`);
+      insights.push(`- Aim for 25-30g fiber daily to support satiety and digestion`);
+      insights.push(`- Spread protein across meals to maintain muscle during weight loss`);
+    } else if (goalCategory === 'muscle_building') {
       insights.push(`- Target ${(weight * 1.6).toFixed(0)}g total daily protein across 4-5 meals`);
-      insights.push(`- Time protein intake every 3-4 hours for continuous MPS`);
-    } else if (goal.toLowerCase().includes('performance')) {
-      insights.push(`- Periodize carb intake: high on training days, moderate on rest days`);
-      insights.push(`- Track HRV and adjust meal timing based on recovery status`);
-      insights.push(`- Consider nutrient timing relative to circadian rhythm`);
-      } else {
-      insights.push(`- Maintain consistent meal timing for metabolic optimization`);
-      insights.push(`- Track energy levels and adjust macronutrient ratios accordingly`);
-      insights.push(`- Focus on nutrient density over calorie counting`);
+      insights.push(`- Time protein intake every 3-4 hours for sustained muscle protein synthesis`);
+      insights.push(`- Ensure adequate calories to support growth (~${Math.round(dailyCalories)} kcal/day)`);
+    } else if (goalCategory === 'athletic_performance') {
+      insights.push(`- Time carb-rich meals 2-3 hours before training for optimal energy`);
+      insights.push(`- Include protein + carbs within 1 hour post-training for recovery`);
+      insights.push(`- Stay hydrated -- aim for at least 500ml water with this meal`);
+    } else if (goalCategory === 'disease_management') {
+      const conditions = healthConditions.map(c => c.toLowerCase());
+      if (conditions.some(c => c.includes('diabetes') || c.includes('blood sugar'))) {
+        insights.push(`- Pair carbohydrates with protein or healthy fats to reduce blood sugar spikes`);
+        insights.push(`- Focus on low-glycemic foods and whole grains`);
+      }
+      if (conditions.some(c => c.includes('heart') || c.includes('cholesterol') || c.includes('hypertension'))) {
+        insights.push(`- Limit sodium to <1500mg/day and saturated fat to <13g/day`);
+        insights.push(`- Increase omega-3 fatty acids (fish, walnuts, flaxseed)`);
+      }
+      if (conditions.length === 0) {
+        insights.push(`- Focus on whole, minimally processed foods`);
+        insights.push(`- Monitor nutrients relevant to your specific condition`);
+      }
+      insights.push(`- Consult your healthcare provider for personalized dietary guidance`);
+    } else {
+      insights.push(`- Focus on nutrient-dense whole foods for sustained energy`);
+      insights.push(`- Aim for variety across food groups throughout the day`);
+      insights.push(`- Stay consistent with meal timing for metabolic health`);
     }
-    
+
+    insights.push('');
+
+    // MEAL SCORE
+    const healthRating = mealData.healthRating || 7;
+    insights.push(`## Meal Score: ${healthRating}/10`);
+
+    if (healthRating >= 8) {
+      insights.push(`Excellent meal for your ${GOAL_LABELS[goalCategory].toLowerCase()} goals. Keep it up!`);
+    } else if (healthRating >= 6) {
+      insights.push(`Good foundation with room for small improvements.`);
+    } else {
+      insights.push(`This meal has some nutritional gaps. See recommendations above.`);
+    }
+
     return insights.join('\n');
-    
+
   } catch (error) {
-    console.error('Error generating tactical insights:', error);
-    return 'Unable to generate performance insights for this meal. Please try uploading the image again.';
+    console.error('Error generating insights:', error);
+    return 'Unable to generate insights for this meal. Please try again.';
   }
+}
+
+/**
+ * Get a goal-relevant benefit description for a nutrient
+ */
+function getNutrientBenefit(name: string, goalCategory: GoalCategory): string {
+  const n = name.toLowerCase();
+  const benefits: Record<string, Record<GoalCategory, string>> = {
+    'vitamin d': {
+      weight_loss: 'supports metabolism and mood',
+      muscle_building: 'supports muscle function and recovery',
+      athletic_performance: 'supports recovery and bone strength',
+      disease_management: 'supports immune function and bone health',
+      general_wellness: 'supports immune function and bone health',
+    },
+    iron: {
+      weight_loss: 'supports energy levels during caloric deficit',
+      muscle_building: 'supports oxygen delivery for training',
+      athletic_performance: 'critical for oxygen transport and endurance',
+      disease_management: 'supports energy and immune function',
+      general_wellness: 'supports energy and oxygen transport',
+    },
+    calcium: {
+      weight_loss: 'may support fat metabolism',
+      muscle_building: 'essential for muscle contraction',
+      athletic_performance: 'prevents cramping and supports bone density',
+      disease_management: 'supports bone and heart health',
+      general_wellness: 'supports bone health',
+    },
+  };
+
+  for (const [key, goalMap] of Object.entries(benefits)) {
+    if (n.includes(key)) return goalMap[goalCategory];
+  }
+  return 'supports overall health';
+}
+
+/**
+ * Suggest food sources for a nutrient
+ */
+function getNutrientFoodSource(name: string): string {
+  const n = name.toLowerCase();
+  if (n.includes('vitamin d')) return 'Try fatty fish, eggs, or fortified foods.';
+  if (n.includes('vitamin c')) return 'Add citrus fruits, bell peppers, or berries.';
+  if (n.includes('vitamin a')) return 'Try sweet potatoes, carrots, or leafy greens.';
+  if (n.includes('iron')) return 'Add red meat, lentils, or spinach.';
+  if (n.includes('calcium')) return 'Try dairy, fortified plant milk, or leafy greens.';
+  if (n.includes('magnesium')) return 'Add nuts, seeds, or dark leafy greens.';
+  if (n.includes('potassium')) return 'Try bananas, sweet potatoes, or avocados.';
+  if (n.includes('zinc')) return 'Add meat, shellfish, or pumpkin seeds.';
+  if (n.includes('b12')) return 'Try meat, fish, eggs, or fortified foods.';
+  if (n.includes('folate') || n.includes('b9')) return 'Add leafy greens, legumes, or fortified grains.';
+  if (n.includes('fiber')) return 'Add whole grains, vegetables, or legumes.';
+  return 'Consider adding more whole foods to address this gap.';
 }
 
 /**
@@ -247,23 +320,7 @@ function calculateDailyCalories(bmr: number, activityLevel: string): number {
   return bmr * multiplier;
 }
 
-/**
- * Helper function for performance-focused micronutrient benefits
- */
-function getPerformanceBenefit(nutrientName: string): string {
-  const name = nutrientName.toLowerCase();
-  
-  if (name.includes('vitamin d')) return 'testosterone production and muscle recovery';
-  if (name.includes('vitamin c')) return 'collagen synthesis and iron absorption';
-  if (name.includes('vitamin b12')) return 'energy metabolism and red blood cell production';
-  if (name.includes('iron')) return 'oxygen transport and endurance capacity';
-  if (name.includes('calcium')) return 'muscle contraction and bone density';
-  if (name.includes('potassium')) return 'muscle function and blood pressure regulation';
-  if (name.includes('magnesium')) return 'muscle recovery and sleep quality';
-  if (name.includes('zinc')) return 'testosterone production and immune function';
-  
-  return 'overall athletic performance';
-}
+// getPerformanceBenefit removed - replaced by goal-aware getNutrientBenefit above
 
 // Enhanced concise insights generation
 export function generateConcisePersonalizedInsights(

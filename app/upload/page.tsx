@@ -109,14 +109,14 @@ export default function UploadPage() {
         analyzeFormData.append('goal', profile.goal);
       }
 
-      console.log('[Upload] Making request to /api/analyze-meal-base64');
+      console.log('[Upload] Making request to /api/analyze-meal');
       console.log('[Upload] FormData contents:', {
         hasFile: analyzeFormData.has('file'),
         hasGoal: analyzeFormData.has('goal'),
         goal: analyzeFormData.get('goal')
       });
 
-      const analyzeResponse = await fetch('/api/analyze-meal-base64?debug=1', {
+      const analyzeResponse = await fetch('/api/analyze-meal', {
         method: 'POST',
         body: analyzeFormData,
         headers: {
