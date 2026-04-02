@@ -43,16 +43,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, result });
     }
 
-    // Create new experiment
-    const { title, hypothesis, targetBehavior, measurementField, expectedDirection, durationDays } = body;
+    // Create new experiment — MUST have a source correlation or outcome analysis
+    const { title, hypothesis, targetBehavior, measurementField, expectedDirection, durationDays, sourceCorrelationId } = body;
     if (!title || !hypothesis || !targetBehavior || !measurementField || !expectedDirection) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+    if (!sourceCorrelationId) {
+      return NextResponse.json({ error: 'Experiments must be based on data analysis. No manual creation allowed.' }, { status: 400 });
     }
 
     const experiment = await createExperiment(user.id, {
       title, hypothesis, targetBehavior, measurementField, expectedDirection,
       durationDays: durationDays || 7,
-      sourceCorrelationId: body.sourceCorrelationId,
+      sourceCorrelationId,
     });
 
     return NextResponse.json({ success: true, experimentId: experiment.id });

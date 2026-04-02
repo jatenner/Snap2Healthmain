@@ -40,6 +40,7 @@ interface SystemSuggestion {
   outcomeLabel: string;
   statusDetail: string;
   evidenceStrength: string;
+  sourceCorrelationId: string;
 }
 
 function ExperimentsContent() {
@@ -72,6 +73,7 @@ function ExperimentsContent() {
             outcomeLabel: oa.outcomeLabel,
             statusDetail: oa.statusDetail,
             evidenceStrength: oa.primaryDrivers?.[0]?.evidenceStrength || 'moderate',
+            sourceCorrelationId: `outcome_${oa.outcome}_${oa.primaryDrivers?.[0]?.pairId || 'unknown'}`,
           });
         }
       }
@@ -94,6 +96,7 @@ function ExperimentsContent() {
         measurementField: suggestion.measurementField,
         expectedDirection: suggestion.expectedDirection,
         durationDays: suggestion.durationDays,
+        sourceCorrelationId: suggestion.sourceCorrelationId,
       }),
     });
     setCreating(false);
