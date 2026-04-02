@@ -1,339 +1,375 @@
 'use client';
 
 import Link from 'next/link';
-import { Camera, BarChart3, Lightbulb, History, Target, Sparkles, Plus, MessageCircle, User } from 'lucide-react';
+import { Camera, MessageSquare, Moon, Heart, Activity, Flame, AlertTriangle, TrendingUp, TrendingDown, Minus, ChevronRight, Beaker, Clock } from 'lucide-react';
 import { useAuth } from './components/client/ClientAuthProvider';
-import NutritionDashboard from './components/NutritionDashboard';
 import ClientOnly from './components/ClientOnly';
 import { useEffect, useState } from 'react';
-import { createClient } from './lib/supabase/client';
-import Image from 'next/image';
 
-interface RecentMeal {
-  id: string;
-  meal_name: string;
-  image_url: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-  created_at: string;
-  analysis: any;
+interface TodayData {
+  greeting: string;
+  goal: string;
+  biometric: {
+    sleepScore: number | null;
+    recoveryScore: number | null;
+    hrv: number | null;
+    strain: number | null;
+    sleepDeviation: number | null;
+    recoveryDeviation: number | null;
+    hrvDeviation: number | null;
+    dayQuality: string | null;
+    trajectory: string | null;
+  } | null;
+  nutrition: {
+    totalCalories: number;
+    totalProtein: number;
+    totalCarbs: number;
+    totalFat: number;
+    mealCount: number;
+    nutrientAdequacy: number | null;
+    inflammatoryScore: number | null;
+    nutrientGaps: Array<{ name: string; pct: number }>;
+  };
+  heroInsight: {
+    title: string;
+    sentence: string;
+    confidence: string;
+    direction: string;
+    category: string;
+  } | null;
+  recommendation: string | null;
+  meals: Array<{
+    id: string;
+    name: string;
+    calories: number;
+    time: string;
+    tags: string[];
+    hasImage: boolean;
+  }>;
+  experiment: {
+    id: string;
+    title: string;
+    hypothesis: string;
+    targetBehavior: string;
+    durationDays: number;
+    startDate: string;
+    endDate: string;
+    status: string;
+  } | null;
 }
 
-function RecentMealsSection({ userId }: { userId: string }) {
-  const [meals, setMeals] = useState<RecentMeal[]>([]);
-  const [loading, setLoading] = useState(true);
+// Trend arrow component
+function TrendArrow({ deviation }: { deviation: number | null }) {
+  if (deviation == null) return <Minus className="w-3 h-3 text-gray-500" />;
+  if (deviation > 3) return <TrendingUp className="w-3 h-3 text-green-400" />;
+  if (deviation < -3) return <TrendingDown className="w-3 h-3 text-red-400" />;
+  return <Minus className="w-3 h-3 text-gray-500" />;
+}
 
-  useEffect(() => {
-    async function fetchRecentMeals() {
-      try {
-        const supabase = createClient();
-        const { data, error } = await supabase
-          .from('meals')
-          .select('id, meal_name, image_url, calories, protein, carbs, fat, created_at, analysis')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(3);
-
-        if (!error && data) {
-          setMeals(data);
-        }
-      } catch (e) {
-        // Silently fail -- dashboard still works without recent meals
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchRecentMeals();
-  }, [userId]);
-
-  if (loading) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[1, 2, 3].map(i => (
-          <div key={i} className="bg-slate-800 rounded-xl p-4 animate-pulse h-48" />
-        ))}
-      </div>
-    );
+// Quality color
+function qualityColor(value: number | null, higherBetter = true): string {
+  if (value == null) return 'text-gray-400';
+  if (higherBetter) {
+    if (value >= 70) return 'text-green-400';
+    if (value >= 45) return 'text-yellow-400';
+    return 'text-red-400';
   }
+  // For strain: lower can be better for recovery
+  return 'text-blue-400';
+}
 
-  if (meals.length === 0) {
-    return (
-      <div className="bg-slate-800 rounded-xl p-8 text-center">
-        <Camera className="w-12 h-12 text-gray-500 mx-auto mb-3" />
-        <p className="text-gray-400 mb-4">No meals analyzed yet. Upload your first meal to get started!</p>
-        <Link
-          href="/upload"
-          className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium px-5 py-2.5 rounded-lg transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Analyze Your First Meal
-        </Link>
-      </div>
-    );
-  }
-
-  const formatTime = (dateStr: string) => {
-    const d = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - d.getTime();
-    const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
-    if (diffHrs < 1) return 'Just now';
-    if (diffHrs < 24) return `${diffHrs}h ago`;
-    const diffDays = Math.floor(diffHrs / 24);
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      {meals.map(meal => (
-        <Link
-          key={meal.id}
-          href={`/analysis/${meal.id}`}
-          className="bg-slate-800 hover:bg-slate-750 rounded-xl overflow-hidden transition-all duration-200 hover:ring-1 hover:ring-blue-500/50 group"
-        >
-          {/* Meal image */}
-          <div className="relative h-32 bg-slate-700">
-            {meal.image_url && !meal.image_url.startsWith('data:') ? (
-              <Image
-                src={meal.image_url}
-                alt={meal.meal_name || 'Meal'}
-                fill
-                className="object-cover group-hover:scale-105 transition-transform duration-200"
-                sizes="(max-width: 768px) 100vw, 33vw"
-              />
-            ) : (
-              <div className="flex items-center justify-center h-full">
-                <Camera className="w-8 h-8 text-gray-500" />
-              </div>
-            )}
-            <span className="absolute top-2 right-2 bg-black/60 text-gray-300 text-xs px-2 py-1 rounded">
-              {formatTime(meal.created_at)}
-            </span>
-          </div>
-          {/* Meal info */}
-          <div className="p-4">
-            <h4 className="text-white font-medium truncate mb-2">
-              {meal.meal_name || 'Analyzed Meal'}
-            </h4>
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div>
-                <div className="text-sm font-semibold text-orange-400">{meal.calories || 0}</div>
-                <div className="text-xs text-gray-500">cal</div>
-              </div>
-              <div>
-                <div className="text-sm font-semibold text-blue-400">{Math.round(meal.protein || 0)}g</div>
-                <div className="text-xs text-gray-500">protein</div>
-              </div>
-              <div>
-                <div className="text-sm font-semibold text-green-400">{Math.round(meal.carbs || 0)}g</div>
-                <div className="text-xs text-gray-500">carbs</div>
-              </div>
-            </div>
-          </div>
-        </Link>
-      ))}
-    </div>
-  );
+function qualityBg(value: number | null): string {
+  if (value == null) return 'bg-slate-800';
+  if (value >= 70) return 'bg-green-500/10 border-green-500/20';
+  if (value >= 45) return 'bg-yellow-500/10 border-yellow-500/20';
+  return 'bg-red-500/10 border-red-500/20';
 }
 
 function AuthenticatedHome({ userId }: { userId: string }) {
-  return (
-    <div className="min-h-screen bg-slate-900">
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-white">Dashboard</h1>
-            <p className="text-gray-400 mt-1">Track your nutrition journey</p>
-          </div>
-          <Link
-            href="/upload"
-            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium px-5 py-2.5 rounded-lg transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Analyze Meal
-          </Link>
-        </div>
+  const [data, setData] = useState<TodayData | null>(null);
+  const [loading, setLoading] = useState(true);
 
-        {/* Recent Meals */}
-        <section className="mb-10">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-white flex items-center gap-2">
-              <History className="w-5 h-5 text-gray-400" />
-              Recent Meals
-            </h2>
-            <Link href="/meal-history" className="text-sm text-blue-400 hover:text-blue-300 transition-colors">
-              View all
-            </Link>
-          </div>
-          <RecentMealsSection userId={userId} />
-        </section>
+  useEffect(() => {
+    fetch('/api/today')
+      .then(r => r.json())
+      .then(d => { if (!d.error) setData(d); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
 
-        {/* Nutrition Dashboard */}
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-white flex items-center gap-2 mb-4">
-            <BarChart3 className="w-5 h-5 text-gray-400" />
-            Nutrition Overview
-          </h2>
-          <NutritionDashboard />
-        </section>
-
-        {/* Quick Actions */}
-        <section>
-          <h2 className="text-xl font-semibold text-white flex items-center gap-2 mb-4">
-            <Sparkles className="w-5 h-5 text-gray-400" />
-            Quick Actions
-          </h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Link href="/upload" className="bg-slate-800 hover:bg-slate-750 rounded-xl p-5 text-center transition-all hover:ring-1 hover:ring-blue-500/50">
-              <Camera className="w-8 h-8 text-blue-400 mx-auto mb-2" />
-              <span className="text-sm text-gray-300">Analyze Meal</span>
-            </Link>
-            <Link href="/meal-history" className="bg-slate-800 hover:bg-slate-750 rounded-xl p-5 text-center transition-all hover:ring-1 hover:ring-blue-500/50">
-              <History className="w-8 h-8 text-green-400 mx-auto mb-2" />
-              <span className="text-sm text-gray-300">Meal History</span>
-            </Link>
-            <Link href="/profile" className="bg-slate-800 hover:bg-slate-750 rounded-xl p-5 text-center transition-all hover:ring-1 hover:ring-blue-500/50">
-              <User className="w-8 h-8 text-purple-400 mx-auto mb-2" />
-              <span className="text-sm text-gray-300">Profile</span>
-            </Link>
-            <button
-              onClick={() => {
-                // Trigger the global chat widget if it exists
-                const chatBtn = document.querySelector('[data-chat-toggle]') as HTMLButtonElement;
-                if (chatBtn) chatBtn.click();
-              }}
-              className="bg-slate-800 hover:bg-slate-750 rounded-xl p-5 text-center transition-all hover:ring-1 hover:ring-blue-500/50"
-            >
-              <MessageCircle className="w-8 h-8 text-orange-400 mx-auto mb-2" />
-              <span className="text-sm text-gray-300">AI Coach</span>
-            </button>
-          </div>
-        </section>
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="animate-pulse text-gray-400">Loading your day...</div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
-function MarketingHome() {
+  if (!data) {
+    return (
+      <div className="min-h-screen bg-slate-900 p-6">
+        <div className="max-w-lg mx-auto text-center py-20">
+          <h1 className="text-2xl font-bold text-white mb-4">Welcome to Snap2Health</h1>
+          <p className="text-gray-400 mb-8">Upload your first meal, beverage, or supplement to get started.</p>
+          <div className="flex gap-4 justify-center">
+            <Link href="/upload" className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-medium transition-colors flex items-center gap-2">
+              <Camera className="w-5 h-5" /> Take Photo
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const bio = data.biometric;
+  const nut = data.nutrition;
+
   return (
     <div className="min-h-screen bg-slate-900">
-      {/* Hero Section */}
-      <section className="pt-20 pb-32">
-        <div className="max-w-4xl mx-auto px-4 text-center">
-          <h1 className="text-5xl md:text-6xl font-bold text-white mb-6 leading-tight">
-            Your AI-Powered Nutrition Assistant
-          </h1>
-          <p className="text-xl text-gray-300 mb-10 max-w-2xl mx-auto leading-relaxed">
-            Upload photos of your meals and get instant nutritional analysis powered by artificial intelligence.
-          </p>
-          <Link
-            href="/upload"
-            className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold px-8 py-4 rounded-lg text-lg transition-all duration-200 transform hover:scale-105 shadow-lg"
-          >
-            Go to Upload
+      <div className="max-w-lg mx-auto px-4 py-6 space-y-5">
+
+        {/* Greeting */}
+        <div>
+          <h1 className="text-2xl font-bold text-white">{data.greeting}</h1>
+          {bio?.dayQuality && (
+            <p className="text-gray-400 mt-1">
+              {bio.dayQuality === 'good' && 'Your body is in good shape today.'}
+              {bio.dayQuality === 'neutral' && 'Moderate recovery today — take it steady.'}
+              {bio.dayQuality === 'poor' && 'Your body needs rest today. Focus on recovery.'}
+            </p>
+          )}
+          {!bio && <p className="text-gray-400 mt-1">Log meals to track your nutrition and health trends.</p>}
+        </div>
+
+        {/* ====== HERO INSIGHT CARD ====== */}
+        {data.heroInsight && (
+          <div className="bg-gradient-to-br from-blue-600/20 to-purple-600/20 border border-blue-500/30 rounded-2xl p-5">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-blue-300 uppercase tracking-wider">Pattern Detected</span>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                data.heroInsight.confidence === 'high' ? 'bg-green-500/20 text-green-300' :
+                data.heroInsight.confidence === 'medium' ? 'bg-yellow-500/20 text-yellow-300' :
+                'bg-gray-500/20 text-gray-300'
+              }`}>
+                {data.heroInsight.confidence} confidence
+              </span>
+            </div>
+            <p className="text-white text-sm leading-relaxed">{data.heroInsight.sentence}</p>
+            <Link href="/trends" className="inline-flex items-center gap-1 text-blue-400 text-xs mt-3 hover:text-blue-300">
+              View all patterns <ChevronRight className="w-3 h-3" />
+            </Link>
+          </div>
+        )}
+
+        {/* ====== BODY STATUS (4 cards) ====== */}
+        {bio && (
+          <div className="grid grid-cols-4 gap-3">
+            <div className={`rounded-xl p-3 border text-center ${qualityBg(bio.sleepScore)}`}>
+              <Moon className="w-4 h-4 mx-auto mb-1 text-blue-400" />
+              <div className={`text-lg font-bold ${qualityColor(bio.sleepScore)}`}>
+                {bio.sleepScore != null ? `${Math.round(bio.sleepScore)}` : '—'}
+              </div>
+              <div className="text-[10px] text-gray-400 uppercase">Sleep</div>
+              <div className="flex justify-center mt-1"><TrendArrow deviation={bio.sleepDeviation} /></div>
+            </div>
+            <div className={`rounded-xl p-3 border text-center ${qualityBg(bio.recoveryScore)}`}>
+              <Heart className="w-4 h-4 mx-auto mb-1 text-green-400" />
+              <div className={`text-lg font-bold ${qualityColor(bio.recoveryScore)}`}>
+                {bio.recoveryScore != null ? `${Math.round(bio.recoveryScore)}` : '—'}
+              </div>
+              <div className="text-[10px] text-gray-400 uppercase">Recovery</div>
+              <div className="flex justify-center mt-1"><TrendArrow deviation={bio.recoveryDeviation} /></div>
+            </div>
+            <div className={`rounded-xl p-3 border text-center bg-slate-800 border-slate-700`}>
+              <Activity className="w-4 h-4 mx-auto mb-1 text-purple-400" />
+              <div className="text-lg font-bold text-purple-400">
+                {bio.hrv != null ? `${bio.hrv}` : '—'}
+              </div>
+              <div className="text-[10px] text-gray-400 uppercase">HRV</div>
+              <div className="flex justify-center mt-1"><TrendArrow deviation={bio.hrvDeviation} /></div>
+            </div>
+            <div className={`rounded-xl p-3 border text-center bg-slate-800 border-slate-700`}>
+              <Flame className="w-4 h-4 mx-auto mb-1 text-orange-400" />
+              <div className="text-lg font-bold text-orange-400">
+                {bio.strain != null ? `${bio.strain}` : '—'}
+              </div>
+              <div className="text-[10px] text-gray-400 uppercase">Strain</div>
+            </div>
+          </div>
+        )}
+
+        {/* ====== NUTRITION STATUS ====== */}
+        <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-medium text-white">Today&apos;s Nutrition</span>
+            {nut.nutrientAdequacy != null && (
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                nut.nutrientAdequacy >= 60 ? 'bg-green-500/20 text-green-300' :
+                nut.nutrientAdequacy >= 30 ? 'bg-yellow-500/20 text-yellow-300' :
+                'bg-red-500/20 text-red-300'
+              }`}>
+                {nut.nutrientAdequacy}% nutrient target
+              </span>
+            )}
+          </div>
+
+          {nut.mealCount === 0 ? (
+            <p className="text-gray-400 text-sm">No meals logged yet today. Upload or describe what you ate.</p>
+          ) : (
+            <>
+              <div className="text-2xl font-bold text-white">{nut.totalCalories} cal</div>
+              <div className="flex gap-4 mt-1 text-xs text-gray-400">
+                <span><span className="text-blue-400 font-medium">{nut.totalProtein}g</span> protein</span>
+                <span><span className="text-yellow-400 font-medium">{nut.totalCarbs}g</span> carbs</span>
+                <span><span className="text-orange-400 font-medium">{nut.totalFat}g</span> fat</span>
+              </div>
+              <div className="text-xs text-gray-500 mt-1">{nut.mealCount} meal{nut.mealCount !== 1 ? 's' : ''} logged</div>
+
+              {/* Nutrient gaps */}
+              {nut.nutrientGaps.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-slate-700">
+                  <div className="text-xs text-gray-400 mb-2">Missing today:</div>
+                  <div className="space-y-1.5">
+                    {nut.nutrientGaps.map((gap) => (
+                      <div key={gap.name} className="flex items-center gap-2">
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-300">{gap.name}</span>
+                            <span className="text-xs text-red-400">{gap.pct}%</span>
+                          </div>
+                          <div className="w-full bg-slate-700 rounded-full h-1 mt-0.5">
+                            <div
+                              className={`h-1 rounded-full ${gap.pct >= 50 ? 'bg-yellow-400' : 'bg-red-400'}`}
+                              style={{ width: `${Math.min(gap.pct, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* ====== RECOMMENDATION ====== */}
+        {data.recommendation && (
+          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4">
+            <div className="text-xs font-medium text-emerald-300 uppercase tracking-wider mb-1">Recommendation</div>
+            <p className="text-sm text-white leading-relaxed">{data.recommendation}</p>
+          </div>
+        )}
+
+        {/* ====== ACTIVE EXPERIMENT ====== */}
+        {data.experiment && (
+          <div className="bg-purple-500/10 border border-purple-500/20 rounded-2xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Beaker className="w-4 h-4 text-purple-400" />
+              <span className="text-xs font-medium text-purple-300 uppercase tracking-wider">Active Experiment</span>
+            </div>
+            <p className="text-sm text-white font-medium">{data.experiment.title}</p>
+            <p className="text-xs text-gray-400 mt-1">{data.experiment.targetBehavior}</p>
+            <div className="flex items-center gap-2 mt-2 text-xs text-gray-400">
+              <Clock className="w-3 h-3" />
+              <span>
+                {Math.max(0, Math.ceil((new Date(data.experiment.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))} days remaining
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* ====== MEAL TIMELINE ====== */}
+        {data.meals.length > 0 && (
+          <div>
+            <div className="text-sm font-medium text-white mb-3">Today&apos;s Timeline</div>
+            <div className="space-y-2">
+              {data.meals.map((meal) => (
+                <Link key={meal.id} href={`/meal/${meal.id}`} className="block">
+                  <div className="bg-slate-800 border border-slate-700 rounded-xl p-3 hover:border-slate-600 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-sm text-white font-medium">{meal.name}</div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-xs text-gray-400">
+                            {new Date(meal.time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                          </span>
+                          <span className="text-xs text-gray-500">{meal.calories} cal</span>
+                        </div>
+                      </div>
+                      <div className="flex gap-1 flex-wrap justify-end max-w-[150px]">
+                        {meal.tags.slice(0, 3).map((tag) => (
+                          <span key={tag} className={`text-[9px] px-1.5 py-0.5 rounded-full ${
+                            tag.includes('sleep') || tag.includes('caffeine') || tag.includes('alcohol')
+                              ? 'bg-red-500/20 text-red-300'
+                              : tag.includes('recovery') || tag.includes('protein') || tag.includes('nutrient')
+                              ? 'bg-green-500/20 text-green-300'
+                              : 'bg-slate-700 text-gray-400'
+                          }`}>
+                            {tag.replace(/_/g, ' ')}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ====== LOG ACTION ====== */}
+        <div className="grid grid-cols-2 gap-3 pt-2">
+          <Link href="/upload" className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl p-4 text-center transition-colors">
+            <Camera className="w-6 h-6 mx-auto mb-1" />
+            <div className="text-sm font-medium">Take Photo</div>
+          </Link>
+          <Link href="/upload?mode=text" className="bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 rounded-xl p-4 text-center transition-colors">
+            <MessageSquare className="w-6 h-6 mx-auto mb-1" />
+            <div className="text-sm font-medium">Describe It</div>
           </Link>
         </div>
-      </section>
 
-      {/* Features Section */}
-      <section className="pb-20">
-        <div className="max-w-6xl mx-auto px-4">
-          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-            <div className="bg-slate-800 rounded-xl p-8 text-center">
-              <h3 className="text-2xl font-bold text-white mb-4">Instant Food Analysis</h3>
-              <p className="text-gray-300 mb-6 leading-relaxed">
-                Take a photo of your meal and get detailed nutritional information within seconds.
-              </p>
-              <ul className="text-gray-300 mb-8 space-y-2">
-                <li>Accurate calorie count</li>
-                <li>Macronutrient breakdown</li>
-                <li>Vitamin and mineral content</li>
-                <li>Health insights and recommendations</li>
-              </ul>
-              <Link
-                href="/upload"
-                className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-3 rounded-lg transition-colors"
-              >
-                Analyze Your Meal
-              </Link>
-            </div>
-
-            <div className="bg-slate-800 rounded-xl p-8 text-center">
-              <h3 className="text-2xl font-bold text-white mb-4">Personalized Nutrition</h3>
-              <p className="text-gray-300 mb-6 leading-relaxed">
-                Get advice tailored to your health goals, dietary preferences, and personal metrics.
-              </p>
-              <ul className="text-gray-300 mb-8 space-y-2">
-                <li>Custom meal recommendations</li>
-                <li>Track progress toward your goals</li>
-                <li>Identify nutritional gaps</li>
-                <li>Build healthier eating habits</li>
-              </ul>
-              <Link
-                href="/meal-history"
-                className="inline-block bg-green-600 hover:bg-green-700 text-white font-medium px-6 py-3 rounded-lg transition-colors"
-              >
-                View Your History
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* How It Works Section */}
-      <section className="pb-20">
-        <div className="max-w-4xl mx-auto px-4 text-center">
-          <h2 className="text-3xl font-bold text-white mb-16">How It Works</h2>
-          <div className="grid md:grid-cols-3 gap-8 text-center">
-            <div className="space-y-4">
-              <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center mx-auto text-white text-xl font-bold">
-                1
-              </div>
-              <h3 className="text-xl font-semibold text-white">Upload Photo</h3>
-              <p className="text-gray-400">Take a photo of your meal or upload from your gallery</p>
-            </div>
-            <div className="space-y-4">
-              <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center mx-auto text-white text-xl font-bold">
-                2
-              </div>
-              <h3 className="text-xl font-semibold text-white">AI Analysis</h3>
-              <p className="text-gray-400">Our AI analyzes your meal against your personal health profile</p>
-            </div>
-            <div className="space-y-4">
-              <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center mx-auto text-white text-xl font-bold">
-                3
-              </div>
-              <h3 className="text-xl font-semibold text-white">Get Insights</h3>
-              <p className="text-gray-400">Receive detailed nutrition data and personalized recommendations</p>
-            </div>
-          </div>
-        </div>
-      </section>
+      </div>
     </div>
   );
 }
 
 export default function Home() {
-  const { isAuthenticated, user } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="animate-pulse text-gray-400">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !user) {
+    return (
+      <ClientOnly>
+        <div className="min-h-screen bg-slate-900 flex items-center justify-center px-4">
+          <div className="text-center max-w-md">
+            <h1 className="text-4xl font-bold text-white mb-4">Snap2Health</h1>
+            <p className="text-gray-400 mb-8 text-lg">Track what you eat. See how your body responds. Improve.</p>
+            <div className="flex gap-4 justify-center">
+              <Link href="/login" className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-medium transition-colors">
+                Log In
+              </Link>
+              <Link href="/signup" className="bg-slate-800 hover:bg-slate-700 text-white px-8 py-3 rounded-xl font-medium border border-slate-700 transition-colors">
+                Sign Up
+              </Link>
+            </div>
+          </div>
+        </div>
+      </ClientOnly>
+    );
+  }
 
   return (
-    <ClientOnly fallback={
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="animate-pulse text-white text-opacity-50">
-          Loading...
-        </div>
-      </div>
-    }>
-      {isAuthenticated && user?.id ? (
-        <AuthenticatedHome userId={user.id} />
-      ) : (
-        <MarketingHome />
-      )}
+    <ClientOnly>
+      <AuthenticatedHome userId={user.id} />
     </ClientOnly>
   );
 }

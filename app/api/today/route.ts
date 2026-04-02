@@ -1,0 +1,217 @@
+import { NextResponse } from 'next/server';
+import { createClient } from '../../lib/supabase/server';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
+
+export const dynamic = 'force-dynamic';
+
+export async function GET() {
+  try {
+    const supabase = createClient();
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const admin = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    const today = new Date().toISOString().split('T')[0]!;
+    const userId = user.id;
+
+    // Fetch all data in parallel
+    const [
+      biometricResult,
+      nutritionResult,
+      mealsResult,
+      correlationResult,
+      profileResult,
+      experimentResult,
+    ] = await Promise.all([
+      // Today's biometric summary
+      admin.from('daily_biometric_summaries')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('summary_date', today)
+        .single(),
+      // Today's nutrition summary
+      admin.from('daily_nutrition_summaries')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('summary_date', today)
+        .single(),
+      // Today's meals
+      admin.from('meals')
+        .select('id, meal_name, calories, protein, carbs, fat, meal_time, meal_tags, image_url')
+        .eq('user_id', userId)
+        .gte('meal_time', `${today}T00:00:00`)
+        .lt('meal_time', `${today}T23:59:59.999`)
+        .order('meal_time', { ascending: true }),
+      // Cached correlation report
+      admin.from('correlation_reports')
+        .select('report_data')
+        .eq('user_id', userId)
+        .single(),
+      // User profile
+      admin.from('profiles')
+        .select('full_name, age, gender, goal, activity_level')
+        .eq('id', userId)
+        .single(),
+      // Active experiment (if any)
+      admin.from('health_experiments')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .single(),
+    ]);
+
+    const biometric = biometricResult.data;
+    const nutrition = nutritionResult.data;
+    const meals = mealsResult.data || [];
+    const correlationReport = correlationResult.data?.report_data;
+    const profile = profileResult.data;
+
+    // Build the hero insight — the ONE most important thing
+    let heroInsight: any = null;
+    if (correlationReport?.insights?.length > 0) {
+      const top = correlationReport.insights[0];
+      heroInsight = {
+        title: top.pairName,
+        sentence: top.displaySentence,
+        confidence: top.confidence,
+        direction: top.direction,
+        category: top.category,
+      };
+    }
+
+    // Build today's recommendation
+    let recommendation: string | null = null;
+    if (nutrition) {
+      const gaps: string[] = [];
+      if ((nutrition.pct_dv_magnesium || 0) < 50) gaps.push('magnesium');
+      if ((nutrition.pct_dv_vitamin_d || 0) < 50) gaps.push('vitamin D');
+      if ((nutrition.pct_dv_fiber || 0) < 50) gaps.push('fiber');
+      if ((nutrition.pct_dv_iron || 0) < 50) gaps.push('iron');
+      if ((nutrition.pct_dv_protein || 0) < 50) gaps.push('protein');
+
+      if (gaps.length > 0) {
+        const topGap = gaps[0]!;
+        const foodSuggestions: Record<string, string> = {
+          magnesium: 'dark chocolate, spinach, almonds, or avocado',
+          'vitamin D': 'salmon, eggs, or fortified foods',
+          fiber: 'beans, berries, broccoli, or oats',
+          iron: 'red meat, spinach, lentils, or fortified cereal',
+          protein: 'chicken, fish, eggs, or Greek yogurt',
+        };
+        recommendation = `You're low on ${topGap} today. Try adding ${foodSuggestions[topGap] || 'nutrient-rich foods'} to your next meal.`;
+      }
+    }
+    if (!recommendation && biometric) {
+      if ((biometric.recovery_score || 0) < 50) {
+        recommendation = 'Recovery is low today. Focus on anti-inflammatory foods, hydration, and an earlier, lighter dinner.';
+      } else if ((biometric.sleep_score || 0) < 70) {
+        recommendation = 'Sleep was below average. Consider reducing caffeine after 2pm and keeping dinner lighter tonight.';
+      }
+    }
+
+    // Build nutrient gaps list
+    const nutrientGaps: Array<{ name: string; pct: number }> = [];
+    if (nutrition) {
+      const checks = [
+        { name: 'Protein', pct: nutrition.pct_dv_protein },
+        { name: 'Fiber', pct: nutrition.pct_dv_fiber },
+        { name: 'Magnesium', pct: nutrition.pct_dv_magnesium },
+        { name: 'Vitamin D', pct: nutrition.pct_dv_vitamin_d },
+        { name: 'Iron', pct: nutrition.pct_dv_iron },
+        { name: 'Calcium', pct: nutrition.pct_dv_calcium },
+        { name: 'Potassium', pct: nutrition.pct_dv_potassium },
+        { name: 'Zinc', pct: nutrition.pct_dv_zinc },
+        { name: 'Vitamin C', pct: nutrition.pct_dv_vitamin_c },
+        { name: 'Vitamin B12', pct: nutrition.pct_dv_vitamin_b12 },
+      ];
+      for (const c of checks) {
+        if (c.pct != null && c.pct < 60) {
+          nutrientGaps.push({ name: c.name, pct: Math.round(c.pct) });
+        }
+      }
+      nutrientGaps.sort((a, b) => a.pct - b.pct);
+    }
+
+    // Greeting
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+    const firstName = profile?.full_name?.split(' ')[0] || user.user_metadata?.full_name?.split(' ')[0] || '';
+
+    return NextResponse.json({
+      greeting: `${greeting}${firstName ? ', ' + firstName : ''}.`,
+      goal: profile?.goal || 'General Wellness',
+
+      // Body status (4 cards)
+      biometric: biometric ? {
+        sleepScore: biometric.sleep_score,
+        recoveryScore: biometric.recovery_score,
+        hrv: biometric.hrv ? Math.round(biometric.hrv * 10) / 10 : null,
+        strain: biometric.strain ? Math.round(biometric.strain * 10) / 10 : null,
+        sleepDeviation: biometric.sleep_deviation,
+        recoveryDeviation: biometric.recovery_deviation,
+        hrvDeviation: biometric.hrv_deviation,
+        dayQuality: biometric.day_quality,
+        trajectory: biometric.trajectory,
+      } : null,
+
+      // Nutrition status
+      nutrition: nutrition ? {
+        totalCalories: Math.round(nutrition.total_calories),
+        totalProtein: Math.round(nutrition.total_protein),
+        totalCarbs: Math.round(nutrition.total_carbs),
+        totalFat: Math.round(nutrition.total_fat),
+        mealCount: nutrition.meal_count,
+        nutrientAdequacy: nutrition.nutrient_adequacy_score,
+        inflammatoryScore: nutrition.inflammatory_score,
+        nutrientGaps: nutrientGaps.slice(0, 3),
+      } : {
+        totalCalories: meals.reduce((s: number, m: any) => s + (m.calories || 0), 0),
+        totalProtein: meals.reduce((s: number, m: any) => s + (m.protein || 0), 0),
+        totalCarbs: meals.reduce((s: number, m: any) => s + (m.carbs || 0), 0),
+        totalFat: meals.reduce((s: number, m: any) => s + (m.fat || 0), 0),
+        mealCount: meals.length,
+        nutrientAdequacy: null,
+        inflammatoryScore: null,
+        nutrientGaps: [],
+      },
+
+      // Hero insight
+      heroInsight,
+
+      // Recommendation
+      recommendation,
+
+      // Today's meals (timeline)
+      meals: meals.map((m: any) => ({
+        id: m.id,
+        name: m.meal_name,
+        calories: m.calories,
+        time: m.meal_time,
+        tags: m.meal_tags || [],
+        hasImage: !!m.image_url,
+      })),
+
+      // Active experiment
+      experiment: experimentResult.data ? {
+        id: experimentResult.data.id,
+        title: experimentResult.data.title,
+        hypothesis: experimentResult.data.hypothesis,
+        targetBehavior: experimentResult.data.target_behavior,
+        durationDays: experimentResult.data.duration_days,
+        startDate: experimentResult.data.start_date,
+        endDate: experimentResult.data.end_date,
+        status: experimentResult.data.status,
+      } : null,
+    });
+
+  } catch (err: any) {
+    console.error('Today API error:', err.message);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}

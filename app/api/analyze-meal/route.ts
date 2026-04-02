@@ -355,7 +355,9 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
     const mealName = (formData.get('mealName') as string) || 'Analyzed Meal';
-    const goal = (formData.get('goal') as string) || 'General Wellness';
+    // Goal comes from user profile, not per-meal selection
+    const profileGoal = session?.user?.user_metadata?.defaultGoal || session?.user?.user_metadata?.goal;
+    const goal = (formData.get('goal') as string) || profileGoal || 'General Wellness';
 
     console.log('[analyze-meal] Form data parsed:', {
       hasFile: !!file,
