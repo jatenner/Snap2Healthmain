@@ -144,56 +144,81 @@ function AuthenticatedHome({ userId }: { userId: string }) {
           {!bio && <p className="text-gray-400 mt-1">Log meals to track your nutrition and health trends.</p>}
         </div>
 
-        {/* ====== HERO INSIGHT CARD (outcome-first) ====== */}
-        {data.heroInsight && (
-          <div className="bg-gradient-to-br from-blue-600/20 to-purple-600/20 border border-blue-500/30 rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-blue-300 uppercase tracking-wider">
+        {/* ====== HERO INSIGHT CARD (outcome-first contributor model) ====== */}
+        {data.heroInsight ? (
+          <div className={`rounded-2xl p-5 border ${
+            data.heroInsight.direction === 'worse'
+              ? 'bg-gradient-to-br from-red-600/10 to-orange-600/10 border-red-500/20'
+              : 'bg-gradient-to-br from-blue-600/15 to-purple-600/15 border-blue-500/20'
+          }`}>
+            {/* Header: outcome + confidence */}
+            <div className="flex items-center justify-between mb-3">
+              <span className={`text-xs font-medium uppercase tracking-wider ${
+                data.heroInsight.direction === 'worse' ? 'text-red-300' : 'text-blue-300'
+              }`}>
                 {data.heroInsight.category || 'Pattern Detected'}
               </span>
-              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+              <span className={`text-[10px] px-2 py-0.5 rounded-full ${
                 data.heroInsight.confidence === 'high' ? 'bg-green-500/20 text-green-300' :
                 data.heroInsight.confidence === 'medium' ? 'bg-yellow-500/20 text-yellow-300' :
-                'bg-gray-500/20 text-gray-300'
+                'bg-gray-500/20 text-gray-400'
               }`}>
-                {data.heroInsight.confidence} confidence
+                {data.heroInsight.confidence}
               </span>
             </div>
 
-            {/* Outcome status */}
-            <p className="text-white font-medium text-sm mb-1">{data.heroInsight.title}</p>
+            {/* Outcome status — the headline */}
+            <p className="text-white font-semibold text-[15px] leading-snug">{data.heroInsight.title}</p>
 
-            {/* Primary drivers */}
+            {/* Primary drivers with strength bars */}
             {data.heroInsight.primaryDrivers && data.heroInsight.primaryDrivers.length > 0 && (
-              <div className="mt-2">
-                <span className="text-[10px] text-gray-400 uppercase tracking-wider">Likely contributors</span>
-                <div className="mt-1 space-y-0.5">
+              <div className="mt-3">
+                <span className="text-[10px] text-gray-500 uppercase tracking-wider">Likely contributors</span>
+                <div className="mt-1.5 space-y-2">
                   {data.heroInsight.primaryDrivers.map((driver: string, i: number) => (
-                    <div key={i} className="text-xs text-gray-300 flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-                      {driver}
+                    <div key={i}>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
+                        <span className="text-xs text-gray-200">{driver}</span>
+                      </div>
+                      <div className="ml-3.5 w-full bg-slate-700/50 rounded-full h-1">
+                        <div className={`h-1 rounded-full ${i === 0 ? 'bg-blue-400 w-[85%]' : 'bg-blue-400/60 w-[60%]'}`} />
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Supporting signals */}
+            {/* Supporting signals — subdued */}
             {data.heroInsight.supportingSignals && data.heroInsight.supportingSignals.length > 0 && (
-              <div className="mt-1.5">
+              <div className="mt-2 space-y-1">
                 {data.heroInsight.supportingSignals.map((signal: string, i: number) => (
-                  <div key={i} className="text-[11px] text-gray-500 flex items-center gap-1.5">
-                    <span className="w-1 h-1 rounded-full bg-gray-600" />
-                    {signal} (possible)
+                  <div key={i}>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="w-1 h-1 rounded-full bg-gray-600 flex-shrink-0" />
+                      <span className="text-[11px] text-gray-500">{signal}</span>
+                    </div>
+                    <div className="ml-3 w-full bg-slate-700/30 rounded-full h-0.5">
+                      <div className="h-0.5 rounded-full bg-gray-600 w-[30%]" />
+                    </div>
                   </div>
                 ))}
               </div>
             )}
 
-            <p className="text-xs text-gray-400 mt-2 leading-relaxed">{data.heroInsight.sentence}</p>
-            <Link href="/trends" className="inline-flex items-center gap-1 text-blue-400 text-xs mt-3 hover:text-blue-300">
-              View all patterns <ChevronRight className="w-3 h-3" />
+            <Link href="/trends" className="inline-flex items-center gap-1 text-blue-400 text-[11px] mt-3 hover:text-blue-300">
+              See full analysis <ChevronRight className="w-3 h-3" />
             </Link>
+          </div>
+        ) : !bio ? null : (
+          /* Empty state: no insights yet — guide user to log more */
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5 text-center">
+            <div className="text-sm text-gray-300 mb-2">Log meals for 2 weeks to unlock your personal patterns</div>
+            <div className="w-full bg-slate-700 rounded-full h-2 mb-1">
+              <div className="h-2 rounded-full bg-blue-500 transition-all" style={{ width: `${Math.min(100, (nut.mealCount / 28) * 100)}%` }} />
+            </div>
+            <div className="text-[10px] text-gray-500">~14 days of consistent logging needed</div>
           </div>
         )}
 
@@ -289,11 +314,16 @@ function AuthenticatedHome({ userId }: { userId: string }) {
           )}
         </div>
 
-        {/* ====== RECOMMENDATION ====== */}
+        {/* ====== RECOMMENDATION (one action) ====== */}
         {data.recommendation && (
-          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4">
-            <div className="text-xs font-medium text-emerald-300 uppercase tracking-wider mb-1">Recommendation</div>
+          <div className="bg-emerald-500/10 border-l-2 border-emerald-500 rounded-r-2xl rounded-l-sm p-4">
             <p className="text-sm text-white leading-relaxed">{data.recommendation}</p>
+            {data.heroInsight?.recommendedAction && data.heroInsight.recommendedAction !== data.recommendation && (
+              <p className="text-xs text-gray-400 mt-1.5">Based on your {data.heroInsight.primaryDrivers?.[0]?.toLowerCase() || 'patterns'}</p>
+            )}
+            <Link href="/experiments" className="inline-flex items-center gap-1 text-emerald-400 text-xs mt-2 hover:text-emerald-300">
+              Start as experiment <ChevronRight className="w-3 h-3" />
+            </Link>
           </div>
         )}
 

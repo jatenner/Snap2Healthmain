@@ -39,10 +39,14 @@ export async function GET(request: NextRequest) {
         .single(),
     ]);
 
+    const reportData = corrResult.data?.report_data;
     return NextResponse.json({
       biometrics: bioResult.data || [],
       nutrition: nutResult.data || [],
-      correlations: corrResult.data?.report_data?.insights || [],
+      correlations: reportData?.insights || [],
+      outcomeAnalyses: reportData?.outcomeAnalyses || [],
+      sensitivities: reportData?.sensitivities || [],
+      dataQuality: reportData?.dataQuality || null,
       days,
     });
   } catch (err: any) {

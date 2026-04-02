@@ -116,7 +116,7 @@ function TrendsContent() {
     return <div className="text-center py-20 text-gray-400">Unable to load trends.</div>;
   }
 
-  const { biometrics, nutrition, correlations } = data;
+  const { biometrics, nutrition, correlations, outcomeAnalyses, sensitivities } = data;
 
   // Prepare chart data
   const chartData = biometrics.map((b: any) => {
@@ -156,23 +156,103 @@ function TrendsContent() {
         </div>
       </div>
 
-      {/* ====== KEY INSIGHTS (top) ====== */}
+      {/* ====== OUTCOME ANALYSES (outcome-first contributor model) ====== */}
+      {outcomeAnalyses && outcomeAnalyses.length > 0 && (
+        <div>
+          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">Your Body&apos;s Response to Your Diet</h2>
+          <div className="space-y-3">
+            {outcomeAnalyses.map((oa: any) => (
+              <div key={oa.outcome} className={`rounded-2xl p-4 border ${
+                oa.status === 'poor' ? 'bg-red-500/5 border-red-500/20' :
+                oa.status === 'below_baseline' ? 'bg-yellow-500/5 border-yellow-500/20' :
+                'bg-green-500/5 border-green-500/20'
+              }`}>
+                {/* Outcome status */}
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`w-2 h-2 rounded-full ${
+                    oa.status === 'poor' ? 'bg-red-400' : oa.status === 'below_baseline' ? 'bg-yellow-400' : 'bg-green-400'
+                  }`} />
+                  <span className="text-sm font-medium text-white">{oa.statusDetail}</span>
+                </div>
+
+                {/* Primary drivers */}
+                {oa.primaryDrivers?.length > 0 && (
+                  <div className="mt-2 space-y-1.5">
+                    <span className="text-[10px] text-gray-500 uppercase tracking-wider">Likely contributors</span>
+                    {oa.primaryDrivers.map((d: any, i: number) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
+                        <span className="text-xs text-gray-300 flex-1">{d.factor}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                          d.evidenceStrength === 'strong' ? 'bg-blue-500/20 text-blue-300' :
+                          d.evidenceStrength === 'moderate' ? 'bg-yellow-500/20 text-yellow-300' :
+                          'bg-gray-500/20 text-gray-400'
+                        }`}>{d.evidenceStrength}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Supporting signals */}
+                {oa.supportingSignals?.length > 0 && (
+                  <div className="mt-1.5 space-y-0.5">
+                    {oa.supportingSignals.map((s: any, i: number) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <span className="w-1 h-1 rounded-full bg-gray-600 flex-shrink-0" />
+                        <span className="text-[11px] text-gray-500">{s.factor} (possible)</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Recommended test */}
+                {oa.recommendedTest && oa.status !== 'good' && (
+                  <div className="mt-3 pt-2 border-t border-slate-700/50">
+                    <p className="text-xs text-emerald-400">{oa.recommendedTest.action}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ====== SINGLE-VARIABLE PATTERNS (Layer 1 detail) ====== */}
       {hasCorrelations && (
         <div>
-          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">Patterns Found ({correlations.length})</h2>
+          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">Individual Patterns ({correlations.length})</h2>
           <div className="space-y-3">
-            {correlations.slice(0, 3).map((c: CorrelationInsight) => (
+            {correlations.slice(0, 5).map((c: CorrelationInsight) => (
               <CorrelationCard key={c.pairId} insight={c} />
             ))}
           </div>
         </div>
       )}
 
-      {!hasCorrelations && (
+      {!hasCorrelations && (!outcomeAnalyses || outcomeAnalyses.length === 0) && (
         <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5 text-center">
           <BarChart3 className="w-8 h-8 mx-auto mb-2 text-gray-500" />
           <p className="text-sm text-gray-400">No patterns detected yet.</p>
           <p className="text-xs text-gray-500 mt-1">Log meals consistently for 2+ weeks to unlock diet-biometric insights.</p>
+        </div>
+      )}
+
+      {/* Personal sensitivities */}
+      {sensitivities && sensitivities.length > 0 && (
+        <div>
+          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">Your Sensitivities</h2>
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4 space-y-2">
+            {sensitivities.slice(0, 5).map((s: any, i: number) => (
+              <div key={i} className="flex items-center justify-between">
+                <span className="text-xs text-gray-300">{s.variable.replace(/_/g, ' ')}</span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                  s.sensitivity === 'high' ? 'bg-red-500/20 text-red-300' :
+                  s.sensitivity === 'medium' ? 'bg-yellow-500/20 text-yellow-300' :
+                  'bg-gray-500/20 text-gray-400'
+                }`}>{s.sensitivity} sensitivity</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
