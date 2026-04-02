@@ -56,6 +56,10 @@ const MICRO_NAME_MAP: Record<string, string> = {
   'sugar': 'sugar',
   'total sugar': 'sugar',
   'total sugars': 'sugar',
+  'omega-3 (epa+dha)': 'omega3',
+  'epa+dha': 'omega3',
+  'tryptophan': 'tryptophan',
+  'choline': 'choline',
 };
 
 function normalizeMicroName(name: string): string | null {
@@ -126,25 +130,41 @@ export async function computeDailyNutritionSummary(userId: string, date: string,
     carbs_after_8pm: 0,
     sugar_after_8pm: 0,
     has_late_night_meal: false,
+    total_caffeine: 0,
+    total_alcohol: 0,
+    caffeine_after_2pm: 0,
+    alcohol_after_8pm: 0,
   };
 
   // Tag frequency counter
   const tagCounts: Record<string, number> = {};
 
   for (const meal of meals) {
+    // Get meal time for timing analysis
+    const mealTime = new Date((meal as any).meal_time || (meal as any).created_at);
+    const hour = mealTime.getHours();
+
     // Accumulate macros
     summary.total_calories += meal.calories || 0;
     summary.total_protein += meal.protein || 0;
     summary.total_carbs += meal.carbs || 0;
     summary.total_fat += meal.fat || 0;
 
-    // Extract fiber, sugar, sodium from macronutrients array
+    // Extract fiber, sugar, sodium, caffeine, alcohol from macronutrients array
     if (Array.isArray(meal.macronutrients)) {
       for (const macro of meal.macronutrients) {
         const name = (macro.name || '').toLowerCase();
         if (name.includes('fiber')) summary.total_fiber += macro.amount || 0;
         if (name.includes('sugar')) summary.total_sugar += macro.amount || 0;
         if (name.includes('sodium')) summary.total_sodium += macro.amount || 0;
+        if (name.includes('caffeine')) {
+          summary.total_caffeine += macro.amount || 0;
+          if (hour >= 14) summary.caffeine_after_2pm += macro.amount || 0;
+        }
+        if (name.includes('alcohol')) {
+          summary.total_alcohol += macro.amount || 0;
+          if (hour >= 20) summary.alcohol_after_8pm += macro.amount || 0;
+        }
       }
     }
 
@@ -158,10 +178,7 @@ export async function computeDailyNutritionSummary(userId: string, date: string,
       }
     }
 
-    // Timing analysis
-    const mealTime = new Date(meal.meal_time || meal.created_at);
-    const hour = mealTime.getHours();
-
+    // Timing analysis (hour already computed above)
     if (hour >= 21) {
       summary.has_late_night_meal = true;
     }

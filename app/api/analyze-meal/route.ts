@@ -47,18 +47,23 @@ async function analyzeImageWithGPT(base64Image: string, userProfile: any = {}): 
         messages: [
           {
             role: "system",
-            content: "You are a nutrition expert. Analyze food images quickly and accurately. Return comprehensive nutrition data with complete micronutrient profiles in valid JSON format. Be efficient but thorough."
+            content: "You are a nutrition expert. Analyze images of food, beverages, or supplements. This includes meals, drinks (coffee, alcohol, smoothies, juice), supplement bottles/pills, protein shakes, and anything consumable. If you see a supplement bottle or label, read the label and extract the nutrient amounts. Assume the user consumed everything shown. Return comprehensive nutrition data in valid JSON format. Be efficient but thorough."
           },
           {
             role: "user", 
             content: [
               {
                 type: "text",
-                text: `Analyze this meal image and provide comprehensive nutrition data in JSON format. Include ALL major nutrients:
+                text: `Analyze this image. It may show a meal, beverage (coffee, juice, alcohol, smoothie, shake), supplement (pills, bottle label, powder), or any combination. Assume the user consumed ALL of what is shown.
+
+If you see a supplement bottle or label, read the supplement facts panel and extract the exact nutrient amounts listed.
+
+Provide comprehensive nutrition data in JSON format:
 
 {
   "mealName": "descriptive name",
   "mealDescription": "detailed description",
+  "consumptionType": "meal" | "beverage" | "supplement" | "snack",
   "calories": number,
   "protein": number,
   "carbs": number,
@@ -70,7 +75,9 @@ async function analyzeImageWithGPT(base64Image: string, userProfile: any = {}): 
     {"name": "Saturated Fat", "amount": number, "unit": "g", "percentDailyValue": number},
     {"name": "Fiber", "amount": number, "unit": "g", "percentDailyValue": number},
     {"name": "Sugar", "amount": number, "unit": "g", "percentDailyValue": number},
-    {"name": "Sodium", "amount": number, "unit": "mg", "percentDailyValue": number}
+    {"name": "Sodium", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Caffeine", "amount": number, "unit": "mg"},
+    {"name": "Alcohol", "amount": number, "unit": "g"}
   ],
   "micronutrients": [
     {"name": "Vitamin A", "amount": number, "unit": "mcg", "percentDailyValue": number},
@@ -97,9 +104,12 @@ async function analyzeImageWithGPT(base64Image: string, userProfile: any = {}): 
     {"name": "Selenium", "amount": number, "unit": "mcg", "percentDailyValue": number},
     {"name": "Iodine", "amount": number, "unit": "mcg", "percentDailyValue": number},
     {"name": "Chromium", "amount": number, "unit": "mcg", "percentDailyValue": number},
-    {"name": "Molybdenum", "amount": number, "unit": "mcg", "percentDailyValue": number}
+    {"name": "Molybdenum", "amount": number, "unit": "mcg", "percentDailyValue": number},
+    {"name": "Omega-3 (EPA+DHA)", "amount": number, "unit": "mg"},
+    {"name": "Tryptophan", "amount": number, "unit": "mg"},
+    {"name": "Choline", "amount": number, "unit": "mg", "percentDailyValue": number}
   ],
-  "foods": ["list", "of", "foods"],
+  "foods": ["list", "of", "identified items"],
   "ingredients": ["main", "ingredients"],
   "benefits": ["health benefits"],
   "concerns": ["nutritional concerns"],
@@ -107,8 +117,16 @@ async function analyzeImageWithGPT(base64Image: string, userProfile: any = {}): 
   "healthRating": number
 }
 
+IMPORTANT:
+- For coffee/tea: estimate caffeine content (typical cup = 95mg caffeine)
+- For alcohol: estimate grams of alcohol (one beer ~14g, one glass wine ~14g, one shot ~14g)
+- For supplements: read the label if visible and extract exact amounts
+- Caffeine and Alcohol amounts should be 0 if not present
+- Omega-3, Tryptophan, Choline: estimate if food sources are present, 0 if not
+- Choline DV: 550mg
+
 Daily Values for calculations:
-Protein: 50g, Carbs: 300g, Fat: 65g, Saturated Fat: 20g, Fiber: 25g, Sodium: 2300mg, Vitamin A: 900mcg, Vitamin C: 90mg, Vitamin D: 20mcg, Calcium: 1000mg, Iron: 18mg, Potassium: 4700mg, Magnesium: 400mg, Phosphorus: 1250mg, Zinc: 11mg, B1: 1.2mg, B2: 1.3mg, B3: 16mg, B6: 1.7mg, B12: 2.4mcg, Folate: 400mcg, Vitamin E: 15mg, Vitamin K: 120mcg
+Protein: 50g, Carbs: 300g, Fat: 65g, Saturated Fat: 20g, Fiber: 25g, Sodium: 2300mg, Vitamin A: 900mcg, Vitamin C: 90mg, Vitamin D: 20mcg, Calcium: 1000mg, Iron: 18mg, Potassium: 4700mg, Magnesium: 400mg, Phosphorus: 1250mg, Zinc: 11mg, B1: 1.2mg, B2: 1.3mg, B3: 16mg, B6: 1.7mg, B12: 2.4mcg, Folate: 400mcg, Vitamin E: 15mg, Vitamin K: 120mcg, Choline: 550mg
 
 Return ONLY valid JSON.`
               },
@@ -655,6 +673,7 @@ export async function POST(request: NextRequest) {
       micronutrients: analysis?.micronutrients,
       mealTime: mealTimeNow,
       ingredients: analysis?.ingredients,
+      consumptionType: analysis?.consumptionType,
     });
 
     const mealRecord = {

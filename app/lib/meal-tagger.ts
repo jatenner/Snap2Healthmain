@@ -10,6 +10,7 @@ export interface MealTagInput {
   micronutrients?: Array<{ name: string; amount: number; unit?: string }>;
   mealTime: Date;
   ingredients?: string[];
+  consumptionType?: string; // 'meal' | 'beverage' | 'supplement' | 'snack'
 }
 
 export function generateMealTags(meal: MealTagInput): string[] {
@@ -83,6 +84,47 @@ export function generateMealTags(meal: MealTagInput): string[] {
   // Micronutrient-rich
   const microCount = countSignificantMicros(meal.micronutrients);
   if (microCount >= 5) tags.push('nutrient_dense');
+
+  // Consumption type tags
+  if (meal.consumptionType === 'beverage') tags.push('beverage');
+  if (meal.consumptionType === 'supplement') tags.push('supplement');
+
+  // Caffeine tracking (from macronutrients where we store caffeine)
+  let caffeine = 0;
+  if (Array.isArray(meal.macronutrients)) {
+    for (const m of meal.macronutrients) {
+      if ((m.name || '').toLowerCase().includes('caffeine')) caffeine = m.amount || 0;
+    }
+  }
+  if (caffeine > 0) tags.push('contains_caffeine');
+  if (caffeine >= 150) tags.push('high_caffeine');
+  if (caffeine > 0 && hour >= 14) tags.push('afternoon_caffeine');
+  if (caffeine > 0 && hour >= 18) tags.push('evening_caffeine');
+
+  // Alcohol tracking
+  let alcohol = 0;
+  if (Array.isArray(meal.macronutrients)) {
+    for (const m of meal.macronutrients) {
+      if ((m.name || '').toLowerCase().includes('alcohol')) alcohol = m.amount || 0;
+    }
+  }
+  if (alcohol > 0) tags.push('contains_alcohol');
+  if (alcohol >= 28) tags.push('heavy_alcohol'); // 2+ standard drinks
+  if (alcohol > 0 && hour >= 20) tags.push('late_alcohol');
+
+  // Sleep-disruptive combination: late caffeine OR late alcohol OR late heavy meal
+  if ((caffeine > 0 && hour >= 16) || (alcohol > 0 && hour >= 20)) {
+    tags.push('sleep_disruptive');
+  }
+
+  // Tryptophan-rich (sleep supportive amino acid)
+  if (Array.isArray(meal.micronutrients)) {
+    for (const m of meal.micronutrients) {
+      if ((m.name || '').toLowerCase().includes('tryptophan') && (m.amount || 0) > 100) {
+        tags.push('high_tryptophan');
+      }
+    }
+  }
 
   return tags;
 }
