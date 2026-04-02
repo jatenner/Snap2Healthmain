@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { getAllPersonalizedTargets, UserProfile } from './personalized-nutrition-calculator';
 
 function getSupabaseAdmin() {
   return createClient(
@@ -72,7 +73,7 @@ function normalizeMicroName(name: string): string | null {
 // COMPUTE DAILY NUTRITION SUMMARY
 // ============================================================================
 
-export async function computeDailyNutritionSummary(userId: string, date: string) {
+export async function computeDailyNutritionSummary(userId: string, date: string, profile?: UserProfile | null) {
   const supabase = getSupabaseAdmin();
 
   // Get all meals for this user on this date
@@ -187,8 +188,11 @@ export async function computeDailyNutritionSummary(userId: string, date: string)
 
   summary.tag_counts = tagCounts;
 
-  // Calculate % DV for key nutrients
-  const dv = (nutrient: string, total: number) => Math.round((total / (DAILY_VALUES[nutrient] || 1)) * 100);
+  // Calculate % DV using personalized targets when available, falling back to FDA defaults
+  const personalizedTargets = profile ? getAllPersonalizedTargets(profile) : null;
+  const getTarget = (nutrient: string) => personalizedTargets?.[nutrient] || DAILY_VALUES[nutrient] || 1;
+  const dv = (nutrient: string, total: number) => Math.round((total / getTarget(nutrient)) * 100);
+
   summary.pct_dv_protein = dv('protein', summary.total_protein);
   summary.pct_dv_fiber = dv('fiber', summary.total_fiber);
   summary.pct_dv_vitamin_d = dv('vitamin_d', summary.total_vitamin_d);
@@ -199,6 +203,11 @@ export async function computeDailyNutritionSummary(userId: string, date: string)
   summary.pct_dv_magnesium = dv('magnesium', summary.total_magnesium);
   summary.pct_dv_potassium = dv('potassium', summary.total_potassium);
   summary.pct_dv_zinc = dv('zinc', summary.total_zinc);
+
+  // Store personalized targets for reference
+  if (personalizedTargets) {
+    summary.personalized_targets = personalizedTargets;
+  }
 
   // Nutrient adequacy score: % of key nutrients meeting >= 80% DV
   const keyNutrientPcts = [
@@ -451,7 +460,7 @@ export async function computeDailyBiometricSummary(userId: string, date: string)
 // COMPUTE ALL SUMMARIES FOR A DATE RANGE
 // ============================================================================
 
-export async function computeAllSummaries(userId: string, startDate: string, endDate: string) {
+export async function computeAllSummaries(userId: string, startDate: string, endDate: string, profile?: UserProfile | null) {
   const results = { nutrition: 0, biometric: 0, errors: 0 };
 
   // Generate date range
@@ -466,7 +475,7 @@ export async function computeAllSummaries(userId: string, startDate: string, end
   // Process dates sequentially (rolling averages depend on prior days)
   for (const date of dates) {
     try {
-      const nutResult = await computeDailyNutritionSummary(userId, date);
+      const nutResult = await computeDailyNutritionSummary(userId, date, profile);
       if (nutResult) results.nutrition++;
     } catch (e) {
       console.error(`Nutrition summary error for ${date}:`, e);
