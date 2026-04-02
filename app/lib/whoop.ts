@@ -187,6 +187,59 @@ export async function fetchWhoopProfile(accessToken: string) {
   return whoopFetch(accessToken, '/user/profile/basic');
 }
 
+// Fetch WHOOP body measurements (height, weight, max HR)
+export async function fetchWhoopBodyMeasurements(accessToken: string) {
+  return whoopFetch(accessToken, '/user/body_measurement');
+}
+
+// Auto-fill Snap2Health profile from WHOOP body measurements
+export async function syncWhoopProfileToSnap2Health(userId: string, accessToken: string) {
+  const supabase = getSupabaseAdmin();
+
+  try {
+    const body = await fetchWhoopBodyMeasurements(accessToken);
+    if (!body) return;
+
+    const updates: Record<string, any> = {};
+
+    // WHOOP returns height in meters, we store in inches
+    if (body.height_meter) {
+      updates.height = String(Math.round(body.height_meter * 39.3701 * 10) / 10);
+      updates.height_unit = 'in';
+    }
+    // WHOOP returns weight in kg, we store as number with unit
+    if (body.weight_kilogram) {
+      updates.weight = Math.round(body.weight_kilogram * 2.20462 * 10) / 10;
+      updates.weight_unit = 'lbs';
+    }
+
+    if (Object.keys(updates).length > 0) {
+      // Only update empty fields — don't overwrite user's manual entries
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('height, weight')
+        .eq('id', userId)
+        .single();
+
+      const finalUpdates: Record<string, any> = { updated_at: new Date().toISOString() };
+      if (!profile?.height && updates.height) {
+        finalUpdates.height = updates.height;
+        finalUpdates.height_unit = updates.height_unit;
+      }
+      if (!profile?.weight && updates.weight) {
+        finalUpdates.weight = updates.weight;
+        finalUpdates.weight_unit = updates.weight_unit;
+      }
+
+      if (Object.keys(finalUpdates).length > 1) {
+        await supabase.from('profiles').update(finalUpdates).eq('id', userId);
+      }
+    }
+  } catch (e) {
+    console.warn('Could not sync WHOOP body measurements to profile:', e);
+  }
+}
+
 // Save WHOOP connection to database
 export async function saveWhoopConnection(
   userId: string,

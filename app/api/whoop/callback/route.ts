@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '../../../lib/supabase/server';
-import { exchangeCodeForTokens, saveWhoopConnection, fetchWhoopProfile } from '../../../lib/whoop';
+import { exchangeCodeForTokens, saveWhoopConnection, fetchWhoopProfile, syncWhoopProfileToSnap2Health } from '../../../lib/whoop';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,6 +56,9 @@ export async function GET(request: NextRequest) {
 
     // Save connection under the authenticated user
     await saveWhoopConnection(user.id, tokens, whoopUserId);
+
+    // Auto-fill profile height/weight from WHOOP if empty
+    await syncWhoopProfileToSnap2Health(user.id, tokens.access_token);
 
     return NextResponse.redirect(new URL('/profile?whoop=connected', request.url));
   } catch (err: any) {
