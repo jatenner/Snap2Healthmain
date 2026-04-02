@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '../../lib/supabase/server';
-import { createExperiment, getExperiments, completeExperiment } from '../../lib/experiment-engine';
+import { createExperiment, getExperiments, completeExperiment, autoPopulateCompliance } from '../../lib/experiment-engine';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +12,17 @@ export async function GET() {
     if (error || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const experiments = await getExperiments(user.id);
-    return NextResponse.json({ experiments });
+
+    // Auto-populate compliance for active experiments
+    for (const exp of experiments.filter(e => e.status === 'active')) {
+      await autoPopulateCompliance(exp.id, user.id).catch(e =>
+        console.error('Auto-compliance error:', e)
+      );
+    }
+
+    // Re-fetch after compliance update
+    const updated = await getExperiments(user.id);
+    return NextResponse.json({ experiments: updated });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

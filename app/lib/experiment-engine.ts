@@ -164,6 +164,103 @@ export async function getExperiments(userId: string): Promise<ExperimentWithLogs
   return results;
 }
 
+// Auto-populate compliance for all days of an active experiment by checking nutrition data
+export async function autoPopulateCompliance(experimentId: string, userId: string) {
+  const supabase = getSupabaseAdmin();
+
+  const { data: exp } = await supabase
+    .from('health_experiments')
+    .select('*')
+    .eq('id', experimentId)
+    .eq('user_id', userId)
+    .single();
+
+  if (!exp || exp.status !== 'active') return;
+
+  // Compliance rules based on target behavior keywords
+  const behavior = exp.target_behavior.toLowerCase();
+  const today = new Date().toISOString().split('T')[0]!;
+
+  // Get all dates in the experiment range up to today
+  const dates: string[] = [];
+  const current = new Date(exp.start_date);
+  const end = new Date(Math.min(new Date(exp.end_date).getTime(), Date.now()));
+  while (current <= end) {
+    dates.push(current.toISOString().split('T')[0]!);
+    current.setDate(current.getDate() + 1);
+  }
+
+  for (const date of dates) {
+    // Check if already logged
+    const { data: existing } = await supabase
+      .from('experiment_daily_logs')
+      .select('id')
+      .eq('experiment_id', experimentId)
+      .eq('log_date', date)
+      .single();
+
+    if (existing) continue;
+
+    // Get nutrition summary for this date
+    const { data: nutSummary } = await supabase
+      .from('daily_nutrition_summaries')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('summary_date', date)
+      .single();
+
+    // Get biometric summary for measurement value
+    const { data: bioSummary } = await supabase
+      .from('daily_biometric_summaries')
+      .select(exp.measurement_field)
+      .eq('user_id', userId)
+      .eq('summary_date', date)
+      .single();
+
+    if (!nutSummary) continue; // No meal data, can't determine compliance
+
+    // Determine compliance based on target behavior
+    let compliant: boolean | null = null;
+
+    if (behavior.includes('carbs') && behavior.includes('after') && behavior.includes('8')) {
+      // "Reduce/keep carbs under X after 8pm"
+      const threshold = extractNumber(behavior) || 30;
+      compliant = (nutSummary.carbs_after_8pm || 0) <= threshold;
+    } else if (behavior.includes('caffeine') && behavior.includes('after') && behavior.includes('2')) {
+      // "No caffeine after 2pm"
+      compliant = (nutSummary.caffeine_after_2pm || 0) === 0;
+    } else if (behavior.includes('protein') && (behavior.includes('120') || behavior.includes('100'))) {
+      // "Hit 120g+ protein daily"
+      const threshold = extractNumber(behavior) || 120;
+      compliant = (nutSummary.total_protein || 0) >= threshold;
+    } else if (behavior.includes('alcohol') && behavior.includes('zero')) {
+      // "Zero alcohol"
+      compliant = (nutSummary.total_alcohol || 0) === 0;
+    } else if (behavior.includes('no') && behavior.includes('alcohol')) {
+      compliant = (nutSummary.total_alcohol || 0) === 0;
+    } else if (behavior.includes('fiber') && behavior.includes('25')) {
+      compliant = (nutSummary.total_fiber || 0) >= 25;
+    } else if (behavior.includes('late') && behavior.includes('meal')) {
+      compliant = !nutSummary.has_late_night_meal;
+    }
+
+    const measurementValue = bioSummary ? (bioSummary as any)[exp.measurement_field] : null;
+
+    await supabase.from('experiment_daily_logs').upsert({
+      experiment_id: experimentId,
+      user_id: userId,
+      log_date: date,
+      compliant,
+      measurement_value: measurementValue,
+    }, { onConflict: 'experiment_id,log_date' });
+  }
+}
+
+function extractNumber(text: string): number | null {
+  const match = text.match(/(\d+)/);
+  return match ? parseInt(match[1]!) : null;
+}
+
 export async function completeExperiment(experimentId: string, userId: string) {
   const supabase = getSupabaseAdmin();
 

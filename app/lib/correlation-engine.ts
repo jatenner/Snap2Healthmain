@@ -36,12 +36,16 @@ export interface CorrelationResult {
   lowGroup: { avg: number; n: number; avgStrain: number };
   difference: number;
   percentDifference: number;
+  effectDirection: 'positive' | 'negative' | 'neutral'; // explicit: does the nutrition factor help or hurt?
   direction: 'better' | 'worse' | 'neutral';
   consistency: number;
   confounderControlled: boolean;
   confounderWarning?: string;
   confidence: 'low' | 'medium' | 'high';
   confidenceScore: number;
+  sensitivityScore: number;     // 0-100: how strongly this user reacts to this variable
+  goalRelevance: number;        // 0-100: how relevant this finding is to the user's goal
+  dataQualityScore: number;     // 0-100: how complete the underlying data is
   displaySentence: string;
 }
 
@@ -49,6 +53,8 @@ export interface CorrelationReport {
   userId: string;
   generatedAt: string;
   totalPairedDays: number;
+  dataQuality: { fullDays: number; partialDays: number; avgMealsPerDay: number };
+  sensitivities: Array<{ variable: string; sensitivity: 'high' | 'medium' | 'low'; score: number }>;
   insights: CorrelationResult[];
   topInsight: CorrelationResult | null;
 }
@@ -199,7 +205,30 @@ const COMPARISON_PAIRS: ComparisonPair[] = [
 // Core Computation
 // ============================================================================
 
-export async function computeCorrelations(userId: string): Promise<CorrelationReport> {
+// Goal relevance weights: which biometric outcomes matter most per goal
+const GOAL_WEIGHTS: Record<string, Record<string, number>> = {
+  athletic_performance: { recovery_score: 1.5, hrv: 1.3, sleep_score: 1.2, resting_heart_rate: 1.1, sleep_efficiency: 1.0, sleep_duration_minutes: 1.0 },
+  weight_loss:          { sleep_score: 1.2, recovery_score: 1.1, hrv: 1.0, resting_heart_rate: 1.0, sleep_efficiency: 1.0, sleep_duration_minutes: 1.0 },
+  muscle_building:      { recovery_score: 1.5, sleep_score: 1.3, hrv: 1.2, resting_heart_rate: 1.0, sleep_efficiency: 1.0, sleep_duration_minutes: 1.0 },
+  sleep:                { sleep_score: 1.5, sleep_efficiency: 1.5, sleep_duration_minutes: 1.3, hrv: 1.2, recovery_score: 1.1, resting_heart_rate: 1.0 },
+  longevity:            { hrv: 1.5, resting_heart_rate: 1.3, recovery_score: 1.2, sleep_score: 1.2, sleep_efficiency: 1.0, sleep_duration_minutes: 1.0 },
+  heart_health:         { resting_heart_rate: 1.5, hrv: 1.5, recovery_score: 1.2, sleep_score: 1.0, sleep_efficiency: 1.0, sleep_duration_minutes: 1.0 },
+  general_wellness:     { sleep_score: 1.1, recovery_score: 1.1, hrv: 1.1, resting_heart_rate: 1.0, sleep_efficiency: 1.0, sleep_duration_minutes: 1.0 },
+};
+
+function normalizeGoalKey(goal?: string): string {
+  if (!goal) return 'general_wellness';
+  const g = goal.toLowerCase();
+  if (g.includes('athletic') || g.includes('performance') || g.includes('sport')) return 'athletic_performance';
+  if (g.includes('weight') || g.includes('lose') || g.includes('fat')) return 'weight_loss';
+  if (g.includes('muscle') || g.includes('strength')) return 'muscle_building';
+  if (g.includes('sleep')) return 'sleep';
+  if (g.includes('longev') || g.includes('aging')) return 'longevity';
+  if (g.includes('heart') || g.includes('cardio')) return 'heart_health';
+  return 'general_wellness';
+}
+
+export async function computeCorrelations(userId: string, userGoal?: string): Promise<CorrelationReport> {
   const supabase = getSupabaseAdmin();
 
   // Fetch all daily summaries
@@ -219,6 +248,8 @@ export async function computeCorrelations(userId: string): Promise<CorrelationRe
       userId,
       generatedAt: new Date().toISOString(),
       totalPairedDays: 0,
+      dataQuality: { fullDays: 0, partialDays: 0, avgMealsPerDay: 0 },
+      sensitivities: [],
       insights: [],
       topInsight: null,
     };
@@ -250,32 +281,82 @@ export async function computeCorrelations(userId: string): Promise<CorrelationRe
     return pairs;
   }
 
+  // Compute data quality
+  const fullDays = nutritionDays.filter((d: any) => (d.meal_count || 0) >= 3).length;
+  const partialDays = nutritionDays.filter((d: any) => (d.meal_count || 0) > 0 && (d.meal_count || 0) < 3).length;
+  const totalMeals = nutritionDays.reduce((s: number, d: any) => s + (d.meal_count || 0), 0);
+  const avgMealsPerDay = nutritionDays.length > 0 ? round(totalMeals / nutritionDays.length, 1) : 0;
+  const dataQualityBase = nutritionDays.length > 0 ? round((fullDays / nutritionDays.length) * 100, 0) : 0;
+
+  // Goal weights for ranking
+  const goalKey = normalizeGoalKey(userGoal);
+  const goalWeights = GOAL_WEIGHTS[goalKey] || GOAL_WEIGHTS.general_wellness!;
+
   // Run all comparisons
   const insights: CorrelationResult[] = [];
 
   for (const pair of COMPARISON_PAIRS) {
     const pairedData = getPairedData(pair.lagDays);
-    if (pairedData.length < 10) continue; // Need minimum data
+    if (pairedData.length < 10) continue;
 
     const result = computeSingleCorrelation(pair, pairedData);
     if (result) {
+      // Add goal relevance
+      const outcomeField = pair.biometricField;
+      result.goalRelevance = round(((goalWeights as any)[outcomeField] || 1.0) * 50, 0);
+
+      // Add data quality score
+      result.dataQualityScore = dataQualityBase;
+
+      // Add sensitivity score: how strongly this user reacts (effect size × consistency × 100)
+      result.sensitivityScore = round(Math.min(100, Math.abs(result.percentDifference) * result.consistency * 10), 0);
+
+      // Add explicit effect direction
+      const isNutrientBad = pair.nutritionField.includes('inflammatory') ||
+        pair.nutritionField.includes('sugar') || pair.nutritionField.includes('sodium') ||
+        pair.nutritionField.includes('caffeine') || pair.nutritionField.includes('alcohol') ||
+        pair.nutritionField === 'has_late_night_meal';
+
+      if (Math.abs(result.percentDifference) < 3) {
+        result.effectDirection = 'neutral';
+      } else if (isNutrientBad) {
+        result.effectDirection = result.difference > 0 === pair.higherIsBetter ? 'negative' : 'positive';
+      } else {
+        result.effectDirection = result.difference > 0 === pair.higherIsBetter ? 'positive' : 'negative';
+      }
+
       insights.push(result);
     }
   }
 
-  // Sort by confidence score × absolute effect size
+  // Sort by (confidence × effect × goal relevance)
   insights.sort((a, b) => {
-    const scoreA = a.confidenceScore * Math.abs(a.percentDifference);
-    const scoreB = b.confidenceScore * Math.abs(b.percentDifference);
+    const scoreA = a.confidenceScore * Math.abs(a.percentDifference) * (a.goalRelevance / 50);
+    const scoreB = b.confidenceScore * Math.abs(b.percentDifference) * (b.goalRelevance / 50);
     return scoreB - scoreA;
   });
 
-  const totalPairedDays = getPairedData(0).length + getPairedData(1).length;
+  // Build sensitivity summary: group by nutrition variable, pick strongest
+  const sensitivityMap = new Map<string, { score: number; confidence: string }>();
+  for (const insight of insights) {
+    const variable = insight.pairId.split('_').slice(0, -1).join('_') || insight.pairId;
+    const existing = sensitivityMap.get(variable);
+    if (!existing || insight.sensitivityScore > existing.score) {
+      sensitivityMap.set(variable, { score: insight.sensitivityScore, confidence: insight.confidence });
+    }
+  }
+  const sensitivities = Array.from(sensitivityMap.entries()).map(([variable, data]) => ({
+    variable,
+    sensitivity: (data.score >= 60 ? 'high' : data.score >= 30 ? 'medium' : 'low') as 'high' | 'medium' | 'low',
+    score: data.score,
+  })).sort((a, b) => b.score - a.score);
 
   return {
     userId,
     generatedAt: new Date().toISOString(),
     totalPairedDays: Math.max(getPairedData(0).length, getPairedData(1).length),
+    dataQuality: { fullDays, partialDays, avgMealsPerDay },
+    sensitivities,
     insights,
     topInsight: insights.length > 0 ? insights[0]! : null,
   };
@@ -403,12 +484,16 @@ function computeSingleCorrelation(
     lowGroup: { avg: round(lowAvg, 1), n: lowGroup.length, avgStrain: round(lowStrain, 1) },
     difference: round(difference, 1),
     percentDifference: round(percentDifference, 1),
+    effectDirection: 'neutral' as 'positive' | 'negative' | 'neutral', // overwritten in main function
     direction,
     consistency: round(consistency, 2),
     confounderControlled,
     confounderWarning,
     confidence,
     confidenceScore,
+    sensitivityScore: 0,   // overwritten in main function
+    goalRelevance: 50,     // overwritten in main function
+    dataQualityScore: 0,   // overwritten in main function
     displaySentence,
   };
 }

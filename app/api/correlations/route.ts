@@ -48,10 +48,12 @@ export async function POST() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const report = await computeCorrelations(user.id);
+    // Fetch user goal for weighting
+    const admin = getSupabaseAdmin();
+    const { data: profile } = await admin.from('profiles').select('goal').eq('id', user.id).single();
+    const report = await computeCorrelations(user.id, profile?.goal);
 
     // Cache the report
-    const admin = getSupabaseAdmin();
     await admin.from('correlation_reports').upsert({
       user_id: user.id,
       report_data: report,

@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import OpenAI from 'openai';
 import { calculatePersonalizedDV } from '../../lib/profile-utils';
 import { generateMealTags } from '../../lib/meal-tagger';
+import { computeDailyNutritionSummary } from '../../lib/daily-summaries';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -778,12 +779,18 @@ export async function POST(request: NextRequest) {
     // Generate AI Health Insights immediately after meal analysis (background process)
     if (dbSaveSuccessful && actualMealId) {
       console.log('[analyze-meal] Starting immediate insights generation...');
-      
+
       // Don't await this - let it run in background so user gets immediate response
       generateInsightsInBackground(actualMealId, userId, session?.user?.user_metadata || {}, analysis)
         .catch(error => {
           console.error('[analyze-meal] Background insights generation failed:', error);
         });
+
+      // Recompute daily nutrition summary in background
+      const mealDate = mealTimeNow.toISOString().split('T')[0]!;
+      computeDailyNutritionSummary(userId, mealDate).catch(e =>
+        console.error('[analyze-meal] Background nutrition summary failed:', e)
+      );
     }
 
     // Return successful response
