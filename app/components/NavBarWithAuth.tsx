@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from './client/ClientAuthProvider';
-import { User, LogOut, Home, Upload, BarChart3, Menu, X, TrendingUp } from 'lucide-react';
+import { User, LogOut, Home, Upload, BarChart3, Menu, X, TrendingUp, Beaker } from 'lucide-react';
 
 export function NavBarWithAuth() {
   const { user, isAuthenticated, signOut, isLoading } = useAuth();
@@ -65,6 +65,10 @@ export function NavBarWithAuth() {
             <Link href="/trends" className={navLinkClass('/trends')}>
               <TrendingUp className="w-4 h-4" />
               <span>Trends</span>
+            </Link>
+            <Link href="/experiments" className={navLinkClass('/experiments')}>
+              <Beaker className="w-4 h-4" />
+              <span>Experiments</span>
             </Link>
             <Link href="/meal-history" className={navLinkClass('/meal-history')}>
               <BarChart3 className="w-4 h-4" />
@@ -143,6 +147,10 @@ export function NavBarWithAuth() {
               <Link href="/trends" className={mobileNavLinkClass('/trends')} onClick={closeMobileMenu}>
                 <TrendingUp className="w-5 h-5" />
                 <span>Trends</span>
+              </Link>
+              <Link href="/experiments" className={mobileNavLinkClass('/experiments')} onClick={closeMobileMenu}>
+                <Beaker className="w-5 h-5" />
+                <span>Experiments</span>
               </Link>
               <Link href="/meal-history" className={mobileNavLinkClass('/meal-history')} onClick={closeMobileMenu}>
                 <BarChart3 className="w-5 h-5" />
