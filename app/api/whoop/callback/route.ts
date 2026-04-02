@@ -5,21 +5,38 @@ import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
+// Get the public-facing base URL (Railway runs behind a proxy)
+function getBaseUrl(request: NextRequest): string {
+  const forwardedHost = request.headers.get('x-forwarded-host');
+  const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
+  if (forwardedHost) {
+    return `${forwardedProto}://${forwardedHost}`;
+  }
+  // Fallback: derive from WHOOP_REDIRECT_URI
+  const redirectUri = process.env.WHOOP_REDIRECT_URI;
+  if (redirectUri) {
+    const url = new URL(redirectUri);
+    return url.origin;
+  }
+  return new URL(request.url).origin;
+}
+
 export async function GET(request: NextRequest) {
+  const baseUrl = getBaseUrl(request);
+
   try {
     const { searchParams } = new URL(request.url);
     const code = searchParams.get('code');
     const state = searchParams.get('state');
     const errorParam = searchParams.get('error');
 
-    // User denied access on WHOOP
     if (errorParam) {
       console.error('WHOOP OAuth error:', errorParam);
-      return NextResponse.redirect(new URL('/profile?whoop=denied', request.url));
+      return NextResponse.redirect(`${baseUrl}/profile?whoop=denied`);
     }
 
     if (!code || !state) {
-      return NextResponse.redirect(new URL('/profile?whoop=error', request.url));
+      return NextResponse.redirect(`${baseUrl}/profile?whoop=error`);
     }
 
     // Verify state from cookie (CSRF protection)
@@ -27,19 +44,19 @@ export async function GET(request: NextRequest) {
     const oauthCookie = cookieStore.get('whoop_oauth_state');
     if (!oauthCookie?.value) {
       console.error('WHOOP OAuth: missing state cookie');
-      return NextResponse.redirect(new URL('/profile?whoop=error', request.url));
+      return NextResponse.redirect(`${baseUrl}/profile?whoop=error`);
     }
 
     let storedState: { state: string; userId: string };
     try {
       storedState = JSON.parse(oauthCookie.value);
     } catch {
-      return NextResponse.redirect(new URL('/profile?whoop=error', request.url));
+      return NextResponse.redirect(`${baseUrl}/profile?whoop=error`);
     }
 
     if (storedState.state !== state) {
       console.error('WHOOP OAuth state mismatch');
-      return NextResponse.redirect(new URL('/profile?whoop=error', request.url));
+      return NextResponse.redirect(`${baseUrl}/profile?whoop=error`);
     }
 
     // Also verify the user is still logged in
@@ -47,7 +64,7 @@ export async function GET(request: NextRequest) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user || user.id !== storedState.userId) {
-      return NextResponse.redirect(new URL('/login?redirectTo=/profile', request.url));
+      return NextResponse.redirect(`${baseUrl}/login?redirectTo=/profile`);
     }
 
     // Clean up the state cookie
@@ -71,9 +88,9 @@ export async function GET(request: NextRequest) {
     // Auto-fill profile height/weight from WHOOP if empty
     await syncWhoopProfileToSnap2Health(user.id, tokens.access_token);
 
-    return NextResponse.redirect(new URL('/profile?whoop=connected', request.url));
+    return NextResponse.redirect(`${baseUrl}/profile?whoop=connected`);
   } catch (err: any) {
     console.error('WHOOP callback error:', err.message);
-    return NextResponse.redirect(new URL('/profile?whoop=error', request.url));
+    return NextResponse.redirect(`${baseUrl}/profile?whoop=error`);
   }
 }
