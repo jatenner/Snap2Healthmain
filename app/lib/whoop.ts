@@ -3,7 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 // WHOOP OAuth & API configuration
 const WHOOP_AUTH_URL = 'https://api.prod.whoop.com/oauth/oauth2/auth';
 const WHOOP_TOKEN_URL = 'https://api.prod.whoop.com/oauth/oauth2/token';
-const WHOOP_API_BASE = 'https://api.prod.whoop.com/developer/v1';
+const WHOOP_API_BASE_V1 = 'https://api.prod.whoop.com/developer/v1';
+const WHOOP_API_BASE_V2 = 'https://api.prod.whoop.com/developer/v2';
 
 const WHOOP_SCOPES = [
   'read:recovery',
@@ -145,8 +146,9 @@ export async function getValidAccessToken(userId: string): Promise<{ accessToken
 }
 
 // Generic WHOOP API fetch with auth
-async function whoopFetch(accessToken: string, path: string, params?: Record<string, string>) {
-  const url = new URL(`${WHOOP_API_BASE}${path}`);
+async function whoopFetch(accessToken: string, path: string, params?: Record<string, string>, apiVersion: 'v1' | 'v2' = 'v2') {
+  const base = apiVersion === 'v1' ? WHOOP_API_BASE_V1 : WHOOP_API_BASE_V2;
+  const url = new URL(`${base}${path}`);
   if (params) {
     Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
   }
@@ -164,7 +166,7 @@ async function whoopFetch(accessToken: string, path: string, params?: Record<str
 }
 
 // Fetch paginated WHOOP data (handles next_token pagination)
-async function whoopFetchAll(accessToken: string, path: string, limit = 25): Promise<any[]> {
+async function whoopFetchAll(accessToken: string, path: string, limit = 25, apiVersion: 'v1' | 'v2' = 'v2'): Promise<any[]> {
   const allRecords: any[] = [];
   let nextToken: string | undefined;
 
@@ -172,7 +174,7 @@ async function whoopFetchAll(accessToken: string, path: string, limit = 25): Pro
     const params: Record<string, string> = { limit: String(limit) };
     if (nextToken) params.nextToken = nextToken;
 
-    const data = await whoopFetch(accessToken, path, params);
+    const data = await whoopFetch(accessToken, path, params, apiVersion);
     if (data.records && Array.isArray(data.records)) {
       allRecords.push(...data.records);
     }
@@ -184,12 +186,17 @@ async function whoopFetchAll(accessToken: string, path: string, limit = 25): Pro
 
 // Fetch WHOOP user profile
 export async function fetchWhoopProfile(accessToken: string) {
-  return whoopFetch(accessToken, '/user/profile/basic');
+  return whoopFetch(accessToken, '/user/profile/basic', undefined, 'v2');
 }
 
 // Fetch WHOOP body measurements (height, weight, max HR)
 export async function fetchWhoopBodyMeasurements(accessToken: string) {
-  return whoopFetch(accessToken, '/user/body_measurement');
+  // Try v2 first, fall back to v1 (body_measurement availability varies)
+  try {
+    return await whoopFetch(accessToken, '/user/body_measurement', undefined, 'v2');
+  } catch {
+    return await whoopFetch(accessToken, '/user/body_measurement', undefined, 'v1');
+  }
 }
 
 // Auto-fill Snap2Health profile from WHOOP body measurements
@@ -316,18 +323,22 @@ export async function syncWhoopData(userId: string) {
 
   const results = { sleep: 0, recovery: 0, cycles: 0, workouts: 0 };
 
-  // Sync all data types in parallel
-  const [sleepRecords, cycleRecords, workoutRecords] = await Promise.all([
-    whoopFetchAll(accessToken, '/activity/sleep').catch((e) => {
+  // Sync all data types in parallel (sleep, recovery, workouts use v2; cycles work on both)
+  const [sleepRecords, cycleRecords, workoutRecords, recoveryRecords] = await Promise.all([
+    whoopFetchAll(accessToken, '/activity/sleep', 25, 'v2').catch((e) => {
       console.error('WHOOP sleep sync error:', e.message);
       return [];
     }),
-    whoopFetchAll(accessToken, '/cycle').catch((e) => {
+    whoopFetchAll(accessToken, '/cycle', 25, 'v2').catch((e) => {
       console.error('WHOOP cycle sync error:', e.message);
       return [];
     }),
-    whoopFetchAll(accessToken, '/activity/workout').catch((e) => {
+    whoopFetchAll(accessToken, '/activity/workout', 25, 'v2').catch((e) => {
       console.error('WHOOP workout sync error:', e.message);
+      return [];
+    }),
+    whoopFetchAll(accessToken, '/recovery', 25, 'v2').catch((e) => {
+      console.error('WHOOP recovery sync error:', e.message);
       return [];
     }),
   ]);
@@ -375,7 +386,7 @@ export async function syncWhoopData(userId: string) {
     else results.sleep = sleepRows.length;
   }
 
-  // Process cycle records + recovery
+  // Process cycle records
   if (cycleRecords.length > 0) {
     const cycleRows = cycleRecords.map((c: any) => ({
       user_id: userId,
@@ -397,40 +408,30 @@ export async function syncWhoopData(userId: string) {
       .upsert(cycleRows, { onConflict: 'user_id,whoop_cycle_id' });
     if (error) console.error('Cycle upsert error:', error.message);
     else results.cycles = cycleRows.length;
+  }
 
-    // Fetch recovery for each cycle
-    const recoveryRows: any[] = [];
-    for (const c of cycleRecords) {
-      try {
-        const recovery = await whoopFetch(accessToken, `/cycle/${c.id}/recovery`);
-        if (recovery) {
-          recoveryRows.push({
-            user_id: userId,
-            whoop_cycle_id: String(recovery.cycle_id || c.id),
-            whoop_sleep_id: recovery.sleep_id ? String(recovery.sleep_id) : null,
-            score_state: recovery.score_state,
-            recovery_score: recovery.score?.recovery_score,
-            resting_heart_rate: recovery.score?.resting_heart_rate,
-            hrv_rmssd_milli: recovery.score?.hrv_rmssd_milli,
-            spo2_pct: recovery.score?.spo2_percentage,
-            skin_temp_celsius: recovery.score?.skin_temp_celsius,
-            user_calibrating: recovery.score?.user_calibrating,
-            raw_data: recovery,
-            updated_at: new Date().toISOString(),
-          });
-        }
-      } catch {
-        // Some cycles may not have recovery data
-      }
-    }
+  // Process recovery records (fetched in parallel via v2 /recovery endpoint)
+  if (recoveryRecords.length > 0) {
+    const recoveryRows = recoveryRecords.map((r: any) => ({
+      user_id: userId,
+      whoop_cycle_id: String(r.cycle_id),
+      whoop_sleep_id: r.sleep_id ? String(r.sleep_id) : null,
+      score_state: r.score_state,
+      recovery_score: r.score?.recovery_score,
+      resting_heart_rate: r.score?.resting_heart_rate,
+      hrv_rmssd_milli: r.score?.hrv_rmssd_milli,
+      spo2_pct: r.score?.spo2_percentage,
+      skin_temp_celsius: r.score?.skin_temp_celsius,
+      user_calibrating: r.score?.user_calibrating,
+      raw_data: r,
+      updated_at: new Date().toISOString(),
+    }));
 
-    if (recoveryRows.length > 0) {
-      const { error: recErr } = await supabase
-        .from('whoop_recovery')
-        .upsert(recoveryRows, { onConflict: 'user_id,whoop_cycle_id' });
-      if (recErr) console.error('Recovery upsert error:', recErr.message);
-      else results.recovery = recoveryRows.length;
-    }
+    const { error: recErr } = await supabase
+      .from('whoop_recovery')
+      .upsert(recoveryRows, { onConflict: 'user_id,whoop_cycle_id' });
+    if (recErr) console.error('Recovery upsert error:', recErr.message);
+    else results.recovery = recoveryRows.length;
   }
 
   // Process workout records
