@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from './client/ClientAuthProvider';
-import { User, LogOut, Home, Upload, BarChart3, Menu, X, TrendingUp, Beaker, Settings, ChevronDown } from 'lucide-react';
+import { User, LogOut, Home, Upload, BarChart3, Menu, X, TrendingUp, Beaker, Settings, ChevronDown, Heart, Camera, Clock } from 'lucide-react';
 
 export function NavBarWithAuth() {
   const { user, isAuthenticated, signOut, isLoading } = useAuth();
@@ -68,8 +68,12 @@ export function NavBarWithAuth() {
               <span>Home</span>
             </Link>
             <Link href="/upload" className={navLinkClass('/upload')}>
-              <Upload className="w-4 h-4" />
+              <Camera className="w-4 h-4" />
               <span>Upload</span>
+            </Link>
+            <Link href="/body" className={navLinkClass('/body')}>
+              <Heart className="w-4 h-4" />
+              <span>Body</span>
             </Link>
             <Link href="/trends" className={navLinkClass('/trends')}>
               <TrendingUp className="w-4 h-4" />
@@ -80,7 +84,7 @@ export function NavBarWithAuth() {
               <span>Insights</span>
             </Link>
             <Link href="/meal-history" className={navLinkClass('/meal-history')}>
-              <BarChart3 className="w-4 h-4" />
+              <Clock className="w-4 h-4" />
               <span>History</span>
             </Link>
           </nav>
@@ -156,8 +160,12 @@ export function NavBarWithAuth() {
                 <span>Home</span>
               </Link>
               <Link href="/upload" className={mobileNavLinkClass('/upload')} onClick={closeMobileMenu}>
-                <Upload className="w-5 h-5" />
+                <Camera className="w-5 h-5" />
                 <span>Upload</span>
+              </Link>
+              <Link href="/body" className={mobileNavLinkClass('/body')} onClick={closeMobileMenu}>
+                <Heart className="w-5 h-5" />
+                <span>Body</span>
               </Link>
               <Link href="/trends" className={mobileNavLinkClass('/trends')} onClick={closeMobileMenu}>
                 <TrendingUp className="w-5 h-5" />
@@ -168,7 +176,7 @@ export function NavBarWithAuth() {
                 <span>Insights</span>
               </Link>
               <Link href="/meal-history" className={mobileNavLinkClass('/meal-history')} onClick={closeMobileMenu}>
-                <BarChart3 className="w-5 h-5" />
+                <Clock className="w-5 h-5" />
                 <span>History</span>
               </Link>
 

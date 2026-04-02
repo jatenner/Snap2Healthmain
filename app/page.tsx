@@ -222,9 +222,9 @@ function AuthenticatedHome({ userId }: { userId: string }) {
           </div>
         )}
 
-        {/* ====== BODY STATUS (4 cards) ====== */}
+        {/* ====== BODY STATUS (4 cards → tap to go to /body) ====== */}
         {bio && (
-          <div className="grid grid-cols-4 gap-3">
+          <Link href="/body" className="grid grid-cols-4 gap-3">
             <div className={`rounded-xl p-3 border text-center ${qualityBg(bio.sleepScore)}`}>
               <Moon className="w-4 h-4 mx-auto mb-1 text-blue-400" />
               <div className={`text-lg font-bold ${qualityColor(bio.sleepScore)}`}>
@@ -256,7 +256,7 @@ function AuthenticatedHome({ userId }: { userId: string }) {
               </div>
               <div className="text-[10px] text-gray-400 uppercase">Strain</div>
             </div>
-          </div>
+          </Link>
         )}
 
         {/* ====== NUTRITION STATUS ====== */}
