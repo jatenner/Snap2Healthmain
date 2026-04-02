@@ -224,6 +224,18 @@ export async function GET() {
         hasImage: !!m.image_url,
       })),
 
+      // Data status — tells the UI what's missing
+      dataStatus: {
+        hasBiometrics: !!biometric,
+        hasNutritionToday: meals.length > 0,
+        hasCorrelations: (correlationReport?.insights?.length || 0) > 0,
+        pairedDays: correlationReport?.totalPairedDays || 0,
+        neededForInsights: 10,
+        biometricDays: correlationReport?.dataQuality?.fullDays != null
+          ? (correlationReport.dataQuality.fullDays + (correlationReport.dataQuality.partialDays || 0))
+          : null,
+      },
+
       // Active experiment
       experiment: experimentResult.data ? {
         id: experimentResult.data.id,

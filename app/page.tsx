@@ -40,6 +40,13 @@ interface TodayData {
     recommendedAction?: string;
   } | null;
   recommendation: string | null;
+  dataStatus: {
+    hasBiometrics: boolean;
+    hasNutritionToday: boolean;
+    hasCorrelations: boolean;
+    pairedDays: number;
+    neededForInsights: number;
+  };
   meals: Array<{ id: string; name: string; calories: number; time: string; tags: string[]; hasImage: boolean }>;
   experiment: { id: string; title: string; targetBehavior: string; durationDays: number; startDate: string; endDate: string } | null;
 }
@@ -150,16 +157,42 @@ function AuthenticatedHome({ userId }: { userId: string }) {
             </div>
           )}
         </div>
-      ) : bio ? (
-        <div className="bg-green-50 border border-green-200 rounded-2xl p-5">
-          <div className="flex items-center gap-2 mb-1">
-            <CheckCircle className="w-4 h-4 text-green-500" />
-            <span className="text-xs font-semibold text-green-700 uppercase">All Good</span>
-          </div>
-          <p className="text-green-900 font-medium">Your body is in good shape today.</p>
-          <p className="text-sm text-green-700 mt-1">Keep logging meals to build your personal pattern library.</p>
+      ) : (
+        /* Data status card — tell the user exactly what's needed */
+        <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+          <span className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide">Building Your Profile</span>
+
+          {data.dataStatus.pairedDays < data.dataStatus.neededForInsights ? (
+            <>
+              <p className="text-gray-900 font-medium mt-2">
+                {data.dataStatus.pairedDays === 0
+                  ? 'Start logging meals to unlock personal insights'
+                  : `${data.dataStatus.pairedDays} of ${data.dataStatus.neededForInsights} days of meal + WHOOP data collected`
+                }
+              </p>
+              <div className="w-full bg-gray-100 rounded-full h-2 mt-3">
+                <div className="bg-blue-500 h-2 rounded-full transition-all" style={{ width: `${Math.min(100, (data.dataStatus.pairedDays / data.dataStatus.neededForInsights) * 100)}%` }} />
+              </div>
+              <div className="mt-3 space-y-1.5 text-sm text-gray-600">
+                {!data.dataStatus.hasBiometrics && (
+                  <p>Connect WHOOP on your <Link href="/profile" className="text-blue-600 underline">Profile</Link> to track biometrics</p>
+                )}
+                {data.dataStatus.hasBiometrics && !data.dataStatus.hasNutritionToday && (
+                  <p>Log today&apos;s meals — your WHOOP data is ready, it just needs nutrition data to compare against</p>
+                )}
+                {data.dataStatus.hasBiometrics && data.dataStatus.pairedDays > 0 && data.dataStatus.pairedDays < data.dataStatus.neededForInsights && (
+                  <p>Keep logging meals daily — the system needs {data.dataStatus.neededForInsights - data.dataStatus.pairedDays} more days with both meal and WHOOP data to detect your patterns</p>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-green-700 font-medium mt-2">Your body is in good shape. No issues detected.</p>
+              <p className="text-sm text-gray-500 mt-1">Keep logging to maintain insight accuracy.</p>
+            </>
+          )}
         </div>
-      ) : null}
+      )}
 
       {/* ====== BODY METRICS (colored cards) ====== */}
       {bio && (

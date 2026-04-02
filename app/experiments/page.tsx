@@ -254,10 +254,24 @@ function ExperimentsContent() {
       )}
 
       {!hasActiveExperiment && suggestions.length === 0 && (
-        <div className="bg-white border border-gray-200 rounded-2xl p-5 text-center">
-          <Beaker className="w-8 h-8 mx-auto mb-2 text-gray-500" />
-          <p className="text-sm text-gray-400">No experiments suggested yet.</p>
-          <p className="text-xs text-gray-400 mt-1">The system needs more meal + WHOOP data to identify what to test. Keep logging consistently.</p>
+        <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+          <span className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide">Not Enough Data Yet</span>
+          <p className="text-gray-900 font-medium mt-2">The system can&apos;t suggest experiments until it finds patterns in your data.</p>
+          <div className="mt-3 space-y-2 text-sm text-gray-600">
+            <p>Here&apos;s what&apos;s needed:</p>
+            <div className="flex items-start gap-2">
+              <span className="w-5 h-5 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">1</span>
+              <span><strong>Log meals consistently</strong> — upload or describe what you eat each day (lunch, dinner, snacks, drinks, supplements)</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="w-5 h-5 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">2</span>
+              <span><strong>Keep WHOOP synced</strong> — the system needs sleep, recovery, and HRV data alongside your meals</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="w-5 h-5 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">3</span>
+              <span><strong>~10 days of overlap</strong> — once the system has 10+ days with both meal and biometric data, it will start detecting patterns and suggesting experiments</span>
+            </div>
+          </div>
         </div>
       )}
 
