@@ -13,7 +13,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import Link from 'next/link';
-import { ArrowLeft, Camera, Save, User, CheckCircle, AlertCircle, Target, Activity, Scale, Ruler } from 'lucide-react';
+import { ArrowLeft, Camera, Save, User, CheckCircle, AlertCircle, Target, Activity, Scale, Ruler, Link2, Link2Off, RefreshCw } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 
 export default function ProfilePage() {
   const { user, isLoading } = useAuth();
@@ -23,6 +24,17 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
+
+  // WHOOP integration state
+  const searchParams = useSearchParams();
+  const [whoopStatus, setWhoopStatus] = useState<{
+    connected: boolean;
+    lastSyncAt?: string;
+    connectedAt?: string;
+  }>({ connected: false });
+  const [whoopLoading, setWhoopLoading] = useState(true);
+  const [whoopSyncing, setWhoopSyncing] = useState(false);
+  const [whoopMessage, setWhoopMessage] = useState<string | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -71,6 +83,73 @@ export default function ProfilePage() {
       });
     }
   }, [profile]);
+
+  // Fetch WHOOP connection status
+  useEffect(() => {
+    if (!user) return;
+    setWhoopLoading(true);
+    fetch('/api/whoop/status')
+      .then((res) => res.json())
+      .then((data) => setWhoopStatus(data))
+      .catch(() => setWhoopStatus({ connected: false }))
+      .finally(() => setWhoopLoading(false));
+  }, [user]);
+
+  // Handle WHOOP OAuth callback query params
+  useEffect(() => {
+    const whoopParam = searchParams.get('whoop');
+    if (whoopParam === 'connected') {
+      setWhoopMessage('WHOOP connected successfully!');
+      setWhoopStatus((prev) => ({ ...prev, connected: true }));
+      // Re-fetch status to get full details
+      fetch('/api/whoop/status')
+        .then((res) => res.json())
+        .then((data) => setWhoopStatus(data))
+        .catch(() => {});
+    } else if (whoopParam === 'denied') {
+      setWhoopMessage('WHOOP connection was denied.');
+    } else if (whoopParam === 'error') {
+      setWhoopMessage('Failed to connect WHOOP. Please try again.');
+    }
+  }, [searchParams]);
+
+  const handleWhoopSync = async () => {
+    setWhoopSyncing(true);
+    setWhoopMessage(null);
+    try {
+      const res = await fetch('/api/whoop/sync', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setWhoopMessage(
+          `Synced: ${data.synced.sleep} sleep, ${data.synced.recovery} recovery, ${data.synced.cycles} cycles, ${data.synced.workouts} workouts`
+        );
+        // Refresh status to update last_sync_at
+        const statusRes = await fetch('/api/whoop/status');
+        const statusData = await statusRes.json();
+        setWhoopStatus(statusData);
+      } else {
+        setWhoopMessage(data.error || 'Sync failed');
+      }
+    } catch {
+      setWhoopMessage('Sync failed. Please try again.');
+    } finally {
+      setWhoopSyncing(false);
+    }
+  };
+
+  const handleWhoopDisconnect = async () => {
+    if (!confirm('Disconnect WHOOP? This will remove all synced WHOOP data.')) return;
+    try {
+      const res = await fetch('/api/whoop/disconnect', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setWhoopStatus({ connected: false });
+        setWhoopMessage('WHOOP disconnected.');
+      }
+    } catch {
+      setWhoopMessage('Failed to disconnect. Please try again.');
+    }
+  };
 
   // Show loading screen while authentication is being determined
   if (isLoading) {
@@ -439,6 +518,96 @@ export default function ProfilePage() {
                 )}
               </Button>
             </div>
+          </CardContent>
+        </Card>
+        {/* WHOOP Integration */}
+        <Card className="bg-gray-800 border-gray-700 mt-6">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center">
+              <Activity className="w-6 h-6 mr-2 text-green-400" />
+              WHOOP Integration
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {whoopMessage && (
+              <div className={`p-3 rounded-lg text-sm ${
+                whoopMessage.includes('success') || whoopMessage.includes('Synced')
+                  ? 'bg-green-900/40 text-green-300 border border-green-700'
+                  : whoopMessage.includes('denied') || whoopMessage.includes('fail') || whoopMessage.includes('Failed')
+                  ? 'bg-red-900/40 text-red-300 border border-red-700'
+                  : 'bg-blue-900/40 text-blue-300 border border-blue-700'
+              }`}>
+                {whoopMessage}
+              </div>
+            )}
+
+            {whoopLoading ? (
+              <div className="flex items-center text-gray-400">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400 mr-2"></div>
+                Checking WHOOP connection...
+              </div>
+            ) : whoopStatus.connected ? (
+              <div className="space-y-4">
+                <div className="flex items-center space-x-3">
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                  <span className="text-green-400 font-medium">WHOOP Connected</span>
+                </div>
+
+                {whoopStatus.connectedAt && (
+                  <p className="text-sm text-gray-400">
+                    Connected since {new Date(whoopStatus.connectedAt).toLocaleDateString()}
+                  </p>
+                )}
+
+                {whoopStatus.lastSyncAt && (
+                  <p className="text-sm text-gray-400">
+                    Last synced: {new Date(whoopStatus.lastSyncAt).toLocaleString()}
+                  </p>
+                )}
+
+                <div className="flex space-x-3">
+                  <Button
+                    onClick={handleWhoopSync}
+                    disabled={whoopSyncing}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    {whoopSyncing ? (
+                      <div className="flex items-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Syncing...
+                      </div>
+                    ) : (
+                      <div className="flex items-center">
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Sync WHOOP Data
+                      </div>
+                    )}
+                  </Button>
+
+                  <Button
+                    onClick={handleWhoopDisconnect}
+                    variant="outline"
+                    className="border-red-600 text-red-400 hover:bg-red-900/30"
+                  >
+                    <Link2Off className="w-4 h-4 mr-2" />
+                    Disconnect
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-gray-400 text-sm">
+                  Connect your WHOOP account to sync sleep, recovery, HRV, and workout data.
+                  This enables future meal-to-biometric correlation insights.
+                </p>
+                <a href="/api/whoop/connect">
+                  <Button className="bg-green-600 hover:bg-green-700">
+                    <Link2 className="w-4 h-4 mr-2" />
+                    Connect WHOOP
+                  </Button>
+                </a>
+              </div>
+            )}
           </CardContent>
         </Card>
       </main>
