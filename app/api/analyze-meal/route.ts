@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import OpenAI from 'openai';
 import { calculatePersonalizedDV } from '../../lib/profile-utils';
+import { generateMealTags } from '../../lib/meal-tagger';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -640,8 +641,22 @@ export async function POST(request: NextRequest) {
       }, { status: 422 });
     }
 
-    // Prepare meal record for database - simplified to avoid column errors
+    // Prepare meal record for database
     const analysis = analysisResult as any;
+    const mealTimeNow = new Date();
+
+    // Generate meal tags based on nutritional content and timing
+    const mealTags = generateMealTags({
+      calories: analysis?.calories || 0,
+      protein: analysis?.protein || 0,
+      carbs: analysis?.carbs || 0,
+      fat: analysis?.fat || 0,
+      macronutrients: analysis?.macronutrients,
+      micronutrients: analysis?.micronutrients,
+      mealTime: mealTimeNow,
+      ingredients: analysis?.ingredients,
+    });
+
     const mealRecord = {
       user_id: userId,
       meal_name: analysis?.mealName || mealName,
@@ -658,7 +673,9 @@ export async function POST(request: NextRequest) {
       suggestions: Array.isArray(analysis?.suggestions) ? analysis.suggestions : [],
       analysis: analysisResult || {},
       personalized_insights: analysis?.personalizedHealthInsights || null,
-      goal: goal
+      goal: goal,
+      meal_time: mealTimeNow.toISOString(),
+      meal_tags: mealTags,
     };
 
     // Save to database with robust error handling
