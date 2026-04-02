@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '../../../lib/supabase/server';
 import { buildAuthorizationUrl } from '../../../lib/whoop';
 import { randomBytes } from 'crypto';
+import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,10 +15,18 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Generate a state parameter that encodes the user ID for CSRF protection
-    // Format: random_bytes:user_id (verified in callback)
-    const random = randomBytes(16).toString('hex');
-    const state = Buffer.from(JSON.stringify({ r: random, u: user.id })).toString('base64url');
+    // WHOOP requires state to be exactly 8 characters
+    const state = randomBytes(4).toString('hex'); // 8 hex chars
+
+    // Store state + user ID in a secure httpOnly cookie for verification in callback
+    const cookieStore = cookies();
+    cookieStore.set('whoop_oauth_state', JSON.stringify({ state, userId: user.id }), {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      maxAge: 600, // 10 minutes
+      path: '/',
+    });
 
     const authUrl = buildAuthorizationUrl(state);
     return NextResponse.redirect(authUrl);

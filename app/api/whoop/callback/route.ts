@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '../../../lib/supabase/server';
 import { exchangeCodeForTokens, saveWhoopConnection, fetchWhoopProfile, syncWhoopProfileToSnap2Health } from '../../../lib/whoop';
+import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,26 +22,36 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL('/profile?whoop=error', request.url));
     }
 
-    // Verify the logged-in user matches the state parameter
-    const supabase = createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.redirect(new URL('/login?redirectTo=/profile', request.url));
+    // Verify state from cookie (CSRF protection)
+    const cookieStore = cookies();
+    const oauthCookie = cookieStore.get('whoop_oauth_state');
+    if (!oauthCookie?.value) {
+      console.error('WHOOP OAuth: missing state cookie');
+      return NextResponse.redirect(new URL('/profile?whoop=error', request.url));
     }
 
-    // Decode and verify state
-    let stateData: { r: string; u: string };
+    let storedState: { state: string; userId: string };
     try {
-      stateData = JSON.parse(Buffer.from(state, 'base64url').toString());
+      storedState = JSON.parse(oauthCookie.value);
     } catch {
       return NextResponse.redirect(new URL('/profile?whoop=error', request.url));
     }
 
-    if (stateData.u !== user.id) {
-      console.error('WHOOP OAuth state mismatch: expected', user.id, 'got', stateData.u);
+    if (storedState.state !== state) {
+      console.error('WHOOP OAuth state mismatch');
       return NextResponse.redirect(new URL('/profile?whoop=error', request.url));
     }
+
+    // Also verify the user is still logged in
+    const supabase = createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user || user.id !== storedState.userId) {
+      return NextResponse.redirect(new URL('/login?redirectTo=/profile', request.url));
+    }
+
+    // Clean up the state cookie
+    cookieStore.set('whoop_oauth_state', '', { maxAge: 0, path: '/' });
 
     // Exchange code for tokens
     const tokens = await exchangeCodeForTokens(code);
