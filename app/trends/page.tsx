@@ -94,6 +94,112 @@ function CorrelationCard({ insight }: { insight: CorrelationInsight }) {
   );
 }
 
+const BIOMETRIC_OPTIONS = [
+  { key: 'sleep', label: 'Sleep Score', color: '#60a5fa' },
+  { key: 'recovery', label: 'Recovery', color: '#4ade80' },
+  { key: 'hrv', label: 'HRV', color: '#c084fc' },
+  { key: 'rhr', label: 'Resting HR', color: '#f87171' },
+];
+
+const NUTRITION_OPTIONS = [
+  { key: 'protein', label: 'Protein (g)', color: '#60a5fa' },
+  { key: 'carbs', label: 'Carbs (g)', color: '#facc15' },
+  { key: 'fat', label: 'Fat (g)', color: '#fb923c' },
+  { key: 'fiber', label: 'Fiber (g)', color: '#34d399' },
+  { key: 'sugar', label: 'Sugar (g)', color: '#f472b6' },
+  { key: 'calories', label: 'Calories', color: '#a78bfa' },
+  { key: 'caffeine', label: 'Caffeine (mg)', color: '#fbbf24' },
+  { key: 'sodium', label: 'Sodium (mg)', color: '#f97316' },
+];
+
+function MetricToggle({ options, selected, onSelect, label }: {
+  options: Array<{ key: string; label: string; color: string }>;
+  selected: string;
+  onSelect: (key: string) => void;
+  label: string;
+}) {
+  return (
+    <div>
+      <span className="text-[10px] text-gray-500 uppercase tracking-wider">{label}</span>
+      <div className="flex flex-wrap gap-1 mt-1">
+        {options.map(opt => (
+          <button
+            key={opt.key}
+            onClick={() => onSelect(opt.key)}
+            className={`text-[10px] px-2 py-1 rounded-full transition-colors ${
+              selected === opt.key
+                ? 'text-white font-medium'
+                : 'text-gray-500 hover:text-gray-300 bg-slate-700/50'
+            }`}
+            style={selected === opt.key ? { backgroundColor: opt.color + '30', color: opt.color } : {}}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TrendChart({ chartData, hasBiometrics, hasNutrition }: { chartData: any[]; hasBiometrics: boolean; hasNutrition: boolean }) {
+  const [bioMetric, setBioMetric] = useState('sleep');
+  const [nutMetric, setNutMetric] = useState('protein');
+
+  if (!hasBiometrics) return null;
+
+  const bioOption = BIOMETRIC_OPTIONS.find(o => o.key === bioMetric)!;
+  const nutOption = NUTRITION_OPTIONS.find(o => o.key === nutMetric)!;
+  const hasNutData = hasNutrition && chartData.some((d: any) => d[nutMetric] != null);
+
+  return (
+    <div>
+      <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">Compare Trends</h2>
+      <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4 space-y-3">
+        {/* Toggles */}
+        <div className="space-y-2">
+          <MetricToggle options={BIOMETRIC_OPTIONS} selected={bioMetric} onSelect={setBioMetric} label="Body metric" />
+          {hasNutrition && (
+            <MetricToggle options={NUTRITION_OPTIONS} selected={nutMetric} onSelect={setNutMetric} label="Nutrition metric" />
+          )}
+        </div>
+
+        {/* Legend */}
+        <div className="flex gap-4 text-xs">
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: bioOption.color }} />
+            {bioOption.label}
+          </span>
+          {hasNutData && (
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: nutOption.color }} />
+              {nutOption.label}
+            </span>
+          )}
+        </div>
+
+        {/* Chart */}
+        <ResponsiveContainer width="100%" height={180}>
+          <LineChart data={chartData}>
+            <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+            <YAxis yAxisId="left" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} width={30} />
+            {hasNutData && (
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} width={30} />
+            )}
+            <Tooltip
+              contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px' }}
+              labelStyle={{ color: '#9ca3af' }}
+            />
+            <Line yAxisId="left" type="monotone" dataKey={bioMetric} stroke={bioOption.color} strokeWidth={2} dot={false} connectNulls />
+            {hasNutData && (
+              <Line yAxisId="right" type="monotone" dataKey={nutMetric} stroke={nutOption.color} strokeWidth={2} dot={false} connectNulls strokeDasharray="5 5" />
+            )}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
 function TrendsContent() {
   const [range, setRange] = useState(30);
   const [data, setData] = useState<any>(null);
@@ -128,8 +234,13 @@ function TrendsContent() {
       hrv: b.hrv ? Math.round(b.hrv * 10) / 10 : null,
       rhr: b.resting_heart_rate,
       protein: nutDay?.total_protein || null,
+      carbs: nutDay?.total_carbs || null,
+      fat: nutDay?.total_fat || null,
       calories: nutDay?.total_calories || null,
       fiber: nutDay?.total_fiber || null,
+      sugar: nutDay?.total_sugar || null,
+      caffeine: nutDay?.total_caffeine || null,
+      sodium: nutDay?.total_sodium || null,
     };
   });
 
@@ -256,77 +367,8 @@ function TrendsContent() {
         </div>
       )}
 
-      {/* ====== BODY TRENDS ====== */}
-      {biometrics.length > 5 && (
-        <div>
-          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">Body Trends</h2>
-          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4">
-            <div className="flex gap-4 mb-2 text-xs">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400" /> Sleep</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-400" /> Recovery</span>
-            </div>
-            <ResponsiveContainer width="100%" height={160}>
-              <LineChart data={chartData}>
-                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
-                <YAxis domain={[40, 100]} tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} width={30} />
-                <Tooltip
-                  contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px' }}
-                  labelStyle={{ color: '#9ca3af' }}
-                />
-                <Line type="monotone" dataKey="sleep" stroke="#60a5fa" strokeWidth={2} dot={false} connectNulls />
-                <Line type="monotone" dataKey="recovery" stroke="#4ade80" strokeWidth={2} dot={false} connectNulls />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-
-      {/* ====== HRV + RHR TREND ====== */}
-      {biometrics.length > 5 && (
-        <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4">
-          <div className="flex gap-4 mb-2 text-xs">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-400" /> HRV</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400" /> RHR</span>
-          </div>
-          <ResponsiveContainer width="100%" height={140}>
-            <LineChart data={chartData}>
-              <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} width={30} />
-              <Tooltip
-                contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px' }}
-                labelStyle={{ color: '#9ca3af' }}
-              />
-              <Line type="monotone" dataKey="hrv" stroke="#c084fc" strokeWidth={2} dot={false} connectNulls />
-              <Line type="monotone" dataKey="rhr" stroke="#f87171" strokeWidth={2} dot={false} connectNulls />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      {/* ====== NUTRITION TRENDS ====== */}
-      {hasNutrition && nutrition.length > 3 && (
-        <div>
-          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">Nutrition Trends</h2>
-          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4">
-            <div className="flex gap-4 mb-2 text-xs">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400" /> Protein (g)</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-400" /> Fiber (g)</span>
-            </div>
-            <ResponsiveContainer width="100%" height={140}>
-              <LineChart data={chartData.filter((d: any) => d.protein != null)}>
-                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} width={30} />
-                <Tooltip
-                  contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px' }}
-                  labelStyle={{ color: '#9ca3af' }}
-                />
-                <Line type="monotone" dataKey="protein" stroke="#60a5fa" strokeWidth={2} dot={false} connectNulls />
-                <Line type="monotone" dataKey="fiber" stroke="#facc15" strokeWidth={2} dot={false} connectNulls />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
+      {/* ====== FLEXIBLE TREND CHART (toggle any nutrition vs any biometric) ====== */}
+      <TrendChart chartData={chartData} hasBiometrics={biometrics.length > 5} hasNutrition={hasNutrition && nutrition.length > 3} />
 
       {/* ====== QUICK PATTERNS ====== */}
       {hasNutrition && (

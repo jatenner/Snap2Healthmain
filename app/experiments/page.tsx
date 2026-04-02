@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../components/client/ClientAuthProvider';
 import ClientOnly from '../components/ClientOnly';
 import Link from 'next/link';
-import { Beaker, CheckCircle, XCircle, Clock, Plus, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Beaker, CheckCircle, Clock, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 
 interface Experiment {
   id: string;
@@ -17,7 +17,6 @@ interface Experiment {
   startDate: string;
   endDate: string;
   baselineValue: number | null;
-  baselineN: number | null;
   status: string;
   logs: Array<{ date: string; compliant: boolean | null; measurementValue: number | null }>;
   result?: {
@@ -32,298 +31,276 @@ interface Experiment {
   };
 }
 
-function StatusBadge({ status }: { status: string }) {
-  if (status === 'active') return <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">Active</span>;
-  if (status === 'completed') return <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-300">Completed</span>;
-  return <span className="text-xs px-2 py-0.5 rounded-full bg-gray-500/20 text-gray-400">{status}</span>;
-}
-
-function OutcomeBadge({ outcome, confidence }: { outcome: string; confidence: string }) {
-  const colors = {
-    improved: 'bg-green-500/20 text-green-300',
-    worsened: 'bg-red-500/20 text-red-300',
-    no_change: 'bg-yellow-500/20 text-yellow-300',
-  };
-  return (
-    <div className="flex gap-2">
-      <span className={`text-xs px-2 py-0.5 rounded-full ${(colors as any)[outcome] || colors.no_change}`}>
-        {outcome === 'improved' ? 'Improved' : outcome === 'worsened' ? 'Not Effective' : 'No Change'}
-      </span>
-      <span className={`text-xs px-2 py-0.5 rounded-full ${
-        confidence === 'high' ? 'bg-green-500/20 text-green-300' :
-        confidence === 'medium' ? 'bg-yellow-500/20 text-yellow-300' :
-        'bg-gray-500/20 text-gray-400'
-      }`}>
-        {confidence} confidence
-      </span>
-    </div>
-  );
-}
-
-function ExperimentCard({ exp, onComplete }: { exp: Experiment; onComplete: (id: string) => void }) {
-  const daysElapsed = Math.max(0, Math.floor((Date.now() - new Date(exp.startDate).getTime()) / (1000 * 60 * 60 * 24)));
-  const daysRemaining = Math.max(0, exp.durationDays - daysElapsed);
-  const progress = Math.min(100, Math.round((daysElapsed / exp.durationDays) * 100));
-  const compliantDays = exp.logs.filter(l => l.compliant === true).length;
-  const loggedDays = exp.logs.filter(l => l.compliant != null).length;
-  const complianceRate = loggedDays > 0 ? Math.round((compliantDays / loggedDays) * 100) : 0;
-
-  return (
-    <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5">
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <Beaker className="w-4 h-4 text-purple-400" />
-            <h3 className="text-sm font-medium text-white">{exp.title}</h3>
-          </div>
-          <StatusBadge status={exp.status} />
-        </div>
-      </div>
-
-      <p className="text-xs text-gray-400 mb-3">{exp.targetBehavior}</p>
-
-      {exp.status === 'active' && (
-        <>
-          {/* Progress bar */}
-          <div className="mb-3">
-            <div className="flex justify-between text-xs text-gray-400 mb-1">
-              <span>Day {daysElapsed} of {exp.durationDays}</span>
-              <span>{daysRemaining} days left</span>
-            </div>
-            <div className="w-full bg-slate-700 rounded-full h-2">
-              <div className="bg-purple-500 h-2 rounded-full transition-all" style={{ width: `${progress}%` }} />
-            </div>
-          </div>
-
-          {/* Compliance */}
-          {loggedDays > 0 && (
-            <div className="flex justify-between items-center text-xs mb-3">
-              <span className="text-gray-400">Compliance</span>
-              <span className={`font-medium ${complianceRate >= 70 ? 'text-green-400' : complianceRate >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
-                {complianceRate}% ({compliantDays}/{loggedDays} days)
-              </span>
-            </div>
-          )}
-
-          {/* Day grid */}
-          <div className="flex gap-1 flex-wrap mb-3">
-            {Array.from({ length: exp.durationDays }, (_, i) => {
-              const dayDate = new Date(exp.startDate);
-              dayDate.setDate(dayDate.getDate() + i);
-              const dateStr = dayDate.toISOString().split('T')[0];
-              const log = exp.logs.find(l => l.date === dateStr);
-              const isPast = dayDate < new Date();
-              const isToday = dateStr === new Date().toISOString().split('T')[0];
-
-              return (
-                <div
-                  key={i}
-                  className={`w-6 h-6 rounded text-[9px] flex items-center justify-center ${
-                    log?.compliant === true ? 'bg-green-500/30 text-green-300' :
-                    log?.compliant === false ? 'bg-red-500/30 text-red-300' :
-                    isToday ? 'bg-blue-500/30 text-blue-300 ring-1 ring-blue-400' :
-                    isPast ? 'bg-slate-700 text-gray-500' :
-                    'bg-slate-700/50 text-gray-600'
-                  }`}
-                >
-                  {i + 1}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Baseline comparison */}
-          {exp.baselineValue != null && (
-            <div className="text-xs text-gray-500">
-              Baseline {exp.measurementField.replace(/_/g, ' ')}: {exp.baselineValue}
-            </div>
-          )}
-
-          {/* Complete button */}
-          {daysElapsed >= exp.durationDays && (
-            <button
-              onClick={() => onComplete(exp.id)}
-              className="w-full mt-3 bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-xl text-sm font-medium"
-            >
-              Complete Experiment
-            </button>
-          )}
-        </>
-      )}
-
-      {/* Completed result */}
-      {exp.status === 'completed' && exp.result && (
-        <div className="space-y-3">
-          <OutcomeBadge outcome={exp.result.outcome} confidence={exp.result.confidence} />
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-slate-700/50 rounded-xl p-3 text-center">
-              <div className="text-xs text-gray-400 mb-1">Baseline</div>
-              <div className="text-lg font-bold text-white">{exp.result.baselineAvg}</div>
-            </div>
-            <div className="bg-slate-700/50 rounded-xl p-3 text-center">
-              <div className="text-xs text-gray-400 mb-1">During Test</div>
-              <div className={`text-lg font-bold ${
-                exp.result.outcome === 'improved' ? 'text-green-400' :
-                exp.result.outcome === 'worsened' ? 'text-red-400' : 'text-yellow-400'
-              }`}>
-                {exp.result.experimentAvg}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-between text-xs">
-            <span className="text-gray-400">Change</span>
-            <span className={`font-medium ${
-              exp.result.outcome === 'improved' ? 'text-green-400' :
-              exp.result.outcome === 'worsened' ? 'text-red-400' : 'text-yellow-400'
-            }`}>
-              {exp.result.percentChange > 0 ? '+' : ''}{exp.result.percentChange}%
-            </span>
-          </div>
-
-          <p className="text-xs text-gray-300 leading-relaxed">{exp.result.summary}</p>
-
-          <div className="text-xs text-gray-500">
-            Compliance: {exp.result.complianceRate}%
-          </div>
-        </div>
-      )}
-    </div>
-  );
+interface SystemSuggestion {
+  action: string;
+  targetBehavior: string;
+  measurementField: string;
+  expectedDirection: string;
+  durationDays: number;
+  outcomeLabel: string;
+  statusDetail: string;
+  evidenceStrength: string;
 }
 
 function ExperimentsContent() {
   const [experiments, setExperiments] = useState<Experiment[]>([]);
+  const [suggestions, setSuggestions] = useState<SystemSuggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
 
-  const fetchExperiments = () => {
+  const fetchData = async () => {
     setLoading(true);
-    fetch('/api/experiments')
-      .then(r => r.json())
-      .then(d => setExperiments(d.experiments || []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    try {
+      const [expRes, trendRes] = await Promise.all([
+        fetch('/api/experiments').then(r => r.json()),
+        fetch('/api/trends?days=30').then(r => r.json()),
+      ]);
+
+      setExperiments(expRes.experiments || []);
+
+      // Extract system suggestions from outcome analyses
+      const outcomeAnalyses = trendRes.outcomeAnalyses || [];
+      const systemSuggestions: SystemSuggestion[] = [];
+      for (const oa of outcomeAnalyses) {
+        if (oa.recommendedTest && oa.status !== 'good') {
+          systemSuggestions.push({
+            action: oa.recommendedTest.action,
+            targetBehavior: oa.recommendedTest.targetBehavior,
+            measurementField: oa.recommendedTest.measurementField,
+            expectedDirection: oa.recommendedTest.expectedDirection,
+            durationDays: oa.recommendedTest.durationDays,
+            outcomeLabel: oa.outcomeLabel,
+            statusDetail: oa.statusDetail,
+            evidenceStrength: oa.primaryDrivers?.[0]?.evidenceStrength || 'moderate',
+          });
+        }
+      }
+      setSuggestions(systemSuggestions);
+    } catch {}
+    setLoading(false);
   };
 
-  useEffect(() => { fetchExperiments(); }, []);
+  useEffect(() => { fetchData(); }, []);
 
-  const handleComplete = async (id: string) => {
-    const res = await fetch('/api/experiments', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'complete', experimentId: id }),
-    });
-    if (res.ok) fetchExperiments();
-  };
-
-  const handleQuickCreate = async (preset: any) => {
+  const handleStartExperiment = async (suggestion: SystemSuggestion) => {
     setCreating(true);
     await fetch('/api/experiments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(preset),
+      body: JSON.stringify({
+        title: suggestion.action.split(' for ')[0] || suggestion.action.substring(0, 60),
+        hypothesis: `${suggestion.action} may improve ${suggestion.outcomeLabel.toLowerCase()}`,
+        targetBehavior: suggestion.targetBehavior,
+        measurementField: suggestion.measurementField,
+        expectedDirection: suggestion.expectedDirection,
+        durationDays: suggestion.durationDays,
+      }),
     });
     setCreating(false);
-    fetchExperiments();
+    fetchData();
   };
 
-  if (loading) return <div className="text-center py-20 text-gray-400 animate-pulse">Loading experiments...</div>;
+  const handleComplete = async (id: string) => {
+    await fetch('/api/experiments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'complete', experimentId: id }),
+    });
+    fetchData();
+  };
+
+  if (loading) return <div className="text-center py-20 text-gray-400 animate-pulse">Loading...</div>;
 
   const active = experiments.filter(e => e.status === 'active');
   const completed = experiments.filter(e => e.status === 'completed');
-
-  const presets = [
-    {
-      title: 'Reduce late carbs',
-      hypothesis: 'Eating fewer carbs after 8pm may improve sleep quality',
-      targetBehavior: 'Keep carbs under 30g after 8pm',
-      measurementField: 'sleep_score',
-      expectedDirection: 'increase',
-      durationDays: 7,
-    },
-    {
-      title: 'No caffeine after 2pm',
-      hypothesis: 'Eliminating afternoon caffeine may improve sleep',
-      targetBehavior: 'No coffee, tea, or energy drinks after 2pm',
-      measurementField: 'sleep_score',
-      expectedDirection: 'increase',
-      durationDays: 7,
-    },
-    {
-      title: 'High protein week',
-      hypothesis: 'Higher protein intake may improve recovery',
-      targetBehavior: 'Hit 120g+ protein daily',
-      measurementField: 'recovery_score',
-      expectedDirection: 'increase',
-      durationDays: 7,
-    },
-    {
-      title: 'No alcohol week',
-      hypothesis: 'Eliminating alcohol may improve HRV and recovery',
-      targetBehavior: 'Zero alcohol for 7 days',
-      measurementField: 'hrv',
-      expectedDirection: 'increase',
-      durationDays: 7,
-    },
-  ];
+  const hasActiveExperiment = active.length > 0;
 
   return (
     <div className="max-w-lg mx-auto px-4 py-6 space-y-6">
-      <h1 className="text-2xl font-bold text-white">Experiments</h1>
-      <p className="text-sm text-gray-400">Test how diet changes affect your body. Each experiment tracks a specific behavior change and measures the outcome.</p>
+      <div>
+        <h1 className="text-2xl font-bold text-white">Insights & Experiments</h1>
+        <p className="text-sm text-gray-400 mt-1">The system analyzes your data and suggests what to test next.</p>
+      </div>
 
-      {/* Active Experiments */}
-      {active.length > 0 && (
-        <div>
-          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">Active ({active.length})</h2>
-          <div className="space-y-3">
-            {active.map(exp => <ExperimentCard key={exp.id} exp={exp} onComplete={handleComplete} />)}
-          </div>
-        </div>
-      )}
+      {/* ====== ACTIVE EXPERIMENT ====== */}
+      {active.map(exp => {
+        const daysElapsed = Math.max(0, Math.floor((Date.now() - new Date(exp.startDate).getTime()) / (1000 * 60 * 60 * 24)));
+        const daysRemaining = Math.max(0, exp.durationDays - daysElapsed);
+        const progress = Math.min(100, Math.round((daysElapsed / exp.durationDays) * 100));
+        const compliantDays = exp.logs.filter(l => l.compliant === true).length;
+        const loggedDays = exp.logs.filter(l => l.compliant != null).length;
+        const complianceRate = loggedDays > 0 ? Math.round((compliantDays / loggedDays) * 100) : 0;
 
-      {/* Start New Experiment */}
-      {active.length === 0 && (
-        <div>
-          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">Start an Experiment</h2>
-          <div className="space-y-2">
-            {presets.map((preset, i) => (
-              <button
-                key={i}
-                onClick={() => handleQuickCreate(preset)}
-                disabled={creating}
-                className="w-full text-left bg-slate-800 border border-slate-700 hover:border-purple-500/50 rounded-xl p-4 transition-colors"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-medium text-white">{preset.title}</div>
-                    <div className="text-xs text-gray-400 mt-0.5">{preset.targetBehavior}</div>
-                    <div className="text-xs text-gray-500 mt-0.5">{preset.durationDays} days · Measures: {preset.measurementField.replace(/_/g, ' ')}</div>
+        // Current measurement vs baseline
+        const recentMeasurements = exp.logs.filter(l => l.measurementValue != null).map(l => l.measurementValue!);
+        const currentAvg = recentMeasurements.length > 0
+          ? Math.round((recentMeasurements.reduce((a, b) => a + b, 0) / recentMeasurements.length) * 10) / 10
+          : null;
+
+        return (
+          <div key={exp.id} className="bg-purple-500/10 border border-purple-500/20 rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Beaker className="w-4 h-4 text-purple-400" />
+              <span className="text-xs font-medium text-purple-300 uppercase tracking-wider">Active Experiment</span>
+            </div>
+
+            <p className="text-white font-medium text-sm">{exp.title}</p>
+            <p className="text-xs text-gray-400 mt-1">{exp.targetBehavior}</p>
+
+            {/* Progress */}
+            <div className="mt-3">
+              <div className="flex justify-between text-xs text-gray-400 mb-1">
+                <span>Day {daysElapsed} of {exp.durationDays}</span>
+                <span>{daysRemaining} days left</span>
+              </div>
+              <div className="w-full bg-slate-700 rounded-full h-2">
+                <div className="bg-purple-500 h-2 rounded-full transition-all" style={{ width: `${progress}%` }} />
+              </div>
+            </div>
+
+            {/* Day grid */}
+            <div className="flex gap-1 flex-wrap mt-3">
+              {Array.from({ length: exp.durationDays }, (_, i) => {
+                const dayDate = new Date(exp.startDate);
+                dayDate.setDate(dayDate.getDate() + i);
+                const dateStr = dayDate.toISOString().split('T')[0];
+                const log = exp.logs.find(l => l.date === dateStr);
+                const isToday = dateStr === new Date().toISOString().split('T')[0];
+
+                return (
+                  <div
+                    key={i}
+                    className={`w-7 h-7 rounded-md text-[10px] flex items-center justify-center font-medium ${
+                      log?.compliant === true ? 'bg-green-500/30 text-green-300' :
+                      log?.compliant === false ? 'bg-red-500/30 text-red-300' :
+                      isToday ? 'bg-purple-500/30 text-purple-300 ring-1 ring-purple-400' :
+                      'bg-slate-700/50 text-gray-600'
+                    }`}
+                  >
+                    {i + 1}
                   </div>
-                  <Plus className="w-5 h-5 text-purple-400" />
+                );
+              })}
+            </div>
+
+            {/* Stats row */}
+            <div className="flex gap-4 mt-3 text-xs">
+              {loggedDays > 0 && (
+                <div>
+                  <span className="text-gray-500">Compliance</span>
+                  <span className={`ml-1 font-medium ${complianceRate >= 70 ? 'text-green-400' : complianceRate >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                    {complianceRate}%
+                  </span>
                 </div>
+              )}
+              {currentAvg != null && exp.baselineValue != null && (
+                <div>
+                  <span className="text-gray-500">{exp.measurementField.replace(/_/g, ' ')}</span>
+                  <span className={`ml-1 font-medium ${
+                    (exp.expectedDirection === 'increase' ? currentAvg > exp.baselineValue : currentAvg < exp.baselineValue)
+                      ? 'text-green-400' : 'text-gray-300'
+                  }`}>
+                    {currentAvg} <span className="text-gray-600">(was {exp.baselineValue})</span>
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {daysElapsed >= exp.durationDays && (
+              <button
+                onClick={() => handleComplete(exp.id)}
+                className="w-full mt-3 bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-xl text-sm font-medium"
+              >
+                Complete & See Results
               </button>
+            )}
+          </div>
+        );
+      })}
+
+      {/* ====== SYSTEM SUGGESTIONS (not user-chosen presets) ====== */}
+      {!hasActiveExperiment && suggestions.length > 0 && (
+        <div>
+          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">
+            Suggested by Your Data
+          </h2>
+          <div className="space-y-3">
+            {suggestions.map((s, i) => (
+              <div key={i} className="bg-slate-800 border border-slate-700 rounded-2xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`w-2 h-2 rounded-full ${
+                    s.evidenceStrength === 'strong' ? 'bg-blue-400' : 'bg-yellow-400'
+                  }`} />
+                  <span className="text-xs text-gray-400">{s.statusDetail}</span>
+                </div>
+                <p className="text-sm text-white font-medium">{s.action}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Measures: {s.measurementField.replace(/_/g, ' ')} over {s.durationDays} days
+                </p>
+                <button
+                  onClick={() => handleStartExperiment(s)}
+                  disabled={creating}
+                  className="mt-3 w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800 text-white py-2 rounded-xl text-sm font-medium"
+                >
+                  {creating ? 'Starting...' : 'Start This Experiment'}
+                </button>
+              </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Completed Experiments */}
-      {completed.length > 0 && (
-        <div>
-          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">Past Results ({completed.length})</h2>
-          <div className="space-y-3">
-            {completed.map(exp => <ExperimentCard key={exp.id} exp={exp} onComplete={handleComplete} />)}
-          </div>
+      {!hasActiveExperiment && suggestions.length === 0 && (
+        <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5 text-center">
+          <Beaker className="w-8 h-8 mx-auto mb-2 text-gray-600" />
+          <p className="text-sm text-gray-400">No experiments suggested yet.</p>
+          <p className="text-xs text-gray-500 mt-1">The system needs more meal + WHOOP data to identify what to test. Keep logging consistently.</p>
         </div>
       )}
 
-      {experiments.length === 0 && (
-        <div className="text-center py-10">
-          <Beaker className="w-10 h-10 mx-auto mb-3 text-gray-600" />
-          <p className="text-gray-400 text-sm">No experiments yet. Start one above to test how diet changes affect your body.</p>
+      {/* ====== COMPLETED EXPERIMENTS ====== */}
+      {completed.length > 0 && (
+        <div>
+          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">Past Results</h2>
+          <div className="space-y-3">
+            {completed.map(exp => (
+              <div key={exp.id} className="bg-slate-800 border border-slate-700 rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-white">{exp.title}</span>
+                  {exp.result && (
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                      exp.result.outcome === 'improved' ? 'bg-green-500/20 text-green-300' :
+                      exp.result.outcome === 'worsened' ? 'bg-red-500/20 text-red-300' :
+                      'bg-yellow-500/20 text-yellow-300'
+                    }`}>
+                      {exp.result.outcome === 'improved' ? 'Worked' : exp.result.outcome === 'worsened' ? 'No effect' : 'Inconclusive'}
+                    </span>
+                  )}
+                </div>
+
+                {exp.result && (
+                  <>
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      <div className="bg-slate-700/50 rounded-lg p-2 text-center">
+                        <div className="text-[10px] text-gray-500">Before</div>
+                        <div className="text-sm font-bold text-white">{exp.result.baselineAvg}</div>
+                      </div>
+                      <div className="bg-slate-700/50 rounded-lg p-2 text-center">
+                        <div className="text-[10px] text-gray-500">During</div>
+                        <div className={`text-sm font-bold ${
+                          exp.result.outcome === 'improved' ? 'text-green-400' : 'text-white'
+                        }`}>{exp.result.experimentAvg}</div>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2 leading-relaxed">{exp.result.summary}</p>
+                    <div className="text-[10px] text-gray-600 mt-1">
+                      Compliance: {exp.result.complianceRate}% | {exp.result.confidence} confidence
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

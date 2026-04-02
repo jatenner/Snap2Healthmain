@@ -1,18 +1,31 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from './client/ClientAuthProvider';
-import { User, LogOut, Home, Upload, BarChart3, Menu, X, TrendingUp, Beaker } from 'lucide-react';
+import { User, LogOut, Home, Upload, BarChart3, Menu, X, TrendingUp, Beaker, Settings, ChevronDown } from 'lucide-react';
 
 export function NavBarWithAuth() {
   const { user, isAuthenticated, signOut, isLoading } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
 
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
+
+  // Close user menu on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/';
@@ -58,17 +71,13 @@ export function NavBarWithAuth() {
               <Upload className="w-4 h-4" />
               <span>Upload</span>
             </Link>
-            <Link href="/profile" className={navLinkClass('/profile')}>
-              <User className="w-4 h-4" />
-              <span>Profile</span>
-            </Link>
             <Link href="/trends" className={navLinkClass('/trends')}>
               <TrendingUp className="w-4 h-4" />
               <span>Trends</span>
             </Link>
             <Link href="/experiments" className={navLinkClass('/experiments')}>
               <Beaker className="w-4 h-4" />
-              <span>Experiments</span>
+              <span>Insights</span>
             </Link>
             <Link href="/meal-history" className={navLinkClass('/meal-history')}>
               <BarChart3 className="w-4 h-4" />
@@ -76,40 +85,50 @@ export function NavBarWithAuth() {
             </Link>
           </nav>
 
-          {/* Desktop User Section */}
+          {/* Desktop User Section — Profile lives here */}
           <div className="hidden lg:flex items-center space-x-4">
             {isLoading ? (
               <div className="text-white text-sm">Loading...</div>
             ) : isAuthenticated && user ? (
-              <>
-                <div className="flex items-center space-x-2">
+              <div className="relative" ref={userMenuRef}>
+                <button
+                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                  className="flex items-center space-x-2 text-white hover:bg-blue-500/30 px-3 py-2 rounded-md transition-colors"
+                >
                   <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
                     <User className="w-4 h-4 text-white" />
                   </div>
-                  <span className="text-white text-sm">
-                    {user.email?.split('@')[0] || 'User'}
-                  </span>
-                </div>
-                <button
-                  onClick={signOut}
-                  className="text-blue-100 hover:text-white transition-colors text-sm flex items-center px-3 py-2 rounded-md touch-target"
-                >
-                  <LogOut className="w-4 h-4 mr-1" />
-                  Sign Out
+                  <span className="text-sm">{user.email?.split('@')[0] || 'User'}</span>
+                  <ChevronDown className={`w-3 h-3 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
-              </>
+
+                {isUserMenuOpen && (
+                  <div className="absolute right-0 mt-1 w-48 bg-slate-800 border border-slate-700 rounded-xl shadow-xl py-1 z-50">
+                    <Link
+                      href="/profile"
+                      onClick={() => setIsUserMenuOpen(false)}
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-200 hover:bg-slate-700 transition-colors"
+                    >
+                      <Settings className="w-4 h-4 text-gray-400" />
+                      Profile & Settings
+                    </Link>
+                    <div className="border-t border-slate-700 my-1" />
+                    <button
+                      onClick={() => { setIsUserMenuOpen(false); signOut(); }}
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-200 hover:bg-slate-700 transition-colors w-full text-left"
+                    >
+                      <LogOut className="w-4 h-4 text-gray-400" />
+                      Sign Out
+                    </button>
+                  </div>
+                )}
+              </div>
             ) : (
               <div className="flex items-center space-x-2">
-                <Link
-                  href="/login"
-                  className="text-white hover:text-blue-200 transition-colors text-sm px-3 py-2 rounded-md touch-target"
-                >
+                <Link href="/login" className="text-white hover:text-blue-200 transition-colors text-sm px-3 py-2 rounded-md">
                   Sign In
                 </Link>
-                <Link
-                  href="/signup"
-                  className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded text-sm touch-target"
-                >
+                <Link href="/signup" className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded text-sm">
                   Sign Up
                 </Link>
               </div>
@@ -138,11 +157,7 @@ export function NavBarWithAuth() {
               </Link>
               <Link href="/upload" className={mobileNavLinkClass('/upload')} onClick={closeMobileMenu}>
                 <Upload className="w-5 h-5" />
-                <span>Upload Meal</span>
-              </Link>
-              <Link href="/profile" className={mobileNavLinkClass('/profile')} onClick={closeMobileMenu}>
-                <User className="w-5 h-5" />
-                <span>Profile</span>
+                <span>Upload</span>
               </Link>
               <Link href="/trends" className={mobileNavLinkClass('/trends')} onClick={closeMobileMenu}>
                 <TrendingUp className="w-5 h-5" />
@@ -150,7 +165,7 @@ export function NavBarWithAuth() {
               </Link>
               <Link href="/experiments" className={mobileNavLinkClass('/experiments')} onClick={closeMobileMenu}>
                 <Beaker className="w-5 h-5" />
-                <span>Experiments</span>
+                <span>Insights</span>
               </Link>
               <Link href="/meal-history" className={mobileNavLinkClass('/meal-history')} onClick={closeMobileMenu}>
                 <BarChart3 className="w-5 h-5" />
@@ -160,48 +175,26 @@ export function NavBarWithAuth() {
               {/* Mobile User Section */}
               <div className="border-t border-blue-500 pt-3 mt-3">
                 {isLoading ? (
-                  <div className="text-white text-base px-3 py-2 mobile-text">Loading...</div>
+                  <div className="text-white text-base px-3 py-2">Loading...</div>
                 ) : isAuthenticated && user ? (
                   <>
-                    <div className="flex items-center space-x-3 px-3 py-2 text-white mobile-text">
-                      <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                        <User className="w-4 h-4 text-white" />
-                      </div>
-                      <div>
-                        <div className="text-base font-medium">
-                          {user.email?.split('@')[0] || 'User'}
-                        </div>
-                        <div className="text-green-400 text-sm">Signed In</div>
-                      </div>
-                    </div>
+                    <Link href="/profile" className={mobileNavLinkClass('/profile')} onClick={closeMobileMenu}>
+                      <Settings className="w-5 h-5" />
+                      <span>Profile & Settings</span>
+                    </Link>
                     <button
-                      onClick={() => {
-                        signOut();
-                        closeMobileMenu();
-                      }}
-                      className="flex items-center space-x-3 text-white hover:text-blue-200 hover:bg-blue-600 px-3 py-3 rounded-md text-base font-medium w-full text-left touch-target mobile-text"
+                      onClick={() => { closeMobileMenu(); signOut(); }}
+                      className="flex items-center space-x-3 px-3 py-3 rounded-md text-base font-medium text-red-200 hover:bg-red-600/30 w-full"
                     >
                       <LogOut className="w-5 h-5" />
                       <span>Sign Out</span>
                     </button>
                   </>
                 ) : (
-                  <>
-                    <Link
-                      href="/login"
-                      className="flex items-center space-x-3 text-white hover:text-blue-200 hover:bg-blue-600 px-3 py-3 rounded-md text-base font-medium touch-target mobile-text"
-                      onClick={closeMobileMenu}
-                    >
-                      <span>Sign In</span>
-                    </Link>
-                    <Link
-                      href="/signup"
-                      className="flex items-center justify-center bg-blue-800 hover:bg-blue-900 text-white px-3 py-3 rounded-md text-base font-medium mt-2 mx-3 touch-target mobile-text"
-                      onClick={closeMobileMenu}
-                    >
-                      Sign Up
-                    </Link>
-                  </>
+                  <div className="flex flex-col space-y-2 px-3">
+                    <Link href="/login" onClick={closeMobileMenu} className="text-white text-base py-2">Sign In</Link>
+                    <Link href="/signup" onClick={closeMobileMenu} className="bg-blue-800 text-white text-base py-2 px-4 rounded text-center">Sign Up</Link>
+                  </div>
                 )}
               </div>
             </div>
