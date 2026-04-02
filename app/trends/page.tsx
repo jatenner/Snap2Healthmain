@@ -32,9 +32,9 @@ const RANGE_OPTIONS = [
 
 function ConfidenceBadge({ confidence }: { confidence: string }) {
   const styles = {
-    high: 'bg-green-500/20 text-green-300',
-    medium: 'bg-yellow-500/20 text-yellow-300',
-    low: 'bg-gray-500/20 text-gray-400',
+    high: 'bg-green-100 text-green-700',
+    medium: 'bg-yellow-100 text-yellow-700',
+    low: 'bg-gray-100 text-gray-400',
   };
   return (
     <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${(styles as any)[confidence] || styles.low}`}>
@@ -46,7 +46,7 @@ function ConfidenceBadge({ confidence }: { confidence: string }) {
 function ComparisonBar({ value, max, color }: { value: number; max: number; color: string }) {
   const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
   return (
-    <div className="w-full bg-slate-700 rounded-full h-2">
+    <div className="w-full bg-gray-100 rounded-full h-2">
       <div className={`h-2 rounded-full ${color}`} style={{ width: `${pct}%` }} />
     </div>
   );
@@ -57,9 +57,9 @@ function CorrelationCard({ insight }: { insight: CorrelationInsight }) {
   const absDiff = Math.abs(insight.difference).toFixed(1);
 
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4">
+    <div className="bg-white border border-gray-200 rounded-2xl p-4">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-sm font-medium text-white">{insight.pairName}</span>
+        <span className="text-sm font-medium text-gray-900">{insight.pairName}</span>
         <ConfidenceBadge confidence={insight.confidence} />
       </div>
 
@@ -67,23 +67,23 @@ function CorrelationCard({ insight }: { insight: CorrelationInsight }) {
         <div>
           <div className="flex justify-between text-xs mb-0.5">
             <span className="text-gray-400">{insight.pairName.split(' vs ')[0]}</span>
-            <span className="text-white font-medium">{insight.highGroup.avg.toFixed(1)}</span>
+            <span className="text-gray-900 font-medium">{insight.highGroup.avg.toFixed(1)}</span>
           </div>
           <ComparisonBar value={insight.highGroup.avg} max={maxVal * 1.1} color="bg-blue-500" />
-          <div className="text-[10px] text-gray-500 mt-0.5">n={insight.highGroup.n} days</div>
+          <div className="text-[10px] text-gray-400 mt-0.5">n={insight.highGroup.n} days</div>
         </div>
         <div>
           <div className="flex justify-between text-xs mb-0.5">
             <span className="text-gray-400">Without</span>
-            <span className="text-white font-medium">{insight.lowGroup.avg.toFixed(1)}</span>
+            <span className="text-gray-900 font-medium">{insight.lowGroup.avg.toFixed(1)}</span>
           </div>
           <ComparisonBar value={insight.lowGroup.avg} max={maxVal * 1.1} color="bg-slate-500" />
-          <div className="text-[10px] text-gray-500 mt-0.5">n={insight.lowGroup.n} days</div>
+          <div className="text-[10px] text-gray-400 mt-0.5">n={insight.lowGroup.n} days</div>
         </div>
       </div>
 
-      <div className="mt-3 pt-3 border-t border-slate-700">
-        <p className="text-xs text-gray-300 leading-relaxed">{insight.displaySentence}</p>
+      <div className="mt-3 pt-3 border-t border-gray-200">
+        <p className="text-xs text-gray-600 leading-relaxed">{insight.displaySentence}</p>
         {insight.confounderWarning && (
           <p className="text-[10px] text-yellow-400 mt-1 flex items-center gap-1">
             <Shield className="w-3 h-3" /> {insight.confounderWarning}
@@ -120,7 +120,7 @@ function MetricToggle({ options, selected, onSelect, label }: {
 }) {
   return (
     <div>
-      <span className="text-[10px] text-gray-500 uppercase tracking-wider">{label}</span>
+      <span className="text-[10px] text-gray-400 uppercase tracking-wider">{label}</span>
       <div className="flex flex-wrap gap-1 mt-1">
         {options.map(opt => (
           <button
@@ -128,8 +128,8 @@ function MetricToggle({ options, selected, onSelect, label }: {
             onClick={() => onSelect(opt.key)}
             className={`text-[10px] px-2 py-1 rounded-full transition-colors ${
               selected === opt.key
-                ? 'text-white font-medium'
-                : 'text-gray-500 hover:text-gray-300 bg-slate-700/50'
+                ? 'text-gray-900 font-medium'
+                : 'text-gray-400 hover:text-gray-600 bg-gray-100/50'
             }`}
             style={selected === opt.key ? { backgroundColor: opt.color + '30', color: opt.color } : {}}
           >
@@ -154,7 +154,7 @@ function TrendChart({ chartData, hasBiometrics, hasNutrition }: { chartData: any
   return (
     <div>
       <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">Compare Trends</h2>
-      <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4 space-y-3">
+      <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-3">
         {/* Toggles */}
         <div className="space-y-2">
           <MetricToggle options={BIOMETRIC_OPTIONS} selected={bioMetric} onSelect={setBioMetric} label="Body metric" />
@@ -251,14 +251,14 @@ function TrendsContent() {
     <div className="max-w-lg mx-auto px-4 py-6 space-y-6">
       {/* Header + Range */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">Trends</h1>
-        <div className="flex gap-1 bg-slate-800 rounded-lg p-1">
+        <h1 className="text-2xl font-bold text-gray-900">Trends</h1>
+        <div className="flex gap-1 bg-white rounded-lg p-1">
           {RANGE_OPTIONS.map(opt => (
             <button
               key={opt.days}
               onClick={() => setRange(opt.days)}
               className={`text-xs px-3 py-1 rounded-md transition-colors ${
-                range === opt.days ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
+                range === opt.days ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-900'
               }`}
             >
               {opt.label}
@@ -283,21 +283,21 @@ function TrendsContent() {
                   <span className={`w-2 h-2 rounded-full ${
                     oa.status === 'poor' ? 'bg-red-400' : oa.status === 'below_baseline' ? 'bg-yellow-400' : 'bg-green-400'
                   }`} />
-                  <span className="text-sm font-medium text-white">{oa.statusDetail}</span>
+                  <span className="text-sm font-medium text-gray-900">{oa.statusDetail}</span>
                 </div>
 
                 {/* Primary drivers */}
                 {oa.primaryDrivers?.length > 0 && (
                   <div className="mt-2 space-y-1.5">
-                    <span className="text-[10px] text-gray-500 uppercase tracking-wider">Likely contributors</span>
+                    <span className="text-[10px] text-gray-400 uppercase tracking-wider">Likely contributors</span>
                     {oa.primaryDrivers.map((d: any, i: number) => (
                       <div key={i} className="flex items-center gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
-                        <span className="text-xs text-gray-300 flex-1">{d.factor}</span>
+                        <span className="text-xs text-gray-600 flex-1">{d.factor}</span>
                         <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
                           d.evidenceStrength === 'strong' ? 'bg-blue-500/20 text-blue-300' :
-                          d.evidenceStrength === 'moderate' ? 'bg-yellow-500/20 text-yellow-300' :
-                          'bg-gray-500/20 text-gray-400'
+                          d.evidenceStrength === 'moderate' ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-gray-100 text-gray-400'
                         }`}>{d.evidenceStrength}</span>
                       </div>
                     ))}
@@ -310,7 +310,7 @@ function TrendsContent() {
                     {oa.supportingSignals.map((s: any, i: number) => (
                       <div key={i} className="flex items-center gap-2">
                         <span className="w-1 h-1 rounded-full bg-gray-600 flex-shrink-0" />
-                        <span className="text-[11px] text-gray-500">{s.factor} (possible)</span>
+                        <span className="text-[11px] text-gray-400">{s.factor} (possible)</span>
                       </div>
                     ))}
                   </div>
@@ -318,7 +318,7 @@ function TrendsContent() {
 
                 {/* Recommended test */}
                 {oa.recommendedTest && oa.status !== 'good' && (
-                  <div className="mt-3 pt-2 border-t border-slate-700/50">
+                  <div className="mt-3 pt-2 border-t border-gray-200/50">
                     <p className="text-xs text-emerald-400">{oa.recommendedTest.action}</p>
                   </div>
                 )}
@@ -341,10 +341,10 @@ function TrendsContent() {
       )}
 
       {!hasCorrelations && (!outcomeAnalyses || outcomeAnalyses.length === 0) && (
-        <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5 text-center">
-          <BarChart3 className="w-8 h-8 mx-auto mb-2 text-gray-500" />
+        <div className="bg-white border border-gray-200 rounded-2xl p-5 text-center">
+          <BarChart3 className="w-8 h-8 mx-auto mb-2 text-gray-400" />
           <p className="text-sm text-gray-400">No patterns detected yet.</p>
-          <p className="text-xs text-gray-500 mt-1">Log meals consistently for 2+ weeks to unlock diet-biometric insights.</p>
+          <p className="text-xs text-gray-400 mt-1">Log meals consistently for 2+ weeks to unlock diet-biometric insights.</p>
         </div>
       )}
 
@@ -352,14 +352,14 @@ function TrendsContent() {
       {sensitivities && sensitivities.length > 0 && (
         <div>
           <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">Your Sensitivities</h2>
-          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4 space-y-2">
+          <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-2">
             {sensitivities.slice(0, 5).map((s: any, i: number) => (
               <div key={i} className="flex items-center justify-between">
-                <span className="text-xs text-gray-300">{s.variable.replace(/_/g, ' ')}</span>
+                <span className="text-xs text-gray-600">{s.variable.replace(/_/g, ' ')}</span>
                 <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-                  s.sensitivity === 'high' ? 'bg-red-500/20 text-red-300' :
-                  s.sensitivity === 'medium' ? 'bg-yellow-500/20 text-yellow-300' :
-                  'bg-gray-500/20 text-gray-400'
+                  s.sensitivity === 'high' ? 'bg-red-100 text-red-700' :
+                  s.sensitivity === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                  'bg-gray-100 text-gray-400'
                 }`}>{s.sensitivity} sensitivity</span>
               </div>
             ))}
@@ -374,7 +374,7 @@ function TrendsContent() {
       {hasNutrition && (
         <div>
           <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">Diet Patterns</h2>
-          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4 space-y-2">
+          <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-2">
             {(() => {
               const lateNights = nutrition.filter((n: any) => n.has_late_night_meal).length;
               const totalDays = nutrition.length;
@@ -392,7 +392,7 @@ function TrendsContent() {
 
               return patterns.map((p, i) => (
                 <div key={i} className="flex justify-between items-center">
-                  <span className="text-xs text-gray-300">{p.label}</span>
+                  <span className="text-xs text-gray-600">{p.label}</span>
                   <span className={`text-xs font-medium ${p.color}`}>{p.value}</span>
                 </div>
               ));
@@ -407,12 +407,12 @@ function TrendsContent() {
 export default function TrendsPage() {
   const { isAuthenticated, isLoading } = useAuth();
 
-  if (isLoading) return <div className="min-h-screen bg-slate-900 flex items-center justify-center"><div className="animate-pulse text-gray-400">Loading...</div></div>;
-  if (!isAuthenticated) return <div className="min-h-screen bg-slate-900 flex items-center justify-center"><p className="text-gray-400">Please <Link href="/login" className="text-blue-400">log in</Link> to view trends.</p></div>;
+  if (isLoading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><div className="animate-pulse text-gray-400">Loading...</div></div>;
+  if (!isAuthenticated) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><p className="text-gray-400">Please <Link href="/login" className="text-blue-600">log in</Link> to view trends.</p></div>;
 
   return (
     <ClientOnly>
-      <div className="min-h-screen bg-slate-900">
+      <div className="min-h-screen bg-gray-50">
         <TrendsContent />
       </div>
     </ClientOnly>

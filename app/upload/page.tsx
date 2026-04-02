@@ -139,23 +139,23 @@ export default function UploadPage() {
 
   return (
     <AuthGate>
-      <div className="min-h-screen bg-slate-900">
+      <div className="min-h-screen bg-gray-50">
         <div className="max-w-lg mx-auto px-4 py-6">
 
           {/* Header */}
           <div className="flex items-center gap-3 mb-6">
-            <button onClick={() => router.back()} className="text-gray-400 hover:text-white">
+            <button onClick={() => router.back()} className="text-gray-400 hover:text-gray-900">
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <h1 className="text-xl font-bold text-white">Log Consumption</h1>
+            <h1 className="text-xl font-bold text-gray-900">Log Consumption</h1>
           </div>
 
           {/* Mode Toggle */}
-          <div className="flex gap-2 mb-6 bg-slate-800 rounded-xl p-1">
+          <div className="flex gap-2 mb-6 bg-white rounded-xl p-1">
             <button
               onClick={() => { setMode('photo'); setError(''); }}
               className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
-                mode === 'photo' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
+                mode === 'photo' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-900'
               }`}
             >
               <Camera className="w-4 h-4" /> Photo
@@ -163,7 +163,7 @@ export default function UploadPage() {
             <button
               onClick={() => { setMode('text'); setError(''); }}
               className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
-                mode === 'text' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
+                mode === 'text' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-900'
               }`}
             >
               <MessageSquare className="w-4 h-4" /> Describe
@@ -177,7 +177,7 @@ export default function UploadPage() {
                 <div
                   {...getRootProps()}
                   className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-colors ${
-                    isDragActive ? 'border-blue-400 bg-blue-500/10' : 'border-slate-600 hover:border-slate-500'
+                    isDragActive ? 'border-blue-400 bg-blue-500/10' : 'border-gray-300 hover:border-slate-500'
                   }`}
                 >
                   <input {...getInputProps()} />
@@ -190,9 +190,9 @@ export default function UploadPage() {
                     </div>
                   ) : (
                     <>
-                      <ImageIcon className="w-10 h-10 text-gray-500 mx-auto mb-3" />
-                      <p className="text-gray-300 text-sm mb-1">Drop a photo here or tap to browse</p>
-                      <p className="text-xs text-gray-500">Meals, beverages, supplements — anything you consumed</p>
+                      <ImageIcon className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+                      <p className="text-gray-600 text-sm mb-1">Drop a photo here or tap to browse</p>
+                      <p className="text-xs text-gray-400">Meals, beverages, supplements — anything you consumed</p>
                     </>
                   )}
                 </div>
@@ -207,7 +207,7 @@ export default function UploadPage() {
                     <button onClick={capturePhoto} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-sm font-medium flex items-center gap-2">
                       <Camera className="w-4 h-4" /> Capture
                     </button>
-                    <button onClick={stopCamera} className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2.5 rounded-xl text-sm">
+                    <button onClick={stopCamera} className="bg-gray-100 hover:bg-gray-50 text-gray-900 px-4 py-2.5 rounded-xl text-sm">
                       Cancel
                     </button>
                   </div>
@@ -216,7 +216,7 @@ export default function UploadPage() {
 
               <div className="flex gap-3">
                 {!isUsingCamera && !previewUrl && (
-                  <button onClick={startCamera} className="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white py-3 rounded-xl text-sm font-medium flex items-center justify-center gap-2">
+                  <button onClick={startCamera} className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-gray-900 py-3 rounded-xl text-sm font-medium flex items-center justify-center gap-2">
                     <Camera className="w-4 h-4" /> Open Camera
                   </button>
                 )}
@@ -229,7 +229,7 @@ export default function UploadPage() {
                     >
                       {isAnalyzing ? <><Loader2 className="w-4 h-4 animate-spin" /> Analyzing...</> : 'Analyze'}
                     </button>
-                    <button onClick={() => { setSelectedFile(null); setPreviewUrl(''); }} className="bg-slate-800 hover:bg-slate-700 text-white px-4 py-3 rounded-xl text-sm">
+                    <button onClick={() => { setSelectedFile(null); setPreviewUrl(''); }} className="bg-white hover:bg-gray-100 text-gray-900 px-4 py-3 rounded-xl text-sm">
                       Reset
                     </button>
                   </>
@@ -241,12 +241,12 @@ export default function UploadPage() {
           {/* ====== TEXT MODE ====== */}
           {mode === 'text' && (
             <div className="space-y-4">
-              <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4">
+              <div className="bg-white border border-gray-200 rounded-2xl p-4">
                 <textarea
                   value={textDescription}
                   onChange={(e) => setTextDescription(e.target.value)}
                   placeholder="Describe what you had...&#10;&#10;Examples:&#10;• Chicken breast with rice and broccoli at 12:30pm&#10;• Large iced coffee with oat milk&#10;• Vitamin D 5000 IU supplement&#10;• Turkey sandwich, chips, and a Diet Coke around 1pm"
-                  className="w-full bg-transparent text-white placeholder-gray-500 text-sm resize-none outline-none min-h-[160px]"
+                  className="w-full bg-transparent text-gray-900 placeholder-gray-400 text-sm resize-none outline-none min-h-[160px]"
                   rows={6}
                 />
               </div>
@@ -254,7 +254,7 @@ export default function UploadPage() {
               <button
                 onClick={handleTextAnalyze}
                 disabled={isAnalyzing || !textDescription.trim()}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:text-gray-400 text-white py-3 rounded-xl text-sm font-medium flex items-center justify-center gap-2"
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:text-gray-300 text-white py-3 rounded-xl text-sm font-medium flex items-center justify-center gap-2"
               >
                 {isAnalyzing ? (
                   <><Loader2 className="w-4 h-4 animate-spin" /> Analyzing...</>
@@ -274,7 +274,7 @@ export default function UploadPage() {
 
           {/* Info */}
           <div className="mt-6 text-center">
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-400">
               Upload photos of meals, beverages, or supplements. Describe anything you consumed.
               <br />Everything shown is assumed to be fully consumed.
             </p>

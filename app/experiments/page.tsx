@@ -118,7 +118,7 @@ function ExperimentsContent() {
   return (
     <div className="max-w-lg mx-auto px-4 py-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Insights & Experiments</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Insights & Experiments</h1>
         <p className="text-sm text-gray-400 mt-1">The system analyzes your data and suggests what to test next.</p>
       </div>
 
@@ -138,13 +138,13 @@ function ExperimentsContent() {
           : null;
 
         return (
-          <div key={exp.id} className="bg-purple-500/10 border border-purple-500/20 rounded-2xl p-5">
+          <div key={exp.id} className="bg-purple-50 border border-purple-200 rounded-2xl p-5">
             <div className="flex items-center gap-2 mb-3">
               <Beaker className="w-4 h-4 text-purple-400" />
-              <span className="text-xs font-medium text-purple-300 uppercase tracking-wider">Active Experiment</span>
+              <span className="text-xs font-medium text-purple-600 uppercase tracking-wider">Active Experiment</span>
             </div>
 
-            <p className="text-white font-medium text-sm">{exp.title}</p>
+            <p className="text-gray-900 font-medium text-sm">{exp.title}</p>
             <p className="text-xs text-gray-400 mt-1">{exp.targetBehavior}</p>
 
             {/* Progress */}
@@ -153,7 +153,7 @@ function ExperimentsContent() {
                 <span>Day {daysElapsed} of {exp.durationDays}</span>
                 <span>{daysRemaining} days left</span>
               </div>
-              <div className="w-full bg-slate-700 rounded-full h-2">
+              <div className="w-full bg-gray-100 rounded-full h-2">
                 <div className="bg-purple-500 h-2 rounded-full transition-all" style={{ width: `${progress}%` }} />
               </div>
             </div>
@@ -171,10 +171,10 @@ function ExperimentsContent() {
                   <div
                     key={i}
                     className={`w-7 h-7 rounded-md text-[10px] flex items-center justify-center font-medium ${
-                      log?.compliant === true ? 'bg-green-500/30 text-green-300' :
-                      log?.compliant === false ? 'bg-red-500/30 text-red-300' :
-                      isToday ? 'bg-purple-500/30 text-purple-300 ring-1 ring-purple-400' :
-                      'bg-slate-700/50 text-gray-600'
+                      log?.compliant === true ? 'bg-green-500/30 text-green-700' :
+                      log?.compliant === false ? 'bg-red-500/30 text-red-700' :
+                      isToday ? 'bg-purple-500/30 text-purple-600 ring-1 ring-purple-400' :
+                      'bg-gray-100/50 text-gray-500'
                     }`}
                   >
                     {i + 1}
@@ -187,7 +187,7 @@ function ExperimentsContent() {
             <div className="flex gap-4 mt-3 text-xs">
               {loggedDays > 0 && (
                 <div>
-                  <span className="text-gray-500">Compliance</span>
+                  <span className="text-gray-400">Compliance</span>
                   <span className={`ml-1 font-medium ${complianceRate >= 70 ? 'text-green-400' : complianceRate >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
                     {complianceRate}%
                   </span>
@@ -195,12 +195,12 @@ function ExperimentsContent() {
               )}
               {currentAvg != null && exp.baselineValue != null && (
                 <div>
-                  <span className="text-gray-500">{exp.measurementField.replace(/_/g, ' ')}</span>
+                  <span className="text-gray-400">{exp.measurementField.replace(/_/g, ' ')}</span>
                   <span className={`ml-1 font-medium ${
                     (exp.expectedDirection === 'increase' ? currentAvg > exp.baselineValue : currentAvg < exp.baselineValue)
-                      ? 'text-green-400' : 'text-gray-300'
+                      ? 'text-green-400' : 'text-gray-500'
                   }`}>
-                    {currentAvg} <span className="text-gray-600">(was {exp.baselineValue})</span>
+                    {currentAvg} <span className="text-gray-500">(was {exp.baselineValue})</span>
                   </span>
                 </div>
               )}
@@ -226,15 +226,15 @@ function ExperimentsContent() {
           </h2>
           <div className="space-y-3">
             {suggestions.map((s, i) => (
-              <div key={i} className="bg-slate-800 border border-slate-700 rounded-2xl p-4">
+              <div key={i} className="bg-white border border-gray-200 rounded-2xl p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className={`w-2 h-2 rounded-full ${
                     s.evidenceStrength === 'strong' ? 'bg-blue-400' : 'bg-yellow-400'
                   }`} />
                   <span className="text-xs text-gray-400">{s.statusDetail}</span>
                 </div>
-                <p className="text-sm text-white font-medium">{s.action}</p>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-sm text-gray-900 font-medium">{s.action}</p>
+                <p className="text-xs text-gray-400 mt-1">
                   Measures: {s.measurementField.replace(/_/g, ' ')} over {s.durationDays} days
                 </p>
                 <button
@@ -251,10 +251,10 @@ function ExperimentsContent() {
       )}
 
       {!hasActiveExperiment && suggestions.length === 0 && (
-        <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5 text-center">
-          <Beaker className="w-8 h-8 mx-auto mb-2 text-gray-600" />
+        <div className="bg-white border border-gray-200 rounded-2xl p-5 text-center">
+          <Beaker className="w-8 h-8 mx-auto mb-2 text-gray-500" />
           <p className="text-sm text-gray-400">No experiments suggested yet.</p>
-          <p className="text-xs text-gray-500 mt-1">The system needs more meal + WHOOP data to identify what to test. Keep logging consistently.</p>
+          <p className="text-xs text-gray-400 mt-1">The system needs more meal + WHOOP data to identify what to test. Keep logging consistently.</p>
         </div>
       )}
 
@@ -264,14 +264,14 @@ function ExperimentsContent() {
           <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">Past Results</h2>
           <div className="space-y-3">
             {completed.map(exp => (
-              <div key={exp.id} className="bg-slate-800 border border-slate-700 rounded-2xl p-4">
+              <div key={exp.id} className="bg-white border border-gray-200 rounded-2xl p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-white">{exp.title}</span>
+                  <span className="text-sm font-medium text-gray-900">{exp.title}</span>
                   {exp.result && (
                     <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-                      exp.result.outcome === 'improved' ? 'bg-green-500/20 text-green-300' :
-                      exp.result.outcome === 'worsened' ? 'bg-red-500/20 text-red-300' :
-                      'bg-yellow-500/20 text-yellow-300'
+                      exp.result.outcome === 'improved' ? 'bg-green-100 text-green-700' :
+                      exp.result.outcome === 'worsened' ? 'bg-red-100 text-red-700' :
+                      'bg-yellow-100 text-yellow-700'
                     }`}>
                       {exp.result.outcome === 'improved' ? 'Worked' : exp.result.outcome === 'worsened' ? 'No effect' : 'Inconclusive'}
                     </span>
@@ -281,19 +281,19 @@ function ExperimentsContent() {
                 {exp.result && (
                   <>
                     <div className="grid grid-cols-2 gap-2 mt-2">
-                      <div className="bg-slate-700/50 rounded-lg p-2 text-center">
-                        <div className="text-[10px] text-gray-500">Before</div>
-                        <div className="text-sm font-bold text-white">{exp.result.baselineAvg}</div>
+                      <div className="bg-gray-100/50 rounded-lg p-2 text-center">
+                        <div className="text-[10px] text-gray-400">Before</div>
+                        <div className="text-sm font-bold text-gray-900">{exp.result.baselineAvg}</div>
                       </div>
-                      <div className="bg-slate-700/50 rounded-lg p-2 text-center">
-                        <div className="text-[10px] text-gray-500">During</div>
+                      <div className="bg-gray-100/50 rounded-lg p-2 text-center">
+                        <div className="text-[10px] text-gray-400">During</div>
                         <div className={`text-sm font-bold ${
-                          exp.result.outcome === 'improved' ? 'text-green-400' : 'text-white'
+                          exp.result.outcome === 'improved' ? 'text-green-400' : 'text-gray-900'
                         }`}>{exp.result.experimentAvg}</div>
                       </div>
                     </div>
                     <p className="text-xs text-gray-400 mt-2 leading-relaxed">{exp.result.summary}</p>
-                    <div className="text-[10px] text-gray-600 mt-1">
+                    <div className="text-[10px] text-gray-500 mt-1">
                       Compliance: {exp.result.complianceRate}% | {exp.result.confidence} confidence
                     </div>
                   </>
@@ -310,12 +310,12 @@ function ExperimentsContent() {
 export default function ExperimentsPage() {
   const { isAuthenticated, isLoading } = useAuth();
 
-  if (isLoading) return <div className="min-h-screen bg-slate-900 flex items-center justify-center"><div className="animate-pulse text-gray-400">Loading...</div></div>;
-  if (!isAuthenticated) return <div className="min-h-screen bg-slate-900 flex items-center justify-center"><p className="text-gray-400">Please <Link href="/login" className="text-blue-400">log in</Link>.</p></div>;
+  if (isLoading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><div className="animate-pulse text-gray-400">Loading...</div></div>;
+  if (!isAuthenticated) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><p className="text-gray-400">Please <Link href="/login" className="text-blue-600">log in</Link>.</p></div>;
 
   return (
     <ClientOnly>
-      <div className="min-h-screen bg-slate-900">
+      <div className="min-h-screen bg-gray-50">
         <ExperimentsContent />
       </div>
     </ClientOnly>
