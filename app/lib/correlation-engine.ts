@@ -49,6 +49,31 @@ export interface CorrelationResult {
   displaySentence: string;
 }
 
+export interface OutcomeContributor {
+  factor: string;              // e.g., "Late eating pattern"
+  pairId: string;              // link back to the single-variable result
+  evidenceStrength: 'strong' | 'moderate' | 'weak';
+  effectDirection: 'positive' | 'negative' | 'neutral';
+  detail: string;              // e.g., "5 of 7 nights this week"
+  confidenceScore: number;
+}
+
+export interface OutcomeAnalysis {
+  outcome: string;             // e.g., "sleep_score"
+  outcomeLabel: string;        // e.g., "Sleep"
+  status: 'good' | 'below_baseline' | 'declining' | 'poor';
+  statusDetail: string;        // e.g., "Sleep score is down 9% vs baseline"
+  primaryDrivers: OutcomeContributor[];     // top 1-2
+  supportingSignals: OutcomeContributor[];  // 3rd+
+  recommendedTest: {
+    action: string;            // "Finish meals by 8pm for the next 5 days"
+    targetBehavior: string;    // "no meals after 8pm"
+    measurementField: string;  // "sleep_score"
+    expectedDirection: 'increase' | 'decrease';
+    durationDays: number;
+  } | null;
+}
+
 export interface CorrelationReport {
   userId: string;
   generatedAt: string;
@@ -56,6 +81,7 @@ export interface CorrelationReport {
   dataQuality: { fullDays: number; partialDays: number; avgMealsPerDay: number };
   sensitivities: Array<{ variable: string; sensitivity: 'high' | 'medium' | 'low'; score: number }>;
   insights: CorrelationResult[];
+  outcomeAnalyses: OutcomeAnalysis[];      // NEW: outcome-first multi-factor analysis
   topInsight: CorrelationResult | null;
 }
 
@@ -251,6 +277,7 @@ export async function computeCorrelations(userId: string, userGoal?: string): Pr
       dataQuality: { fullDays: 0, partialDays: 0, avgMealsPerDay: 0 },
       sensitivities: [],
       insights: [],
+      outcomeAnalyses: [],
       topInsight: null,
     };
   }
@@ -351,6 +378,13 @@ export async function computeCorrelations(userId: string, userGoal?: string): Pr
     score: data.score,
   })).sort((a, b) => b.score - a.score);
 
+  // ========================================================================
+  // Layer 2: Outcome-first multi-factor analysis
+  // For each biometric outcome, group all contributing findings and rank them
+  // ========================================================================
+
+  const outcomeAnalyses = buildOutcomeAnalyses(insights, biometricDays);
+
   return {
     userId,
     generatedAt: new Date().toISOString(),
@@ -358,6 +392,7 @@ export async function computeCorrelations(userId: string, userGoal?: string): Pr
     dataQuality: { fullDays, partialDays, avgMealsPerDay },
     sensitivities,
     insights,
+    outcomeAnalyses,
     topInsight: insights.length > 0 ? insights[0]! : null,
   };
 }
@@ -516,6 +551,157 @@ function generateDisplaySentence(
   const higherLabel = pair.labels.high;
   const lowerLabel = pair.labels.low;
   return `On days with ${higherLabel}, your ${pair.labels.outcome} averaged ${round(highAvg, 1)}. On days with ${lowerLabel}, it averaged ${round(lowAvg, 1)}. That's a ${absDiff}-point gap across ${totalN} days. Confidence: ${confidence}.`;
+}
+
+// ============================================================================
+// Layer 2: Outcome-First Multi-Factor Analysis
+// ============================================================================
+
+// Map each biometric outcome to all the comparison pairs that measure it
+const OUTCOME_DEFINITIONS: Array<{
+  outcome: string;
+  label: string;
+  higherIsBetter: boolean;
+  pairIds: string[];  // which comparison pair IDs contribute to this outcome
+  recommendationMap: Array<{ pairId: string; action: string; targetBehavior: string; durationDays: number }>;
+}> = [
+  {
+    outcome: 'sleep_score', label: 'Sleep', higherIsBetter: true,
+    pairIds: ['late_carbs_sleep', 'late_sugar_sleep', 'late_meal_sleep', 'afternoon_caffeine_sleep', 'late_alcohol_sleep', 'fiber_sleep', 'magnesium_sleep'],
+    recommendationMap: [
+      { pairId: 'late_carbs_sleep', action: 'Finish eating carb-heavy foods by 8pm for the next 5 days', targetBehavior: 'Keep carbs under 30g after 8pm', durationDays: 7 },
+      { pairId: 'late_meal_sleep', action: 'Have your last meal by 8pm this week', targetBehavior: 'No meals after 9pm', durationDays: 7 },
+      { pairId: 'afternoon_caffeine_sleep', action: 'No caffeine after 2pm for 7 days', targetBehavior: 'No coffee, tea, or energy drinks after 2pm', durationDays: 7 },
+      { pairId: 'late_alcohol_sleep', action: 'Skip alcohol for 5 days and compare sleep', targetBehavior: 'Zero alcohol', durationDays: 5 },
+      { pairId: 'magnesium_sleep', action: 'Add magnesium-rich foods (spinach, almonds, dark chocolate) daily', targetBehavior: 'Hit magnesium target daily', durationDays: 7 },
+      { pairId: 'fiber_sleep', action: 'Add more fiber (beans, berries, oats) to your meals', targetBehavior: 'Hit 25g+ fiber daily', durationDays: 7 },
+    ],
+  },
+  {
+    outcome: 'recovery_score', label: 'Recovery', higherIsBetter: true,
+    pairIds: ['protein_recovery', 'sugar_recovery', 'alcohol_recovery', 'vitamin_d_recovery', 'vitamin_c_recovery', 'zinc_recovery', 'iron_recovery', 'adequacy_recovery', 'inflammatory_recovery'],
+    recommendationMap: [
+      { pairId: 'protein_recovery', action: 'Increase protein to 120g+ daily for 7 days', targetBehavior: 'Hit 120g+ protein daily', durationDays: 7 },
+      { pairId: 'alcohol_recovery', action: 'No alcohol for 7 days and track recovery', targetBehavior: 'Zero alcohol', durationDays: 7 },
+      { pairId: 'sugar_recovery', action: 'Reduce sugar to under 30g daily this week', targetBehavior: 'Keep sugar under 30g daily', durationDays: 7 },
+      { pairId: 'adequacy_recovery', action: 'Focus on nutrient-dense meals (vegetables, lean protein, whole grains)', targetBehavior: 'Hit 60%+ nutrient adequacy daily', durationDays: 7 },
+      { pairId: 'inflammatory_recovery', action: 'Reduce processed foods and add anti-inflammatory foods (fish, berries, leafy greens)', targetBehavior: 'Lower inflammatory score below 50', durationDays: 7 },
+    ],
+  },
+  {
+    outcome: 'hrv', label: 'HRV', higherIsBetter: true,
+    pairIds: ['alcohol_hrv', 'magnesium_hrv', 'inflammatory_hrv'],
+    recommendationMap: [
+      { pairId: 'alcohol_hrv', action: 'Skip alcohol for 7 days and track HRV', targetBehavior: 'Zero alcohol', durationDays: 7 },
+      { pairId: 'magnesium_hrv', action: 'Add magnesium-rich foods daily (almonds, spinach, avocado)', targetBehavior: 'Hit magnesium target daily', durationDays: 7 },
+      { pairId: 'inflammatory_hrv', action: 'Reduce processed/high-sugar foods this week', targetBehavior: 'Lower inflammatory score below 50', durationDays: 7 },
+    ],
+  },
+  {
+    outcome: 'resting_heart_rate', label: 'Resting Heart Rate', higherIsBetter: false,
+    pairIds: ['sodium_rhr'],
+    recommendationMap: [
+      { pairId: 'sodium_rhr', action: 'Reduce sodium to under 2000mg daily this week', targetBehavior: 'Keep sodium under 2000mg daily', durationDays: 7 },
+    ],
+  },
+];
+
+function buildOutcomeAnalyses(
+  insights: CorrelationResult[],
+  biometricDays: any[]
+): OutcomeAnalysis[] {
+  const analyses: OutcomeAnalysis[] = [];
+
+  for (const def of OUTCOME_DEFINITIONS) {
+    // Find all insights that relate to this outcome
+    const contributors = insights
+      .filter(i => def.pairIds.includes(i.pairId))
+      .filter(i => i.effectDirection !== 'neutral')
+      .sort((a, b) => b.confidenceScore * Math.abs(b.percentDifference) - a.confidenceScore * Math.abs(a.percentDifference));
+
+    if (contributors.length === 0) continue;
+
+    // Determine outcome status from recent biometric data
+    const recent7 = biometricDays.slice(-7);
+    const recent30 = biometricDays.slice(-30);
+    const recentAvg = avgField(recent7, def.outcome);
+    const baselineAvg = avgField(recent30, def.outcome);
+
+    if (recentAvg === null || baselineAvg === null) continue;
+
+    const deviationPct = baselineAvg > 0 ? ((recentAvg - baselineAvg) / baselineAvg) * 100 : 0;
+
+    let status: OutcomeAnalysis['status'];
+    let statusDetail: string;
+
+    if (def.higherIsBetter) {
+      if (deviationPct >= 3) { status = 'good'; statusDetail = `${def.label} is ${round(Math.abs(deviationPct), 0)}% above your baseline`; }
+      else if (deviationPct >= -3) { status = 'good'; statusDetail = `${def.label} is stable around your baseline`; }
+      else if (deviationPct >= -8) { status = 'below_baseline'; statusDetail = `${def.label} is ${round(Math.abs(deviationPct), 0)}% below your baseline`; }
+      else { status = 'poor'; statusDetail = `${def.label} is ${round(Math.abs(deviationPct), 0)}% below your baseline`; }
+    } else {
+      // For RHR: lower is better
+      if (deviationPct <= -3) { status = 'good'; statusDetail = `${def.label} is ${round(Math.abs(deviationPct), 0)}% below your baseline (good)`; }
+      else if (deviationPct <= 3) { status = 'good'; statusDetail = `${def.label} is stable around your baseline`; }
+      else if (deviationPct <= 8) { status = 'below_baseline'; statusDetail = `${def.label} is ${round(deviationPct, 0)}% above your baseline`; }
+      else { status = 'poor'; statusDetail = `${def.label} is elevated ${round(deviationPct, 0)}% above your baseline`; }
+    }
+
+    // Only produce analysis for outcomes that need attention (or have strong findings)
+    const hasStrongFinding = contributors.some(c => c.confidence === 'high' || c.confidence === 'medium');
+    if (status === 'good' && !hasStrongFinding) continue;
+
+    // Map contributors
+    const mapContributor = (c: CorrelationResult): OutcomeContributor => ({
+      factor: c.pairName.split(' vs ')[0] || c.pairName,
+      pairId: c.pairId,
+      evidenceStrength: c.confidence === 'high' ? 'strong' : c.confidence === 'medium' ? 'moderate' : 'weak',
+      effectDirection: c.effectDirection,
+      detail: c.displaySentence,
+      confidenceScore: c.confidenceScore,
+    });
+
+    const primaryDrivers = contributors.slice(0, 2).map(mapContributor);
+    const supportingSignals = contributors.slice(2, 5).map(mapContributor);
+
+    // Pick the best recommendation: strongest contributor that has a recommendation
+    let recommendedTest: OutcomeAnalysis['recommendedTest'] = null;
+    for (const contributor of contributors) {
+      const rec = def.recommendationMap.find(r => r.pairId === contributor.pairId);
+      if (rec) {
+        recommendedTest = {
+          action: rec.action,
+          targetBehavior: rec.targetBehavior,
+          measurementField: def.outcome,
+          expectedDirection: def.higherIsBetter ? 'increase' : 'decrease',
+          durationDays: rec.durationDays,
+        };
+        break;
+      }
+    }
+
+    analyses.push({
+      outcome: def.outcome,
+      outcomeLabel: def.label,
+      status,
+      statusDetail,
+      primaryDrivers,
+      supportingSignals,
+      recommendedTest,
+    });
+  }
+
+  // Sort: outcomes that need attention first
+  const statusOrder = { poor: 0, declining: 1, below_baseline: 2, good: 3 };
+  analyses.sort((a, b) => (statusOrder[a.status] || 3) - (statusOrder[b.status] || 3));
+
+  return analyses;
+}
+
+function avgField(arr: any[], field: string): number | null {
+  const vals = arr.map(r => r[field]).filter((v: any) => v != null);
+  if (vals.length === 0) return null;
+  return vals.reduce((a: number, b: number) => a + b, 0) / vals.length;
 }
 
 // ============================================================================

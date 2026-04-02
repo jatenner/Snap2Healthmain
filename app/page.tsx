@@ -36,6 +36,9 @@ interface TodayData {
     confidence: string;
     direction: string;
     category: string;
+    primaryDrivers?: string[];
+    supportingSignals?: string[];
+    recommendedAction?: string;
   } | null;
   recommendation: string | null;
   meals: Array<{
@@ -141,11 +144,13 @@ function AuthenticatedHome({ userId }: { userId: string }) {
           {!bio && <p className="text-gray-400 mt-1">Log meals to track your nutrition and health trends.</p>}
         </div>
 
-        {/* ====== HERO INSIGHT CARD ====== */}
+        {/* ====== HERO INSIGHT CARD (outcome-first) ====== */}
         {data.heroInsight && (
           <div className="bg-gradient-to-br from-blue-600/20 to-purple-600/20 border border-blue-500/30 rounded-2xl p-5">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-blue-300 uppercase tracking-wider">Pattern Detected</span>
+              <span className="text-xs font-medium text-blue-300 uppercase tracking-wider">
+                {data.heroInsight.category || 'Pattern Detected'}
+              </span>
               <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                 data.heroInsight.confidence === 'high' ? 'bg-green-500/20 text-green-300' :
                 data.heroInsight.confidence === 'medium' ? 'bg-yellow-500/20 text-yellow-300' :
@@ -154,7 +159,38 @@ function AuthenticatedHome({ userId }: { userId: string }) {
                 {data.heroInsight.confidence} confidence
               </span>
             </div>
-            <p className="text-white text-sm leading-relaxed">{data.heroInsight.sentence}</p>
+
+            {/* Outcome status */}
+            <p className="text-white font-medium text-sm mb-1">{data.heroInsight.title}</p>
+
+            {/* Primary drivers */}
+            {data.heroInsight.primaryDrivers && data.heroInsight.primaryDrivers.length > 0 && (
+              <div className="mt-2">
+                <span className="text-[10px] text-gray-400 uppercase tracking-wider">Likely contributors</span>
+                <div className="mt-1 space-y-0.5">
+                  {data.heroInsight.primaryDrivers.map((driver: string, i: number) => (
+                    <div key={i} className="text-xs text-gray-300 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                      {driver}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Supporting signals */}
+            {data.heroInsight.supportingSignals && data.heroInsight.supportingSignals.length > 0 && (
+              <div className="mt-1.5">
+                {data.heroInsight.supportingSignals.map((signal: string, i: number) => (
+                  <div key={i} className="text-[11px] text-gray-500 flex items-center gap-1.5">
+                    <span className="w-1 h-1 rounded-full bg-gray-600" />
+                    {signal} (possible)
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <p className="text-xs text-gray-400 mt-2 leading-relaxed">{data.heroInsight.sentence}</p>
             <Link href="/trends" className="inline-flex items-center gap-1 text-blue-400 text-xs mt-3 hover:text-blue-300">
               View all patterns <ChevronRight className="w-3 h-3" />
             </Link>

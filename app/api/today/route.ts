@@ -72,9 +72,26 @@ export async function GET() {
     const correlationReport = correlationResult.data?.report_data;
     const profile = profileResult.data;
 
-    // Build the hero insight — the ONE most important thing
+    // Build the hero insight — outcome-first if available, single-variable fallback
     let heroInsight: any = null;
-    if (correlationReport?.insights?.length > 0) {
+    if (correlationReport?.outcomeAnalyses?.length > 0) {
+      // Use the top outcome analysis (outcome that needs attention most)
+      const topOutcome = correlationReport.outcomeAnalyses[0];
+      const topDriver = topOutcome.primaryDrivers?.[0];
+      heroInsight = {
+        title: topOutcome.statusDetail,
+        sentence: topDriver
+          ? `Strongest pattern: ${topDriver.factor.toLowerCase()}. ${topDriver.evidenceStrength === 'strong' ? 'This is a strong signal in your data.' : 'This is a possible contributor based on your patterns.'}`
+          : topOutcome.statusDetail,
+        confidence: topDriver?.evidenceStrength === 'strong' ? 'high' : topDriver?.evidenceStrength === 'moderate' ? 'medium' : 'low',
+        direction: topOutcome.status === 'good' ? 'better' : 'worse',
+        category: topOutcome.outcomeLabel,
+        primaryDrivers: topOutcome.primaryDrivers?.map((d: any) => d.factor),
+        supportingSignals: topOutcome.supportingSignals?.map((d: any) => d.factor),
+        recommendedAction: topOutcome.recommendedTest?.action,
+      };
+    } else if (correlationReport?.insights?.length > 0) {
+      // Fallback to single-variable top insight
       const top = correlationReport.insights[0];
       heroInsight = {
         title: top.pairName,
@@ -85,9 +102,19 @@ export async function GET() {
       };
     }
 
-    // Build today's recommendation
+    // Build today's recommendation — outcome-first, then nutrient gaps
     let recommendation: string | null = null;
-    if (nutrition) {
+
+    // First: use outcome analysis recommended test if available
+    if (correlationReport?.outcomeAnalyses?.length > 0) {
+      const topOutcome = correlationReport.outcomeAnalyses[0];
+      if (topOutcome.recommendedTest && topOutcome.status !== 'good') {
+        recommendation = topOutcome.recommendedTest.action;
+      }
+    }
+
+    // Second: nutrient gap recommendations if no outcome-based rec
+    if (!recommendation && nutrition) {
       const gaps: string[] = [];
       if ((nutrition.pct_dv_magnesium || 0) < 50) gaps.push('magnesium');
       if ((nutrition.pct_dv_vitamin_d || 0) < 50) gaps.push('vitamin D');
