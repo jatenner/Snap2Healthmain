@@ -50,7 +50,16 @@ export async function POST(request: NextRequest) {
       messages: [
         {
           role: 'system',
-          content: `You are a nutrition expert. The user will describe food, beverages, or supplements they consumed. Analyze and return comprehensive nutrition data in JSON format. Assume they consumed ALL of what they describe. If they mention a time, note it. Estimate portions based on typical serving sizes unless they specify.${learningContext}`
+          content: `You are a precision nutrition expert. The user will describe food, beverages, or supplements they consumed. Analyze and return comprehensive nutrition data in JSON format.
+
+CRITICAL RULES:
+- Assume they consumed ALL of what they describe
+- If they mention a time, note it
+- Estimate portions based on typical serving sizes unless specified
+- For SUPPLEMENTS: Look up the actual product if it's a known brand. Include EVERY vitamin, mineral, and active ingredient with exact amounts in the micronutrients array. Known supplements like "Blueprint Longevity Mix", "Athletic Greens", "Garden of Life multivitamin" etc. should have their full ingredient profiles returned.
+- For FOOD: Include only nutrients actually present in significant amounts
+- For DRINKS: Include caffeine content if applicable
+- For ALCOHOL: Estimate grams of alcohol (1 drink ≈ 14g)${learningContext}`
         },
         {
           role: 'user',

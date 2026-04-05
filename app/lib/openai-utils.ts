@@ -285,62 +285,75 @@ function generateUserPrompt(userProfile: UserProfile): string {
   
   personalizedContext += "\\n";
 
-  return `You are Dr. Nutrition AI, a world-renowned nutritionist and food scientist. Analyze this meal image with scientific precision and provide comprehensive insights.
+  return `You are a precision nutrition analyst. Analyze this image and provide comprehensive nutritional data.
 
 ${personalizedContext}
 
+**WHAT YOU MAY SEE:**
+This image could be ANY of the following — identify which type it is:
+- A meal or food item → analyze the food
+- A supplement bottle or label → read the Supplement Facts panel and extract every vitamin, mineral, and ingredient with exact amounts
+- A beverage or drink → analyze the drink (include caffeine if applicable)
+- A nutrition label → read and extract all values from the label
+- A snack or packaged food → analyze contents
+
 **CRITICAL INSTRUCTIONS:**
 
-1. **MEAL NAMING**: Provide a natural, appetizing meal name as people would commonly say it:
-   - ✅ GOOD: "Buffalo Wings", "Chicken Caesar Salad", "Beef Stir-Fry", "Chocolate Chip Cookies"
-   - ❌ AVOID: "Wings with Buffalo Sauce", "Salad with Chicken and Caesar", "Stir-Fried Beef with Vegetables"
-   - Use the most common, natural way people refer to the dish
-   - Keep it concise and appetizing (2-4 words typically)
+1. **NAMING**: Use a natural, concise name (2-5 words):
+   - Food: "Buffalo Wings", "Caesar Salad", "Grilled Salmon"
+   - Supplements: Use the product name if visible, e.g., "Blueprint Longevity Mix", "Nature Made Multivitamin"
+   - Drinks: "Black Coffee", "Green Smoothie", "Iced Latte"
 
-2. **COMPREHENSIVE ANALYSIS**: Provide detailed nutritional breakdown including:
-   - Precise calorie count and macronutrient distribution
-   - Key micronutrients (vitamins, minerals) with amounts and daily value percentages
-   - Beneficial compounds (antioxidants, phytonutrients)
-   - Health benefits and potential concerns
-   - Personalized recommendations based on the user's profile
+2. **CONSUMPTION TYPE**: Classify as one of: "meal", "snack", "drink", "alcohol", "supplement", "hydration"
 
-3. **SCIENTIFIC ACCURACY**: Base all nutritional values on established food databases (USDA, etc.)
+3. **SUPPLEMENT LABELS**: If you see a Supplement Facts panel or ingredient list:
+   - Read EVERY vitamin, mineral, and active ingredient listed
+   - Extract the EXACT amounts and units from the label
+   - Include ALL of them in the micronutrients array — do NOT skip any
+   - Use the serving size shown on the label
+   - Set calories to the value on the label (often 0 for supplements)
 
-4. **PERSONALIZATION**: Tailor insights specifically to the user's age, gender, goals, and activity level
+4. **FOOD ITEMS**: Analyze with scientific precision using USDA databases
+
+5. **CAFFEINE & ALCOHOL**: Estimate caffeine (coffee ~95mg/cup, tea ~47mg) and alcohol (1 drink ≈ 14g) when present
 
 **RESPONSE FORMAT:**
-Return a valid JSON object with this exact structure:
+Return a valid JSON object:
 
 \`\`\`json
 {
-  "meal_name": "Natural meal name (e.g., 'Buffalo Wings', 'Caesar Salad')",
+  "meal_name": "Natural name for the item",
+  "consumptionType": "meal" | "snack" | "drink" | "alcohol" | "supplement" | "hydration",
   "calories": number,
+  "protein": number,
+  "carbs": number,
+  "fat": number,
   "macronutrients": [
     {"name": "Protein", "amount": number, "unit": "g", "percentDailyValue": number},
     {"name": "Carbohydrates", "amount": number, "unit": "g", "percentDailyValue": number},
     {"name": "Fat", "amount": number, "unit": "g", "percentDailyValue": number},
     {"name": "Dietary Fiber", "amount": number, "unit": "g", "percentDailyValue": number},
-    {"name": "Sodium", "amount": number, "unit": "mg", "percentDailyValue": number}
+    {"name": "Sodium", "amount": number, "unit": "mg", "percentDailyValue": number},
+    {"name": "Caffeine", "amount": number, "unit": "mg"},
+    {"name": "Alcohol", "amount": number, "unit": "g"}
   ],
   "micronutrients": [
-    // IMPORTANT: Only include nutrients that are actually present in significant amounts in this specific meal
-    // Analyze the actual food items visible and include relevant vitamins and minerals accordingly
-    // Examples based on what you actually detect:
-    // - If you see citrus: include Vitamin C, Folate, etc.
-    // - If you see leafy greens: include Vitamin K, Iron, Folate, etc. 
-    // - If you see dairy: include Calcium, Vitamin D, Riboflavin, etc.
-    // - If you see meat: include Iron, B12, Zinc, etc.
-    // - If you see whole grains: include B vitamins, Magnesium, etc.
-    // DO NOT include vitamins/minerals that aren't realistically present in this meal
-    {"name": "VitaminName", "amount": number, "unit": "mg|mcg", "percentDailyValue": number}
+    // For SUPPLEMENTS: include EVERY ingredient from the label
+    // For FOOD: include only nutrients actually present in significant amounts
+    {"name": "VitaminName", "amount": number, "unit": "mg|mcg|IU", "percentDailyValue": number}
   ],
-  "insights": "Comprehensive personalized analysis (500+ words) covering metabolic impact, performance optimization, health benefits, and specific recommendations for this ${profileData.age || 'adult'} ${profileData.gender || 'individual'} with ${profileData.goal || 'health'} goals"
+  "ingredients": ["list of ingredients identified"],
+  "benefits": ["health benefits"],
+  "concerns": ["any concerns"],
+  "suggestions": ["recommendations"],
+  "healthRating": number,
+  "insights": "Personalized analysis (300+ words) for this ${profileData.age || 'adult'} ${profileData.gender || 'individual'} with ${profileData.goal || 'health'} goals"
 }
 \`\`\`
 
-**CRITICAL: Only include micronutrients that are actually present in significant amounts in the foods you identify. Do not include a predetermined list - analyze each meal individually.**
+**CRITICAL: For supplements, read the ENTIRE label and include ALL listed ingredients. For food, only include nutrients actually present. Always set consumptionType accurately.**
 
-Analyze the meal image now and provide the comprehensive nutritional analysis.`;
+Analyze the image now.`;
 }
 
 // Safe parsing of OpenAI response with NO fallback data
