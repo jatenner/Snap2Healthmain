@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '../../lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
+import { maybeRefreshCorrelations } from '../../lib/auto-refresh';
+import { maybeAutoSyncWhoop } from '../../lib/whoop-auto-sync';
+import { autoLogRecurringHabits } from '../../lib/recurring-habits';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,7 +53,7 @@ export async function GET() {
         .order('meal_time', { ascending: true }),
       // Cached correlation report
       admin.from('correlation_reports')
-        .select('report_data')
+        .select('report_data, generated_at')
         .eq('user_id', userId)
         .single(),
       // User profile
@@ -247,7 +250,23 @@ export async function GET() {
         endDate: experimentResult.data.end_date,
         status: experimentResult.data.status,
       } : null,
+
+      // Data freshness info
+      correlationAge: correlationResult.data?.generated_at
+        ? Math.round((Date.now() - new Date(correlationResult.data.generated_at).getTime()) / (1000 * 60 * 60))
+        : null,
     });
+
+    // Fire-and-forget background tasks
+    autoLogRecurringHabits(userId).catch(e =>
+      console.error('[today] Background habit logging error:', e)
+    );
+    maybeAutoSyncWhoop(userId).catch(e =>
+      console.error('[today] Background WHOOP sync error:', e)
+    );
+    maybeRefreshCorrelations(userId).catch(e =>
+      console.error('[today] Background correlation refresh error:', e)
+    );
 
   } catch (err: any) {
     console.error('Today API error:', err.message);

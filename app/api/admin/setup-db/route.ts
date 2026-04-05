@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 export async function POST(req: NextRequest) {
+  // Restrict to development environment only
+  if (process.env.NODE_ENV !== 'development') {
+    return NextResponse.json(
+      { error: 'This endpoint is only available in development' },
+      { status: 403 }
+    );
+  }
+
   console.log('[setup-db] Starting database setup...');
 
   // Create admin Supabase client

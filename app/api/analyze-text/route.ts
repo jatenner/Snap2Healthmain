@@ -61,7 +61,7 @@ Provide comprehensive nutrition data in JSON format:
 {
   "mealName": "descriptive name",
   "mealDescription": "detailed description of what was consumed",
-  "consumptionType": "meal" | "beverage" | "supplement" | "snack",
+  "consumptionType": "meal" | "snack" | "drink" | "alcohol" | "supplement" | "hydration",
   "parsedTime": "HH:MM in 24hr format if mentioned, null otherwise",
   "calories": number,
   "protein": number,
@@ -160,11 +160,19 @@ Return ONLY valid JSON.`
       consumptionType: analysis.consumptionType,
     });
 
+    // Map consumptionType to intake_type (normalize legacy values)
+    const consumptionTypeMap: Record<string, string> = {
+      meal: 'meal', snack: 'snack', drink: 'drink', beverage: 'drink',
+      alcohol: 'alcohol', supplement: 'supplement', hydration: 'hydration',
+    };
+    const intakeType = consumptionTypeMap[analysis.consumptionType] || 'meal';
+
     // Save to database — same structure as image-based analysis
     const mealRecord = {
       user_id: userId,
       meal_name: analysis.mealName || description.substring(0, 100),
       image_url: null,
+      intake_type: intakeType,
       calories: analysis.calories || 0,
       protein: analysis.protein || 0,
       fat: analysis.fat || 0,

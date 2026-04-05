@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '../../../lib/supabase/server';
-import { getLocalMealById, shouldUseLocalStorage } from '../../../lib/localStorage-utils';
-import { safeJsonParse } from '../../analyze-meal/json-fix';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,88 +51,23 @@ export async function GET(
   console.log(`[api/meals/id] Will try these meal ID candidates:`, mealIdCandidates);
 
   try {
-    // If we should use local storage or if it's a dev meal
-    if (shouldUseLocalStorage() || mealId.startsWith('dev-')) {
-      console.log(`[api/meals/id] Using local storage for meal: ${mealId}`);
-      const localMeal = getLocalMealById(mealId);
-      
-      if (localMeal) {
-        return NextResponse.json(localMeal);
-      } else {
-        console.log(`[api/meals/id] Meal not found in local storage: ${mealId}`);
-        return NextResponse.json({ error: 'Meal not found' }, { status: 404 });
-      }
-    }
-
     const supabase = createServerClient();
-    
-    // Get the user with proper authentication
+
+    // Authenticate user
     const { data: { user }, error: userError } = await supabase.auth.getUser();
-    
-    if (userError) {
-      console.error('[api/meals/id] Error getting user:', userError);
-      return NextResponse.json({ error: 'Failed to authenticate user' }, { status: 500 });
+    if (userError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Debug environment variables
-    console.log('[api/meals/id] Environment variables:', {
-      FORCE_DEV_MODE: process.env.FORCE_DEV_MODE,
-      BYPASS_AUTH: process.env.BYPASS_AUTH,
-      NODE_ENV: process.env.NODE_ENV
-    });
-    
-    // Allow bypass for temporary demo mode or development
-    const allowBypass = true; // Temporarily disable auth for debugging
-    
-    console.log('[api/meals/id] Auth check:', { 
-      hasUser: !!user, 
-      allowBypass, 
-      willBypass: !user && allowBypass 
-    });
-    
-    // In development mode or with bypass, allow access without user for testing
-    if (!user && !allowBypass) {
-      console.log('[api/meals/id] ❌ Access denied - no user and no bypass allowed');
-      return NextResponse.json(
-        { error: 'Unauthorized - You must be logged in to view meals' },
-        { status: 401 }
-      );
-    }
-    
-    if (!user && allowBypass) {
-      console.log('[api/meals/id] ✅ Allowing access via development bypass');
-    } else if (user) {
-      console.log('[api/meals/id] ✅ Allowing access via valid user');
-    }
-    
-    // Create admin client to bypass RLS policies for read operations
-    const { createClient } = require('@supabase/supabase-js');
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    );
-    
-    const userId = user?.id;
-    console.log(`[api/meals/id] Fetching meal ${mealId} for user ${userId || 'development-mode'}`);
-    
-    // Fetch the meal from Supabase using admin client
-    let query = supabaseAdmin
+    const userId = user.id;
+
+    // Fetch the meal from Supabase, scoped to the authenticated user
+    const { data, error } = await supabase
       .from('meals')
       .select('*')
-      .eq('id', mealId);
-    
-    // In production, filter by user_id for security
-    if (false) { // Temporarily disabled for debugging
-      query = query.eq('user_id', userId);
-    }
-    
-    const { data, error } = await query.single();
+      .eq('id', mealId)
+      .eq('user_id', userId)
+      .single();
     
     if (error) {
       console.error('[api/meals/id] Database error:', error);

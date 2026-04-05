@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import Link from 'next/link';
-import { ArrowLeft, Camera, Save, User, CheckCircle, AlertCircle, Target, Activity, Scale, Ruler, Link2, Link2Off, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Camera, Save, User, CheckCircle, AlertCircle, Target, Activity, Scale, Ruler, Link2, Link2Off, RefreshCw, BrainCircuit, TrendingUp, TrendingDown } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 
 export default function ProfilePage() {
@@ -24,6 +24,9 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
+
+  // Sensitivity profile state
+  const [sensitivityProfile, setSensitivityProfile] = useState<any>(null);
 
   // WHOOP integration state
   const searchParams = useSearchParams();
@@ -93,6 +96,35 @@ export default function ProfilePage() {
       .then((data) => setWhoopStatus(data))
       .catch(() => setWhoopStatus({ connected: false }))
       .finally(() => setWhoopLoading(false));
+  }, [user]);
+
+  // Fetch sensitivity profile
+  useEffect(() => {
+    if (!user) return;
+    fetch('/api/correlations')
+      .then(res => res.json())
+      .then(data => {
+        if (data.sensitivities) {
+          // Build a lightweight profile from correlation data
+          setSensitivityProfile({
+            sensitivities: data.sensitivities?.slice(0, 8) || [],
+            summary: null, // Will be fetched separately if exists
+          });
+        }
+      })
+      .catch(() => {});
+
+    // Fetch the AI-generated summary from sensitivity profiles
+    // This is a client-side query so we use the supabase client
+    import('../lib/supabase/client').then(({ createClient }) => {
+      const supabase = createClient();
+      supabase.from('user_sensitivity_profiles')
+        .select('profile_summary, sensitivities, top_positive_factors, top_negative_factors, last_correlation_at')
+        .single()
+        .then(({ data }: any) => {
+          if (data) setSensitivityProfile(data);
+        });
+    });
   }, [user]);
 
   // Handle WHOOP OAuth callback query params
@@ -610,6 +642,81 @@ export default function ProfilePage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Sensitivity Profile */}
+        {sensitivityProfile && (
+          <Card className="bg-gray-800 border-gray-700 mt-6">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center">
+                <BrainCircuit className="w-6 h-6 mr-2 text-purple-400" />
+                Your Health Patterns
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {sensitivityProfile.profile_summary ? (
+                <p className="text-gray-300 text-sm leading-relaxed">{sensitivityProfile.profile_summary}</p>
+              ) : (
+                <p className="text-gray-500 text-sm">Building your personal health profile... Keep logging meals and wearing your WHOOP.</p>
+              )}
+
+              {sensitivityProfile.sensitivities?.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">Sensitivities</p>
+                  <div className="space-y-2">
+                    {(sensitivityProfile.sensitivities as any[]).slice(0, 6).map((s: any, i: number) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <span className="text-xs text-gray-400 w-28 truncate">{s.variable}</span>
+                        <div className="flex-1 bg-gray-700 rounded-full h-2">
+                          <div
+                            className={`h-2 rounded-full ${
+                              s.sensitivity === 'high' ? 'bg-red-500' : s.sensitivity === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
+                            }`}
+                            style={{ width: `${Math.min(s.score, 100)}%` }}
+                          />
+                        </div>
+                        <span className={`text-xs font-medium ${
+                          s.sensitivity === 'high' ? 'text-red-400' : s.sensitivity === 'medium' ? 'text-yellow-400' : 'text-green-400'
+                        }`}>{s.sensitivity}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {sensitivityProfile.top_positive_factors?.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1">
+                    <TrendingUp className="w-3 h-3 text-green-400" /> Positive Factors
+                  </p>
+                  <div className="space-y-1">
+                    {(sensitivityProfile.top_positive_factors as any[]).slice(0, 3).map((f: any, i: number) => (
+                      <p key={i} className="text-xs text-green-300">{f.sentence}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {sensitivityProfile.top_negative_factors?.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1">
+                    <TrendingDown className="w-3 h-3 text-red-400" /> Risk Factors
+                  </p>
+                  <div className="space-y-1">
+                    {(sensitivityProfile.top_negative_factors as any[]).slice(0, 3).map((f: any, i: number) => (
+                      <p key={i} className="text-xs text-red-300">{f.sentence}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {sensitivityProfile.last_correlation_at && (
+                <p className="text-xs text-gray-600 pt-2">
+                  Last updated: {new Date(sensitivityProfile.last_correlation_at).toLocaleDateString()}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </main>
     </div>
   );

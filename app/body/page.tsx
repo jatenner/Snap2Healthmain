@@ -91,6 +91,16 @@ function BodyContent() {
         )}
       </div>
 
+      {data.dataAgeDays > 0 && (
+        <div className={`flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-xl ${
+          data.dataAgeDays <= 1 ? 'bg-yellow-50 text-yellow-700' : 'bg-red-50 text-red-700'
+        }`}>
+          <span>Data from {data.latestDate ? new Date(data.latestDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : `${data.dataAgeDays}d ago`}</span>
+          <span>·</span>
+          <Link href="/profile" className="underline">Sync WHOOP</Link>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3">
         <Metric icon={Moon} label="Sleep" value={t.sleep_score} unit="%" avg7={wa.sleepScore} baseline={bl.sleepScore} color="#3b82f6" bg="bg-blue-50" spark={spark} sparkKey="sleep_score" />
         <Metric icon={Heart} label="Recovery" value={t.recovery_score} unit="%" avg7={wa.recovery} baseline={bl.recovery} color="#22c55e" bg="bg-green-50" spark={spark} sparkKey="recovery_score" />

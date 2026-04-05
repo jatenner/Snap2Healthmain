@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '../../lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
+import { maybeAutoSyncWhoop } from '../../lib/whoop-auto-sync';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,21 +14,34 @@ export async function GET() {
     const admin = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
     const today = new Date().toISOString().split('T')[0]!;
     const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]!;
-    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0]!;
 
-    const [todayRes, yesterdayRes, weekRes, sleepRes] = await Promise.all([
-      admin.from('daily_biometric_summaries').select('*').eq('user_id', user.id).eq('summary_date', today).single(),
-      admin.from('daily_biometric_summaries').select('*').eq('user_id', user.id).eq('summary_date', yesterday).single(),
+    // Fetch recent biometric summaries (up to 14 days) — not just today/yesterday
+    const twoWeeksAgo = new Date(Date.now() - 14 * 86400000).toISOString().split('T')[0]!;
+
+    const [recentRes, sleepRes] = await Promise.all([
       admin.from('daily_biometric_summaries')
-        .select('summary_date, sleep_score, recovery_score, hrv, resting_heart_rate, strain, respiratory_rate, deep_sleep_minutes, rem_sleep_minutes, workout_count, day_quality')
-        .eq('user_id', user.id).gte('summary_date', weekAgo).order('summary_date', { ascending: true }),
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('summary_date', twoWeeksAgo)
+        .order('summary_date', { ascending: false }),
       admin.from('whoop_sleep')
         .select('start_time, end_time, sleep_performance_pct, sleep_efficiency_pct, sleep_consistency_pct, respiratory_rate, total_in_bed_minutes, total_awake_minutes, total_light_sleep_minutes, total_slow_wave_sleep_minutes, total_rem_sleep_minutes, is_nap, score_state')
         .eq('user_id', user.id).eq('is_nap', false).order('start_time', { ascending: false }).limit(1),
     ]);
 
-    const todayData = todayRes.data;
-    const recentDays = weekRes.data || [];
+    const allRecent = recentRes.data || [];
+
+    // Use most recent available day as "today" (may be 1-2 days old if WHOOP hasn't synced)
+    const todayData = allRecent.find((d: any) => d.summary_date === today)
+      || allRecent.find((d: any) => d.summary_date === yesterday)
+      || allRecent[0]  // fallback to most recent available
+      || null;
+    const yesterdayData = todayData
+      ? allRecent.find((d: any) => d.summary_date !== todayData.summary_date) || null
+      : null;
+
+    // Sparkline data: most recent 7 days that have data
+    const recentDays = allRecent.slice(0, 10).reverse();
 
     // Compute week averages
     const avg = (field: string) => {
@@ -35,11 +49,19 @@ export async function GET() {
       return vals.length > 0 ? Math.round((vals.reduce((a: number, b: number) => a + b, 0) / vals.length) * 10) / 10 : null;
     };
 
+    // Calculate how stale the data is
+    const latestDate = todayData?.summary_date || null;
+    const dataAgeDays = latestDate
+      ? Math.floor((Date.now() - new Date(latestDate).getTime()) / 86400000)
+      : null;
+
     return NextResponse.json({
       today: todayData,
-      yesterday: yesterdayRes.data,
+      yesterday: yesterdayData,
       sleepDetail: sleepRes.data?.[0] || null,
       recentDays,
+      latestDate,
+      dataAgeDays,
       weekAvg: {
         sleepScore: avg('sleep_score'),
         recovery: avg('recovery_score'),
@@ -56,6 +78,12 @@ export async function GET() {
       } : null,
       trajectory: todayData?.trajectory || null,
     });
+
+    // Fire-and-forget: auto-sync WHOOP if stale
+    maybeAutoSyncWhoop(user!.id).catch(e =>
+      console.error('[body] Background WHOOP sync error:', e)
+    );
+
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

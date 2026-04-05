@@ -2,6 +2,7 @@
 // Pure deterministic statistics — no AI. AI interprets results separately.
 
 import { createClient } from '@supabase/supabase-js';
+import { generateAndStoreProfileSummary } from './profile-summary-generator';
 
 function getSupabaseAdmin() {
   return createClient(
@@ -17,7 +18,7 @@ function getSupabaseAdmin() {
 interface ComparisonPair {
   id: string;
   name: string;
-  category: 'timing' | 'macros' | 'micros' | 'scores' | 'tags' | 'caffeine_alcohol';
+  category: 'timing' | 'macros' | 'micros' | 'scores' | 'tags' | 'caffeine_alcohol' | 'context';
   nutritionField: string;
   highThreshold: number;
   lowThreshold: number;
@@ -225,6 +226,32 @@ const COMPARISON_PAIRS: ComparisonPair[] = [
     biometricField: 'recovery_score', higherIsBetter: true, lagDays: 1,
     labels: { high: 'high inflammatory score', low: 'low inflammatory score', outcome: 'next-day recovery' }
   },
+
+  // Context events (self-reported energy/stress vs biometrics)
+  {
+    id: 'stress_sleep', name: 'Stress vs sleep', category: 'context',
+    nutritionField: 'avg_stress_level', highThreshold: 6, lowThreshold: 3, thresholdType: 'above_below',
+    biometricField: 'sleep_score', higherIsBetter: true, lagDays: 0,
+    labels: { high: 'high stress days', low: 'low stress days', outcome: 'sleep score' }
+  },
+  {
+    id: 'stress_recovery', name: 'Stress vs recovery', category: 'context',
+    nutritionField: 'avg_stress_level', highThreshold: 6, lowThreshold: 3, thresholdType: 'above_below',
+    biometricField: 'recovery_score', higherIsBetter: true, lagDays: 1,
+    labels: { high: 'high stress days', low: 'low stress days', outcome: 'next-day recovery' }
+  },
+  {
+    id: 'energy_recovery', name: 'Self-reported energy vs recovery', category: 'context',
+    nutritionField: 'avg_energy_level', highThreshold: 7, lowThreshold: 4, thresholdType: 'above_below',
+    biometricField: 'recovery_score', higherIsBetter: true, lagDays: 0,
+    labels: { high: 'high energy days', low: 'low energy days', outcome: 'recovery score' }
+  },
+  {
+    id: 'energy_hrv', name: 'Self-reported energy vs HRV', category: 'context',
+    nutritionField: 'avg_energy_level', highThreshold: 7, lowThreshold: 4, thresholdType: 'above_below',
+    biometricField: 'hrv', higherIsBetter: true, lagDays: 0,
+    labels: { high: 'high energy days', low: 'low energy days', outcome: 'HRV' }
+  },
 ];
 
 // ============================================================================
@@ -335,8 +362,11 @@ export async function computeCorrelations(userId: string, userGoal?: string): Pr
       // Add data quality score
       result.dataQualityScore = dataQualityBase;
 
-      // Add sensitivity score: how strongly this user reacts (effect size × consistency × 100)
-      result.sensitivityScore = round(Math.min(100, Math.abs(result.percentDifference) * result.consistency * 10), 0);
+      // Sensitivity score: effect × consistency × sample size factor
+      // n-factor: 0.5 at n=5, 0.75 at n=10, 1.0 at n=20+
+      const minNForSens = Math.min(result.highGroup.n, result.lowGroup.n);
+      const nFactor = Math.min(1.0, 0.25 + (minNForSens / 27));
+      result.sensitivityScore = round(Math.min(100, Math.abs(result.percentDifference) * result.consistency * 10 * nFactor), 0);
 
       // Add explicit effect direction
       const isNutrientBad = pair.nutritionField.includes('inflammatory') ||
@@ -509,7 +539,10 @@ function computeSingleCorrelation(
     confidenceScore >= 40 ? 'medium' : 'low';
 
   // Generate display sentence
-  const displaySentence = generateDisplaySentence(pair, highGroup.length, lowGroup.length, highAvg, lowAvg, difference, confidence);
+  let displaySentence = generateDisplaySentence(pair, highGroup.length, lowGroup.length, highAvg, lowAvg, difference, confidence);
+  if (!confounderControlled && confounderWarning) {
+    displaySentence += ` Note: ${confounderWarning} — this may affect the result.`;
+  }
 
   return {
     pairId: pair.id,
@@ -717,4 +750,86 @@ function addDays(dateStr: string, days: number): string {
 function round(n: number, decimals: number): number {
   const factor = Math.pow(10, decimals);
   return Math.round(n * factor) / factor;
+}
+
+// ============================================================================
+// Persist Sensitivity Profile
+// ============================================================================
+
+export async function persistSensitivityProfile(
+  userId: string,
+  report: CorrelationReport
+): Promise<void> {
+  const supabase = getSupabaseAdmin();
+
+  // Extract top sensitivities — exclude 'low' sensitivity (score < 30)
+  const sensitivities = (report.sensitivities || [])
+    .filter(s => s.score >= 20)
+    .slice(0, 15)
+    .map(s => ({
+      variable: s.variable,
+      sensitivity: s.sensitivity,
+      score: s.score,
+    }));
+
+  // Extract top positive factors (direction = 'better', high confidence)
+  const positiveFactors = report.insights
+    .filter(i => i.direction === 'better' && i.confidence !== 'low')
+    .sort((a, b) => b.confidenceScore - a.confidenceScore)
+    .slice(0, 5)
+    .map(i => ({
+      pairId: i.pairId,
+      name: i.pairName,
+      sentence: i.displaySentence,
+      confidence: i.confidence,
+      percentDifference: i.percentDifference,
+    }));
+
+  // Extract top negative factors (direction = 'worse', high confidence)
+  const negativeFactors = report.insights
+    .filter(i => i.direction === 'worse' && i.confidence !== 'low')
+    .sort((a, b) => b.confidenceScore - a.confidenceScore)
+    .slice(0, 5)
+    .map(i => ({
+      pairId: i.pairId,
+      name: i.pairName,
+      sentence: i.displaySentence,
+      confidence: i.confidence,
+      percentDifference: i.percentDifference,
+    }));
+
+  // Fetch existing profile to increment count
+  const { data: existing } = await supabase
+    .from('user_sensitivity_profiles')
+    .select('correlation_count')
+    .eq('user_id', userId)
+    .single();
+
+  const correlationCount = (existing?.correlation_count || 0) + 1;
+
+  const { error } = await supabase
+    .from('user_sensitivity_profiles')
+    .upsert({
+      user_id: userId,
+      sensitivities,
+      top_positive_factors: positiveFactors,
+      top_negative_factors: negativeFactors,
+      last_correlation_at: new Date().toISOString(),
+      correlation_count: correlationCount,
+    }, { onConflict: 'user_id' });
+
+  if (error) {
+    console.error('[correlation-engine] Failed to persist sensitivity profile:', error.message);
+  } else {
+    console.log(`[correlation-engine] Sensitivity profile updated for user ${userId} (run #${correlationCount})`);
+
+    // Generate AI summary in background (every 3rd run to save API calls)
+    if (correlationCount % 3 === 1 || correlationCount === 1) {
+      // Fetch user goal for context
+      const { data: profile } = await supabase.from('profiles').select('goal').eq('id', userId).single();
+      generateAndStoreProfileSummary(
+        userId, sensitivities, positiveFactors, negativeFactors, profile?.goal
+      ).catch(e => console.error('[correlation-engine] Profile summary generation error:', e));
+    }
+  }
 }

@@ -88,16 +88,52 @@ async function getEnhancedUserContext(user_id: string, supabase: any) {
       .order('created_at', { ascending: false })
       .limit(10);
 
+    // Fetch today's nutrition summary for real-time dietary recommendations
+    const today = new Date().toISOString().split('T')[0]!;
+    const { data: todayNutrition } = await supabase
+      .from('daily_nutrition_summaries')
+      .select('total_calories, total_protein, total_carbs, total_fat, total_fiber, total_sugar, total_sodium, total_caffeine, total_alcohol, alcohol_servings, total_water_ml, supplement_count, meal_count, has_late_night_meal, first_meal_time, last_meal_time, nutrient_adequacy_score')
+      .eq('user_id', user_id)
+      .eq('summary_date', today)
+      .single();
+
+    // Fetch correlation-aware context in parallel
+    const [sensitivityResult, correlationResult, experimentResult, learningResult] = await Promise.all([
+      supabase.from('user_sensitivity_profiles')
+        .select('sensitivities, top_positive_factors, top_negative_factors, profile_summary')
+        .eq('user_id', user_id).single(),
+      supabase.from('correlation_reports')
+        .select('report_data')
+        .eq('user_id', user_id).single(),
+      supabase.from('health_experiments')
+        .select('title, hypothesis, target_behavior, measurement_field, status, start_date, end_date')
+        .eq('user_id', user_id).eq('status', 'active').single(),
+      supabase.from('user_profiles_learning')
+        .select('dietary_preferences, health_goals, food_sensitivities, past_insights')
+        .eq('user_id', user_id).single(),
+    ]);
+
     // Analyze meal patterns and trends
     const mealAnalysis = analyzeMealTrends(mealHistory || []);
     const chatPatterns = analyzeChatPatterns(recentChats || []);
-    
+
+    // Extract top correlation display sentences
+    const correlationInsights = correlationResult.data?.report_data?.insights
+      ?.filter((i: any) => i.confidence !== 'low')
+      ?.slice(0, 7)
+      ?.map((i: any) => i.displaySentence) || [];
+
     return {
       mealHistory: mealHistory || [],
       mealAnalysis,
       recentChats: recentChats || [],
       chatPatterns,
-      totalMeals: mealHistory?.length || 0
+      totalMeals: mealHistory?.length || 0,
+      sensitivityProfile: sensitivityResult.data || null,
+      correlationInsights,
+      activeExperiment: experimentResult.data || null,
+      learningProfile: learningResult.data || null,
+      todayNutrition: todayNutrition || null,
     };
   } catch (error) {
     console.error('[Enhanced Context] Error:', error);
@@ -428,6 +464,68 @@ Current daily averages:
     contextPrompt += `\n\n💬 CLIENT INTERESTS: ${patterns.commonTopics.join(', ')}`;
   }
 
+  // Inject sensitivity profile
+  if (enhancedContext?.sensitivityProfile?.profile_summary) {
+    contextPrompt += `\n\n🧬 PERSONAL SENSITIVITY PROFILE:\n${enhancedContext.sensitivityProfile.profile_summary}`;
+
+    const topSens = enhancedContext.sensitivityProfile.sensitivities?.slice(0, 5);
+    if (topSens?.length > 0) {
+      contextPrompt += `\n\nTop sensitivities:`;
+      for (const s of topSens) {
+        contextPrompt += `\n• ${s.variable}: ${s.sensitivity} sensitivity (score: ${s.score})`;
+      }
+    }
+  }
+
+  // Inject correlation findings
+  if (enhancedContext?.correlationInsights?.length > 0) {
+    contextPrompt += `\n\n📊 KEY DATA-DRIVEN PATTERNS (from real correlation analysis):`;
+    for (const insight of enhancedContext.correlationInsights) {
+      contextPrompt += `\n• ${insight}`;
+    }
+    contextPrompt += `\n\nIMPORTANT: These are real statistical patterns from this client's data. Reference them when relevant. Use "associated with" or "pattern suggests" language — NEVER claim causation.`;
+  }
+
+  // Inject active experiment
+  if (enhancedContext?.activeExperiment) {
+    const exp = enhancedContext.activeExperiment;
+    contextPrompt += `\n\n🧪 ACTIVE EXPERIMENT:\nTitle: "${exp.title}"\nHypothesis: ${exp.hypothesis}\nBehavior: ${exp.target_behavior}\nMeasuring: ${exp.measurement_field}\nDates: ${exp.start_date} to ${exp.end_date}`;
+  }
+
+  // Inject known preferences from learning profile
+  if (enhancedContext?.learningProfile) {
+    const lp = enhancedContext.learningProfile;
+    const parts: string[] = [];
+    if (lp.dietary_preferences) parts.push(`Dietary preferences: ${JSON.stringify(lp.dietary_preferences)}`);
+    if (lp.food_sensitivities) parts.push(`Known sensitivities: ${JSON.stringify(lp.food_sensitivities)}`);
+    if (lp.health_goals) parts.push(`Health goals: ${JSON.stringify(lp.health_goals)}`);
+    if (parts.length > 0) {
+      contextPrompt += `\n\n📝 REMEMBERED CLIENT DETAILS:\n${parts.join('\n')}`;
+    }
+  }
+
+  // Inject today's nutrition for real-time recommendations
+  if (enhancedContext?.todayNutrition) {
+    const tn = enhancedContext.todayNutrition;
+    contextPrompt += `\n\n🍽️ TODAY'S INTAKE SO FAR (${tn.meal_count || 0} meals logged today):`;
+    contextPrompt += `\n• Calories: ${tn.total_calories || 0}`;
+    contextPrompt += `\n• Protein: ${Math.round(tn.total_protein || 0)}g`;
+    contextPrompt += `\n• Carbs: ${Math.round(tn.total_carbs || 0)}g`;
+    contextPrompt += `\n• Fat: ${Math.round(tn.total_fat || 0)}g`;
+    if (tn.total_fiber) contextPrompt += `\n• Fiber: ${Math.round(tn.total_fiber)}g`;
+    if (tn.total_caffeine) contextPrompt += `\n• Caffeine: ${Math.round(tn.total_caffeine)}mg`;
+    if (tn.alcohol_servings) contextPrompt += `\n• Alcohol: ${tn.alcohol_servings} drinks (${Math.round(tn.total_alcohol || 0)}g)`;
+    if (tn.total_water_ml) contextPrompt += `\n• Water: ${Math.round(tn.total_water_ml)}ml`;
+    if (tn.supplement_count) contextPrompt += `\n• Supplements taken: ${tn.supplement_count}`;
+    if (tn.first_meal_time) contextPrompt += `\n• First meal: ${new Date(tn.first_meal_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+    if (tn.last_meal_time) contextPrompt += `\n• Last meal: ${new Date(tn.last_meal_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+    if (tn.has_late_night_meal) contextPrompt += `\n• ⚠️ Late-night meal logged`;
+    if (tn.nutrient_adequacy_score != null) contextPrompt += `\n• Nutrient adequacy: ${Math.round(tn.nutrient_adequacy_score)}%`;
+    contextPrompt += `\n\nUse this data to give specific remaining-intake recommendations when asked "what should I eat?" For example: "You've had X calories and Yg protein so far — aim for Z more protein at dinner."`;
+  } else {
+    contextPrompt += `\n\n🍽️ TODAY'S INTAKE: No meals logged yet today.`;
+  }
+
   const responseGuidelines = `
 
 🎯 COACHING RESPONSE FRAMEWORK:
@@ -452,7 +550,16 @@ Current daily averages:
    - Clear metrics: "Aim for X grams of protein at each meal"
    - Follow-up: "Check in with me in a few days and let me know how it's going"
 
-Remember: You're their dedicated AI nutrition guide - experienced, knowledgeable, and genuinely invested in their success. Speak with the authority of an advanced AI system that has analyzed thousands of nutrition patterns and can provide personalized, evidence-based guidance.`;
+## CRITICAL RULES:
+- You are NOT a doctor. NEVER diagnose medical conditions.
+- NEVER prescribe medications or clinical supplement protocols.
+- For medical concerns, always recommend consulting a healthcare provider.
+- If asked about symptoms that could indicate a medical issue, say: "I can share what your nutrition data shows, but please consult a doctor for medical advice."
+- If you don't have enough data to answer a question, say so clearly: "I don't have enough data to answer that with confidence yet."
+- NEVER fabricate data or patterns. Only reference what is actually in the context provided.
+- Use "associated with", "pattern suggests", "tends to" — NEVER "causes", "will", or "definitely".
+
+Remember: You're their AI nutrition guide — knowledgeable, data-grounded, and genuinely invested in their success. Base all claims on the data provided in this context.`;
 
   return basePrompt + contextPrompt + responseGuidelines;
 }
@@ -802,7 +909,56 @@ export async function POST(request: NextRequest) {
     
     // Extract learning insights from user messages
     const learningInsights = extractLearningInsights(content, combinedProfile);
-    
+
+    // Auto-detect and log context events from chat messages
+    const contextEventsDetected: string[] = [];
+    const textLower = content.toLowerCase();
+    const contextDetections: Array<{ eventType: string; value: string; numericValue: number }> = [];
+
+    if (/\b(exhausted|so tired|really tired|wiped out|no energy|drained|fatigued)\b/.test(textLower)) {
+      contextDetections.push({ eventType: 'energy', value: 'low', numericValue: 2 });
+    } else if (/\b(tired|sleepy|low energy|sluggish)\b/.test(textLower)) {
+      contextDetections.push({ eventType: 'energy', value: 'low', numericValue: 3 });
+    } else if (/\b(energized|great energy|full of energy|feeling great|amazing)\b/.test(textLower)) {
+      contextDetections.push({ eventType: 'energy', value: 'high', numericValue: 9 });
+    }
+
+    if (/\b(very stressed|so stressed|extremely stressed|overwhelmed|anxious|anxiety)\b/.test(textLower)) {
+      contextDetections.push({ eventType: 'stress', value: 'high', numericValue: 8 });
+    } else if (/\b(stressed|stress)\b/.test(textLower)) {
+      contextDetections.push({ eventType: 'stress', value: 'medium', numericValue: 6 });
+    }
+
+    if (/\b(headache|migraine)\b/.test(textLower)) {
+      contextDetections.push({ eventType: 'symptom', value: 'headache', numericValue: 7 });
+    }
+    if (/\b(bloated|bloating)\b/.test(textLower)) {
+      contextDetections.push({ eventType: 'symptom', value: 'bloated', numericValue: 6 });
+    }
+    if (/\b(brain fog|foggy|can't think|can't focus)\b/.test(textLower)) {
+      contextDetections.push({ eventType: 'symptom', value: 'brain_fog', numericValue: 6 });
+    }
+
+    // Store detected context events in background
+    if (contextDetections.length > 0 && authenticatedUser) {
+      for (const detection of contextDetections) {
+        contextEventsDetected.push(`${detection.eventType}:${detection.value}`);
+        Promise.resolve(
+          supabase.from('context_events').insert({
+            user_id: authenticatedUser.id,
+            event_type: detection.eventType,
+            value: detection.value,
+            numeric_value: detection.numericValue,
+            raw_text: content,
+            source: 'chat',
+            event_time: new Date().toISOString(),
+          })
+        ).catch((e: any) =>
+          console.error('[chat] Failed to log context event:', e)
+        );
+      }
+    }
+
     // Save user message with enhanced metadata
     const { data: userMessage, error: userMessageError } = await supabase
       .from('chat_messages')
@@ -967,6 +1123,11 @@ ${recentMeals.slice(0, 5).map((meal, index) =>
               fullResponse += delta;
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: delta })}\n\n`));
             }
+          }
+
+          // Send context events notification if any were detected
+          if (contextEventsDetected.length > 0) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ contextCaptured: contextEventsDetected })}\n\n`));
           }
 
           // Send done signal

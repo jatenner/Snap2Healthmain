@@ -4,7 +4,7 @@ import React, { useState, FormEvent, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '../components/client/ClientAuthProvider';
-import { createClient, shouldUseMockAuth } from '../lib/supabase/client';
+import { createClient } from '../lib/supabase/client';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -16,7 +16,6 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { user, isLoading, isAuthenticated } = useAuth();
-  const useMockAuth = shouldUseMockAuth();
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -36,29 +35,17 @@ export default function LoginPage() {
     }
     
     try {
-      if (useMockAuth) {
-        // For development mode - simple demo credentials
-        if (email === 'demo@snap2health.com' && password === 'demo123') {
-          console.log('Development login successful for:', email);
-          // Trigger a page refresh to update auth state
-          window.location.href = redirectTo;
-        } else {
-          setError('For demo mode, use: demo@snap2health.com / demo123');
-        }
-      } else {
-        // Real Supabase authentication
-        const supabase = createClient();
-        const { data, error: authError } = await supabase.auth.signInWithPassword({
-          email,
-          password
-        });
+      const supabase = createClient();
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
 
-        if (authError) {
-          setError(authError.message);
-        } else if (data.user) {
-          console.log('Login successful:', data.user.email);
-          router.push(redirectTo);
-        }
+      if (authError) {
+        setError(authError.message);
+      } else if (data.user) {
+        console.log('Login successful:', data.user.email);
+        router.push(redirectTo);
       }
     } catch (err: any) {
       console.error('Login error:', err);
@@ -85,11 +72,11 @@ export default function LoginPage() {
           </div>
           <h1 className="text-3xl font-bold text-white">Sign In</h1>
           <p className="mt-2 text-gray-400">
-            {useMockAuth ? 'Demo Mode - No Database Required' : 'Sign in to track your nutrition'}
+Sign in to track your nutrition
           </p>
         </div>
 
-        {redirectTo !== '/' && !useMockAuth && (
+        {redirectTo !== '/' && (
           <div className="p-3 bg-blue-900/50 border border-blue-700 rounded-md text-blue-300 text-sm">
             Please sign in to continue. Don&apos;t have an account?{' '}
             <Link href="/signup" className="font-medium text-blue-400 hover:text-blue-300 underline">
@@ -98,11 +85,6 @@ export default function LoginPage() {
           </div>
         )}
 
-        {useMockAuth && (
-          <div className="p-3 bg-yellow-900/50 border border-yellow-700 rounded-md text-yellow-300 text-sm">
-            <strong>Demo Mode:</strong> Use demo@snap2health.com / demo123
-          </div>
-        )}
 
         {error && (
           <div className="p-3 bg-red-900/50 border border-red-700 rounded-md text-red-300 text-sm">
@@ -132,7 +114,7 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder={useMockAuth ? "demo@snap2health.com" : "you@example.com"}
+              placeholder="you@example.com"
               className="mt-1 block w-full px-4 py-3 border border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-700 text-white placeholder-gray-400 sm:text-sm"
               disabled={isSubmitting}
             />
@@ -150,7 +132,7 @@ export default function LoginPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder={useMockAuth ? "demo123" : "••••••••"}
+              placeholder="••••••••"
               className="mt-1 block w-full px-4 py-3 border border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-700 text-white placeholder-gray-400 sm:text-sm"
               disabled={isSubmitting}
             />
@@ -166,8 +148,7 @@ export default function LoginPage() {
             </button>
           </div>
 
-          {!useMockAuth && (
-            <div className="text-center">
+          <div className="text-center">
               <button
                 type="button"
                 onClick={async () => {
@@ -194,8 +175,7 @@ export default function LoginPage() {
               >
                 Forgot your password?
               </button>
-            </div>
-          )}
+          </div>
         </form>
 
         <p className="mt-8 text-center text-sm text-gray-400">
@@ -205,22 +185,6 @@ export default function LoginPage() {
           </Link>
         </p>
         
-        {/* Development Helper */}
-        {useMockAuth && (
-          <div className="mt-4 p-3 bg-gray-700 rounded-md text-center">
-            <p className="text-xs text-gray-400 mb-2">Quick Demo Login</p>
-            <button
-              type="button"
-              onClick={() => {
-                setEmail('demo@snap2health.com');
-                setPassword('demo123');
-              }}
-              className="text-xs text-blue-400 hover:text-blue-300 underline"
-            >
-              Fill Demo Credentials
-            </button>
-          </div>
-        )}
 
       </div>
     </div>

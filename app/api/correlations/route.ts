@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '../../lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
-import { computeCorrelations } from '../../lib/correlation-engine';
+import { computeCorrelations, persistSensitivityProfile } from '../../lib/correlation-engine';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,6 +61,11 @@ export async function POST() {
       insight_count: report.insights.length,
       generated_at: report.generatedAt,
     }, { onConflict: 'user_id' });
+
+    // Persist sensitivity profile in background
+    persistSensitivityProfile(user.id, report).catch(e =>
+      console.error('Background sensitivity profile error:', e)
+    );
 
     return NextResponse.json(report);
   } catch (err: any) {

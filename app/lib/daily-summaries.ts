@@ -86,7 +86,7 @@ export async function computeDailyNutritionSummary(userId: string, date: string,
 
   const { data: meals, error } = await supabase
     .from('meals')
-    .select('calories, protein, carbs, fat, macronutrients, micronutrients, meal_time, meal_tags, created_at')
+    .select('calories, protein, carbs, fat, macronutrients, micronutrients, meal_time, meal_tags, created_at, intake_type, water_ml')
     .eq('user_id', userId)
     .gte('meal_time', dayStart)
     .lt('meal_time', dayEnd + '.999')
@@ -134,6 +134,15 @@ export async function computeDailyNutritionSummary(userId: string, date: string,
     total_alcohol: 0,
     caffeine_after_2pm: 0,
     alcohol_after_8pm: 0,
+    total_water_ml: 0,
+    supplement_count: 0,
+    alcohol_servings: 0,
+    // Context event fields — explicitly null so upsert overwrites stale values
+    avg_energy_level: null,
+    avg_stress_level: null,
+    avg_mood_level: null,
+    symptom_tags: null,
+    context_event_count: 0,
   };
 
   // Tag frequency counter
@@ -149,6 +158,18 @@ export async function computeDailyNutritionSummary(userId: string, date: string,
     summary.total_protein += meal.protein || 0;
     summary.total_carbs += meal.carbs || 0;
     summary.total_fat += meal.fat || 0;
+
+    // Accumulate intake-type-specific fields
+    if ((meal as any).water_ml) summary.total_water_ml += (meal as any).water_ml;
+    if ((meal as any).intake_type === 'supplement') summary.supplement_count += 1;
+    // Count actual alcohol servings from grams (~14g per standard drink), not meal records
+    if (Array.isArray(meal.macronutrients)) {
+      for (const macro of meal.macronutrients) {
+        if ((macro.name || '').toLowerCase().includes('alcohol') && macro.amount > 0) {
+          summary.alcohol_servings += Math.round(macro.amount / 14);
+        }
+      }
+    }
 
     // Extract fiber, sugar, sodium, caffeine, alcohol from macronutrients array
     if (Array.isArray(meal.macronutrients)) {
@@ -204,6 +225,42 @@ export async function computeDailyNutritionSummary(userId: string, date: string,
   }
 
   summary.tag_counts = tagCounts;
+
+  // ====== Aggregate Context Events ======
+  try {
+    const { data: contextEvents } = await supabase
+      .from('context_events')
+      .select('event_type, numeric_value, value')
+      .eq('user_id', userId)
+      .gte('event_time', dayStart)
+      .lt('event_time', dayEnd + '.999');
+
+    if (contextEvents && contextEvents.length > 0) {
+      summary.context_event_count = contextEvents.length;
+
+      const byType: Record<string, number[]> = {};
+      const symptoms: string[] = [];
+
+      for (const evt of contextEvents) {
+        if (evt.numeric_value != null) {
+          if (!byType[evt.event_type]) byType[evt.event_type] = [];
+          byType[evt.event_type]!.push(evt.numeric_value);
+        }
+        if (evt.event_type === 'symptom' && evt.value) {
+          symptoms.push(evt.value);
+        }
+      }
+
+      const avg = (arr: number[]) => arr.reduce((a, b) => a + b, 0) / arr.length;
+      if (byType['energy']?.length) summary.avg_energy_level = Math.round(avg(byType['energy']) * 10) / 10;
+      if (byType['stress']?.length) summary.avg_stress_level = Math.round(avg(byType['stress']) * 10) / 10;
+      if (byType['mood']?.length) summary.avg_mood_level = Math.round(avg(byType['mood']) * 10) / 10;
+      if (symptoms.length > 0) summary.symptom_tags = symptoms;
+    }
+  } catch (e) {
+    // Context events table may not exist yet — ignore
+    console.warn('Context events aggregation skipped:', (e as Error).message);
+  }
 
   // Calculate % DV using personalized targets when available, falling back to FDA defaults
   const personalizedTargets = profile ? getAllPersonalizedTargets(profile) : null;

@@ -55,14 +55,11 @@ interface SchemaCheckResult {
  */
 export async function GET(req: NextRequest) {
   try {
-    // Check for auth bypass in dev mode
-    const isAdminBypass = req.headers.get("x-admin-bypass") === "true";
-    const authHeader = req.headers.get("authorization");
-    
-    if (!authHeader && !isAdminBypass && process.env.NODE_ENV !== 'development') {
+    // Restrict to development environment only
+    if (process.env.NODE_ENV !== 'development') {
       return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
+        { error: "This endpoint is only available in development" },
+        { status: 403 }
       );
     }
 

@@ -12,19 +12,25 @@ import { createClient } from '../lib/supabase/client';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { 
-  Calendar, 
-  Clock, 
-  Utensils, 
-  TrendingUp, 
-  Eye, 
-  Trash2, 
-  Plus, 
-  ChevronDown, 
+  Calendar,
+  Clock,
+  Utensils,
+  TrendingUp,
+  Eye,
+  Trash2,
+  Plus,
+  ChevronDown,
   ChevronRight,
   BarChart3,
   Target,
   Zap,
-  RefreshCw
+  RefreshCw,
+  Coffee,
+  Wine,
+  Pill,
+  Droplets,
+  Cookie,
+  MessageSquare
 } from 'lucide-react';
 import { formatTimeEST, getRelativeDateEST, formatDateEST } from '../lib/utils';
 
@@ -39,6 +45,16 @@ interface MealHistoryEntry {
   carbs: number;
   goal?: string;
   created_at: string;
+  intake_type?: string;
+}
+
+interface ContextEvent {
+  id: string;
+  event_type: string;
+  value: string;
+  numeric_value: number;
+  event_time: string;
+  source: string;
 }
 
 interface DayGroup {
@@ -208,7 +224,8 @@ export default function MealHistoryPage() {
           fat,
           carbs,
           goal,
-          created_at
+          created_at,
+          intake_type
         `)
         .eq('user_id', user?.id)
         .order('created_at', { ascending: false })
@@ -347,7 +364,7 @@ export default function MealHistoryPage() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-white via-blue-100 to-purple-200 bg-clip-text text-transparent mb-2">
-              Meal History
+              Health Timeline
             </h1>
             <p className="text-slate-300">Track your nutrition journey day by day</p>
           </div>
@@ -470,9 +487,17 @@ export default function MealHistoryPage() {
 
                                 {/* Meal Info */}
                                 <div className="p-4">
-                                  <h3 className="font-semibold text-slate-100 mb-2 line-clamp-1">
-                                    {meal.meal_name || 'Untitled Meal'}
-                                  </h3>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    {meal.intake_type === 'drink' && <Coffee className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />}
+                                    {meal.intake_type === 'alcohol' && <Wine className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />}
+                                    {meal.intake_type === 'supplement' && <Pill className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />}
+                                    {meal.intake_type === 'hydration' && <Droplets className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />}
+                                    {meal.intake_type === 'snack' && <Cookie className="w-3.5 h-3.5 text-orange-400 flex-shrink-0" />}
+                                    {(!meal.intake_type || meal.intake_type === 'meal') && <Utensils className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />}
+                                    <h3 className="font-semibold text-slate-100 line-clamp-1">
+                                      {meal.meal_name || 'Untitled Meal'}
+                                    </h3>
+                                  </div>
                                   
                                   {meal.meal_description && (
                                     <p className="text-sm text-slate-400 mb-3 line-clamp-2">

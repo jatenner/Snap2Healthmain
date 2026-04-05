@@ -10,7 +10,7 @@ export interface MealTagInput {
   micronutrients?: Array<{ name: string; amount: number; unit?: string }>;
   mealTime: Date;
   ingredients?: string[];
-  consumptionType?: string; // 'meal' | 'beverage' | 'supplement' | 'snack'
+  consumptionType?: string; // 'meal' | 'snack' | 'drink' | 'alcohol' | 'supplement' | 'hydration'
 }
 
 export function generateMealTags(meal: MealTagInput): string[] {
@@ -85,9 +85,13 @@ export function generateMealTags(meal: MealTagInput): string[] {
   const microCount = countSignificantMicros(meal.micronutrients);
   if (microCount >= 5) tags.push('nutrient_dense');
 
-  // Consumption type tags
-  if (meal.consumptionType === 'beverage') tags.push('beverage');
-  if (meal.consumptionType === 'supplement') tags.push('supplement');
+  // Intake type tags
+  const ct = meal.consumptionType;
+  if (ct === 'drink' || ct === 'beverage') tags.push('is_drink');
+  if (ct === 'alcohol') tags.push('is_alcohol');
+  if (ct === 'supplement') tags.push('is_supplement');
+  if (ct === 'hydration') tags.push('is_hydration');
+  if (ct === 'snack') tags.push('is_snack');
 
   // Caffeine tracking (from macronutrients where we store caffeine)
   let caffeine = 0;

@@ -679,10 +679,18 @@ export async function POST(request: NextRequest) {
       consumptionType: analysis?.consumptionType,
     });
 
+    // Map consumptionType to intake_type
+    const consumptionTypeMap: Record<string, string> = {
+      meal: 'meal', snack: 'snack', drink: 'drink', beverage: 'drink',
+      alcohol: 'alcohol', supplement: 'supplement', hydration: 'hydration',
+    };
+    const intakeType = consumptionTypeMap[analysis?.consumptionType] || 'meal';
+
     const mealRecord = {
       user_id: userId,
       meal_name: analysis?.mealName || mealName,
       image_url: publicUrl,
+      intake_type: intakeType,
       calories: analysis?.calories || 0,
       protein: analysis?.protein || 0,
       fat: analysis?.fat || 0,

@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { Camera, MessageSquare, Moon, Heart, Activity, Flame, ChevronRight, Clock, AlertTriangle, CheckCircle, TrendingUp, TrendingDown } from 'lucide-react';
+import { Camera, MessageSquare, Moon, Heart, Activity, Flame, ChevronRight, Clock, AlertTriangle, CheckCircle, TrendingUp, TrendingDown, Zap, Repeat } from 'lucide-react';
 import { useAuth } from './components/client/ClientAuthProvider';
 import ClientOnly from './components/ClientOnly';
+import ContextQuickCapture from './components/ContextQuickCapture';
 import { useEffect, useState } from 'react';
 
 interface TodayData {
@@ -47,6 +48,7 @@ interface TodayData {
     pairedDays: number;
     neededForInsights: number;
   };
+  correlationAge: number | null;
   meals: Array<{ id: string; name: string; calories: number; time: string; tags: string[]; hasImage: boolean }>;
   experiment: { id: string; title: string; targetBehavior: string; durationDays: number; startDate: string; endDate: string } | null;
 }
@@ -104,6 +106,24 @@ function AuthenticatedHome({ userId }: { userId: string }) {
 
   return (
     <div className="max-w-md mx-auto px-5 py-6 space-y-5">
+
+      {/* ====== DATA FRESHNESS BADGE ====== */}
+      {data.correlationAge != null && data.dataStatus.hasCorrelations && (
+        <div className={`flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full w-fit ${
+          data.correlationAge < 24
+            ? 'bg-green-50 text-green-700'
+            : data.correlationAge < 48
+            ? 'bg-yellow-50 text-yellow-700'
+            : 'bg-red-50 text-red-700'
+        }`}>
+          <Clock className="w-3 h-3" />
+          {data.correlationAge < 24
+            ? 'Insights up to date'
+            : data.correlationAge < 48
+            ? `Insights from ${Math.round(data.correlationAge)}h ago`
+            : `Insights are ${Math.round(data.correlationAge / 24)}d old — log more data to refresh`}
+        </div>
+      )}
 
       {/* ====== HERO INSIGHT (the brain — biggest, first, colored) ====== */}
       {data.heroInsight ? (
@@ -267,6 +287,9 @@ function AuthenticatedHome({ userId }: { userId: string }) {
         </div>
       )}
 
+      {/* ====== CONTEXT QUICK CAPTURE ====== */}
+      <ContextQuickCapture />
+
       {/* ====== UPLOAD BUTTONS ====== */}
       <div className="flex gap-3">
         <Link href="/upload" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-3.5 text-center text-sm font-medium flex items-center justify-center gap-2 shadow-sm">
@@ -274,6 +297,12 @@ function AuthenticatedHome({ userId }: { userId: string }) {
         </Link>
         <Link href="/upload?mode=text" className="flex-1 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl py-3.5 text-center text-sm font-medium flex items-center justify-center gap-2 shadow-sm">
           <MessageSquare className="w-4 h-4" /> Describe It
+        </Link>
+        <Link href="/upload?mode=quick" className="bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl py-3.5 px-4 text-center text-sm font-medium flex items-center justify-center gap-2 shadow-sm">
+          <Zap className="w-4 h-4" />
+        </Link>
+        <Link href="/habits" className="bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl py-3.5 px-4 text-center text-sm font-medium flex items-center justify-center gap-2 shadow-sm">
+          <Repeat className="w-4 h-4" />
         </Link>
       </div>
     </div>

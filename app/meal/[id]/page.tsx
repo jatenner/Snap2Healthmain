@@ -170,7 +170,8 @@ function MealDetailContent() {
       {/* Biometric response */}
       {bio && (bio.sameNight || bio.nextMorning) && (
         <div className="bg-white border border-gray-200 rounded-2xl p-4">
-          <h2 className="text-sm font-medium text-gray-900 mb-3">What Happened After</h2>
+          <h2 className="text-sm font-medium text-gray-900 mb-1">What Happened After</h2>
+          <p className="text-[10px] text-gray-400 mb-3">These metrics are influenced by many factors and are not solely caused by this meal.</p>
           <div className="space-y-2 text-xs">
             {bio.sameNight?.sleep_score != null && (
               <div className="flex justify-between"><span className="text-gray-400 flex items-center gap-1"><Moon className="w-3 h-3" /> Sleep</span><span className="text-gray-900">{Math.round(bio.sameNight.sleep_score)}%{bio.sameNight.baseline_sleep_score && <span className={`ml-1 text-[10px] ${bio.sameNight.sleep_score >= bio.sameNight.baseline_sleep_score ? 'text-green-400' : 'text-red-400'}`}>(avg {Math.round(bio.sameNight.baseline_sleep_score)}%)</span>}</span></div>
