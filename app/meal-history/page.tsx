@@ -72,10 +72,11 @@ const groupMealsByDate = (meals: MealHistoryEntry[]): DayGroup[] => {
   const grouped: Record<string, MealHistoryEntry[]> = {};
   
   meals.forEach(meal => {
-    // Convert to Eastern time zone for proper date grouping
-    const date = new Date(meal.created_at).toLocaleDateString('en-CA', { 
-      timeZone: 'America/New_York' 
-    }) || 'unknown'; // This returns YYYY-MM-DD format in Eastern time
+    // Group by user's local date
+    const userTz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return 'America/New_York'; } })();
+    const date = new Date(meal.created_at).toLocaleDateString('en-CA', {
+      timeZone: userTz
+    }) || 'unknown';
     
     if (!grouped[date]) {
       grouped[date] = [];

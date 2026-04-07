@@ -22,6 +22,12 @@ export async function POST(request: NextRequest) {
     }
 
     const userId = session.user.id;
+
+    // Rate limiting
+    const { rateLimitResponse } = await import('../../lib/rate-limiter');
+    const rlResponse = rateLimitResponse(userId, 'analyzeText');
+    if (rlResponse) return rlResponse;
+
     const body = await request.json();
     const { description, mealTime, goal } = body;
 
@@ -143,6 +149,17 @@ Return ONLY valid JSON.`
     }
 
     const analysis = JSON.parse(jsonMatch[0]);
+
+    // Validate nutrition estimates before storing
+    const { validateNutritionEstimate } = await import('../../lib/nutrition-validation');
+    const validationResult = validateNutritionEstimate(analysis);
+    console.log('[analyze-text] Validation:', { confidence: validationResult.confidenceScore, flags: validationResult.flags.length });
+    if (!validationResult.isValid) {
+      return NextResponse.json({
+        error: 'Nutrition analysis produced invalid results. Please try describing your meal differently.',
+        validationFlags: validationResult.flags,
+      }, { status: 422 });
+    }
 
     // Determine meal time: user-provided > AI-parsed > now
     let finalMealTime: Date;

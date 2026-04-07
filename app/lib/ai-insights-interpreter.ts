@@ -1,9 +1,11 @@
 // AI Insights Interpreter
-// Takes pre-computed correlation results and generates plain-English explanations.
-// The AI interprets — it does NOT calculate. All statistics are pre-computed.
+// Takes pre-computed structured insights and generates plain-English explanations.
+// The AI is a NARRATOR — it does NOT analyze, calculate, or invent.
+// All data must originate from the Insight schema produced by insight-builder.ts.
 
 import OpenAI from 'openai';
 import { CorrelationReport, CorrelationResult } from './correlation-engine';
+import type { Insight } from './insight-schema';
 
 export interface AIInsightRequest {
   correlationReport: CorrelationReport;
@@ -156,4 +158,107 @@ Provide 1-3 recommendations and 1-2 experiment proposals. If insufficient data, 
   }
 
   return JSON.parse(jsonMatch[0]) as AIInsightResponse;
+}
+
+// ============================================================================
+// Phase 2: Structured Insight Narrator
+// Accepts a pre-built Insight object and produces a plain-English summary.
+// The LLM is a translator, not an analyst.
+// ============================================================================
+
+export async function narrateInsight(insight: Insight): Promise<string> {
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 20000 });
+
+  // Build a compact representation of the structured data
+  const factsText = insight.facts.map(f => `${f.label}: ${f.value}${f.unit ? ' ' + f.unit : ''} [${f.source}]`).join('\n');
+  const scoresText = insight.scores.map(s => `${s.name}: ${s.value}/${s.max} — ${s.interpretation}`).join('\n');
+  const patternsText = insight.patterns.length > 0
+    ? insight.patterns.map(p => `• [${p.findingType}] ${p.description} (${p.effect}, confidence ${p.confidence}%, n=${p.sampleSize})`).join('\n')
+    : 'No significant patterns detected.';
+  const driversText = insight.drivers.length > 0
+    ? insight.drivers.map(d => `• ${d.factor} → ${d.outcome} [${d.impact} impact, ${d.direction}]`).join('\n')
+    : 'No drivers identified.';
+  const recsText = insight.recommendations.length > 0
+    ? insight.recommendations.map(r => `• ${r.action} — ${r.rationale} (confidence ${r.confidence}%)`).join('\n')
+    : 'No specific recommendations.';
+
+  // Hypothesis testing summary
+  const hypotheses = insight.hypotheses || [];
+  const helpfulCount = hypotheses.filter(h => h.findingType === 'helpful').length;
+  const harmfulCount = hypotheses.filter(h => h.findingType === 'harmful').length;
+  const neutralCount = hypotheses.filter(h => h.findingType === 'neutral').length;
+  const insufficientCount = hypotheses.filter(h => h.findingType === 'insufficient_data').length;
+  const hypothesesText = hypotheses.length > 0
+    ? `Tested ${hypotheses.length} diet-biomarker hypotheses: ${helpfulCount} helpful, ${harmfulCount} harmful, ${neutralCount} no effect detected, ${insufficientCount} need more data.`
+    : 'Not enough data to test hypotheses yet.';
+
+  const prompt = `STRUCTURED INSIGHT DATA (pre-computed, all numbers are final):
+
+FACTS:
+${factsText}
+
+SCORES:
+${scoresText}
+
+PATTERNS (significant findings only):
+${patternsText}
+
+HYPOTHESIS TESTING:
+${hypothesesText}
+
+KEY DRIVERS:
+${driversText}
+
+RECOMMENDATIONS:
+${recsText}
+
+CONFIDENCE: overall ${insight.confidence.overall}%, data quality ${insight.confidence.dataQuality}%, sample size ${insight.confidence.sampleSize} days, input confidence ${insight.confidence.inputConfidence}%
+
+Write a 3-5 sentence summary. Include:
+1. What the data shows today (reference specific numbers)
+2. If null findings exist, mention them: "We tested X but found no meaningful effect on Y" — this IS a finding
+3. If many hypotheses need more data, note that continued logging will unlock more intelligence
+4. End with the single most important action if one exists`;
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: `You are given structured health data that has already been computed and analyzed.
+
+Your ONLY job is to explain this data in plain English.
+
+STRICT RULES:
+- You are a TRANSLATOR, not an analyst.
+- Reference ONLY the numbers and findings provided.
+- Do NOT introduce new causes, mechanisms, or biological explanations.
+- Do NOT speculate about insulin, hormones, cortisol, gut microbiome, or any process not in the data.
+- Do NOT invent statistics or patterns.
+- Use phrases like "your data shows", "the pattern suggests", "based on ${insight.confidence.sampleSize} days of data".
+- If confidence is low or data is limited, say so clearly.
+- IMPORTANT: Report null/neutral findings honestly. "We tested X and found no meaningful relationship" IS a finding. Do not only highlight positive/negative effects.
+- If diet changed but biomarkers didn't respond, say so: "Your diet may not be the primary driver here" or "no meaningful biomarker response detected."
+- Keep it concise: 3-5 sentences maximum.
+- Sound like a knowledgeable advisor, not a statistics report.
+- All nutrient values are AI estimates from meal photos — do not present them as exact measurements.`,
+        },
+        { role: 'user', content: prompt },
+      ],
+      max_tokens: 400,
+      temperature: 0.15,
+    });
+
+    return completion.choices[0]?.message?.content?.trim() || 'Unable to generate summary at this time.';
+  } catch (e) {
+    console.error('[narrateInsight] LLM call failed:', e);
+    // Deterministic fallback — no LLM needed
+    const topScore = insight.scores[0];
+    const topRec = insight.recommendations[0];
+    let fallback = `Today you logged ${insight.facts.find(f => f.label === 'Meals logged')?.value || 0} meals.`;
+    if (topScore) fallback += ` ${topScore.name}: ${topScore.interpretation}.`;
+    if (topRec) fallback += ` Suggestion: ${topRec.action}.`;
+    return fallback;
+  }
 }

@@ -21,7 +21,7 @@ async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
   if (!profile || !profile.age || !profile.gender) return null;
 
   return {
-    age: parseInt(profile.age) || 25,
+    age: parseInt(profile.age) || 30,
     gender: profile.gender === 'female' ? 'female' : 'male',
     height: parseFloat(profile.height) || 70,
     height_unit: (profile.height_unit || 'in') as 'cm' | 'in',

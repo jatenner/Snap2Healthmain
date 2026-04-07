@@ -226,7 +226,12 @@ export default function UploadForm() {
       
       // Create headers with explicit authentication info
       const headers = new Headers();
-      
+
+      // Send user's timezone so backend stores meal_time in correct local context
+      try {
+        headers.set('x-timezone', Intl.DateTimeFormat().resolvedOptions().timeZone);
+      } catch (e) { /* timezone detection unsupported — server will use UTC */ }
+
       // If we have authentication info, add it to headers as well
       if (effectiveAuthStatus === 'authenticated' && effectiveUserId) {
         headers.set('x-auth-user-id', effectiveUserId);

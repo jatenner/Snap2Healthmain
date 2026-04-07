@@ -47,16 +47,19 @@ export interface ExtendedUserProfile extends UserProfile {
   targetCalories?: number;
 }
 
+// CONSOLIDATED DEFAULT — imports from the single source of truth
+import { SYSTEM_DEFAULT_PROFILE } from './personalization-status';
+
 // Default profile values - used as fallbacks when user profile is incomplete
 const DEFAULT_PROFILE = {
-  gender: 'Female',
-  age: 30,
-  height: 165,
-  height_unit: 'cm' as 'cm',
-  weight: 65,
-  weight_unit: 'kg' as 'kg',
-  activity_level: 'Moderate',
-  goal: 'Athletic Performance'
+  gender: SYSTEM_DEFAULT_PROFILE.gender,
+  age: SYSTEM_DEFAULT_PROFILE.age,
+  height: SYSTEM_DEFAULT_PROFILE.height,
+  height_unit: SYSTEM_DEFAULT_PROFILE.height_unit,
+  weight: SYSTEM_DEFAULT_PROFILE.weight,
+  weight_unit: SYSTEM_DEFAULT_PROFILE.weight_unit,
+  activity_level: SYSTEM_DEFAULT_PROFILE.activity_level,
+  goal: SYSTEM_DEFAULT_PROFILE.goal,
 };
 
 // Add FDA reference daily values map after the interfaces and before existing functions
@@ -350,14 +353,14 @@ export const getEffectiveProfileSync = () => {
 // Get a default profile
 export const getDefaultProfile = () => {
   return enhanceProfileWithDefaults({
-    age: 35,
-    gender: 'Male',
-    height: 70, // inches
-    height_unit: 'in',
-    weight: 170, // pounds
-    weight_unit: 'lb',
-    activity_level: 'Moderate',
-    goal: 'Athletic Performance'
+    age: SYSTEM_DEFAULT_PROFILE.age,
+    gender: SYSTEM_DEFAULT_PROFILE.gender,
+    height: SYSTEM_DEFAULT_PROFILE.height,
+    height_unit: SYSTEM_DEFAULT_PROFILE.height_unit,
+    weight: SYSTEM_DEFAULT_PROFILE.weight,
+    weight_unit: SYSTEM_DEFAULT_PROFILE.weight_unit,
+    activity_level: SYSTEM_DEFAULT_PROFILE.activity_level,
+    goal: SYSTEM_DEFAULT_PROFILE.goal,
   });
 };
 

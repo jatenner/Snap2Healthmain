@@ -69,15 +69,16 @@ export async function POST() {
       if (avgZinc < 60) nutrientGaps.push(`Zinc (${avgZinc}% of target)`);
     }
 
+    const { SYSTEM_DEFAULT_PROFILE: SDP } = await import('../../../lib/personalization-status');
     const aiResponse = await generateAIInsights({
       correlationReport: report,
       userProfile: {
-        age: parseInt(profile?.age) || 25,
-        gender: profile?.gender || 'male',
-        weight: parseFloat(profile?.weight) || 170,
-        height: parseFloat(profile?.height) || 70,
-        activityLevel: profile?.activity_level || 'active',
-        goal: profile?.goal || 'General Wellness',
+        age: parseInt(profile?.age) || SDP.age,
+        gender: profile?.gender || SDP.gender,
+        weight: parseFloat(profile?.weight) || SDP.weight,
+        height: parseFloat(profile?.height) || SDP.height,
+        activityLevel: profile?.activity_level || SDP.activity_level,
+        goal: profile?.goal || SDP.goal,
       },
       recentNutrition: recentNut && recentNut.length > 0 ? {
         avgCalories: avgField(recentNut, 'total_calories'),

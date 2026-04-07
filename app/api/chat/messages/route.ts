@@ -680,6 +680,11 @@ export async function POST(request: NextRequest) {
       }, { status: 401 });
     }
 
+    // Rate limiting
+    const { rateLimitResponse } = await import('../../../lib/rate-limiter');
+    const rlResponse = rateLimitResponse(user_id, 'chat');
+    if (rlResponse) return rlResponse;
+
     console.log('[Chat Messages API] 🔐 Final auth status:', {
       authMethod,
       user_id,

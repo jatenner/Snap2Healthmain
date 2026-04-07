@@ -22,9 +22,17 @@ yarn-error.log*
 # Local environment files
 .env
 .env.*
-# Allow .env.local for consistent environment setup
+# Allow .env.local and .env.example only
 !.env.local
 !.env.example
+# Explicitly exclude env backups/temps
+.env.local.backup*
+.env.local.bak
+.env.local.tmp
+.env.local.original
+.env.local.key
+.env.prod
+.env.production
 
 # VS Code
 .vscode/

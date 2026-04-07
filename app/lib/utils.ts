@@ -119,12 +119,25 @@ export function safeJsonParse<T>(json: string, fallback: T): T {
 }
 
 /**
- * Timezone and date utilities for EST/EDT handling
+ * Timezone and date utilities
+ *
+ * getUserLocalTimezone() returns the browser's IANA timezone (e.g., "America/New_York").
+ * All display functions accept an optional timezone parameter; if omitted they fall back
+ * to the browser's local timezone (not hardcoded EST).
  */
 
-// Eastern timezone helper functions
+// Get the user's browser timezone — works on all modern browsers
+export function getUserLocalTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return 'America/New_York'; // fallback only if Intl is unavailable
+  }
+}
+
+// Eastern timezone helper functions (kept for backward compat, now uses dynamic fallback)
 export function getEasternTime(): Date {
-  return new Date(new Date().toLocaleString("en-US", {timeZone: "America/New_York"}));
+  return new Date(new Date().toLocaleString("en-US", {timeZone: getUserLocalTimezone()}));
 }
 
 export function formatDateEST(date: Date | string): string {

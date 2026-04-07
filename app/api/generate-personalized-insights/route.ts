@@ -37,7 +37,7 @@ function calculateDailyValue(nutrientName: string, amount: number, userProfile: 
   // Adjust for user profile (simplified)
   let adjustedDV = baseDV;
   if (userProfile?.weight && userProfile?.gender) {
-    const weightFactor = (userProfile.weight || 225) / 180; // Reference weight
+    const weightFactor = (userProfile.weight || 170) / 180; // Reference weight (aligned to SYSTEM_DEFAULT_PROFILE)
     if (key === 'protein') adjustedDV = Math.round(baseDV * weightFactor);
   }
   
@@ -95,15 +95,18 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
     
-    // Extract user profile data
+    // Extract user profile data — use consolidated system defaults
+    const { SYSTEM_DEFAULT_PROFILE: SDP, getPersonalizationStatus } = await import('../../lib/personalization-status');
     const sessionUser = user?.user_metadata || {};
+    const profileData = { ...sessionUser, ...(userProfile || {}) };
+    const personalizationStatus = getPersonalizationStatus(profileData);
     const firstName = sessionUser.firstName || userProfile?.firstName || 'there';
-    const age = parseInt(sessionUser.age || userProfile?.age) || 25;
-    const weight = parseInt(sessionUser.weight || userProfile?.weight) || 225;
-    const height = parseInt(sessionUser.height || userProfile?.height) || 78;
-    const gender = sessionUser.gender || userProfile?.gender || 'male';
-    const activityLevel = sessionUser.activityLevel || userProfile?.activityLevel || 'active';
-    const goal = sessionUser.defaultGoal || userProfile?.goal || body.userGoal || 'Athletic Performance';
+    const age = parseInt(sessionUser.age || userProfile?.age) || SDP.age;
+    const weight = parseInt(sessionUser.weight || userProfile?.weight) || SDP.weight;
+    const height = parseInt(sessionUser.height || userProfile?.height) || SDP.height;
+    const gender = sessionUser.gender || userProfile?.gender || SDP.gender;
+    const activityLevel = sessionUser.activityLevel || userProfile?.activityLevel || SDP.activity_level;
+    const goal = sessionUser.defaultGoal || userProfile?.goal || body.userGoal || SDP.goal;
     
     // Extract meal data
     const mealName = mealData?.meal_name || mealData?.mealName || 'Analyzed Meal';
@@ -201,14 +204,18 @@ Keep each section focused, practical, and personalized to ${firstName}'s ${goal}
       messages: [
         {
           role: "system",
-          content: `You are a certified sports nutritionist providing personalized meal analysis. Your responses should be:
+          content: `You are a nutrition analyst summarizing pre-computed meal data. Your responses should be:
 - CONCISE: Each section 2-3 sentences max
-- ACTIONABLE: Include specific, practical advice  
-- PERSONALIZED: Reference their goals, stats, and meal specifics
+- ACTIONABLE: Include specific, practical advice
+- DATA-GROUNDED: Only reference numbers and nutrients actually provided in the data
 - CONVERSATIONAL: Friendly but professional tone
 - FORMATTED: Use exact section headers as requested
 
-Focus on the most impactful insights for their specific profile and goals.`
+CRITICAL RULES:
+- Do NOT discuss insulin response, hormonal effects, cortisol, leptin, ghrelin, or gut microbiome
+- Do NOT claim to be a certified professional
+- All nutrient values are AI estimates — they are approximate
+- Focus on macro balance, key micronutrients, and practical meal improvements${!personalizationStatus.isPersonalized ? '\n- Note: This analysis uses default profile values, not the user\'s actual measurements' : ''}`
         },
         {
           role: "user",

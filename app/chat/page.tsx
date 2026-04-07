@@ -14,19 +14,65 @@ interface Message {
   timestamp: Date;
 }
 
-const QUICK_ACTIONS = [
-  { label: 'Why am I tired?', prompt: "Why have I been feeling tired lately? Look at my recent data.", icon: Activity },
+const DEFAULT_QUICK_ACTIONS = [
   { label: 'What should I eat?', prompt: "Based on my data and goals, what should I eat today?", icon: Utensils },
-  { label: 'How does alcohol affect me?', prompt: "Do I react badly to alcohol? What does my data show?", icon: TrendingUp },
   { label: 'Sleep tips', prompt: "What can I change about my diet to improve my sleep?", icon: Sparkles },
+  { label: 'What patterns exist?', prompt: "What diet-biomarker patterns has the system detected in my data?", icon: TrendingUp },
+  { label: 'Where are my gaps?', prompt: "What nutrients am I consistently low on?", icon: Activity },
 ];
+
+/**
+ * Generate personalized quick actions from the user's actual insight data.
+ * Falls back to defaults if no data.
+ */
+function getPersonalizedQuickActions(insight: any): typeof DEFAULT_QUICK_ACTIONS {
+  if (!insight) return DEFAULT_QUICK_ACTIONS;
+
+  const actions: typeof DEFAULT_QUICK_ACTIONS = [];
+  const recs = insight.recommendations || [];
+  const patterns = insight.patterns || [];
+  const hypotheses = insight.hypotheses || [];
+
+  // Top harmful pattern → ask about it
+  const harmful = patterns.find((p: any) => p.findingType === 'harmful');
+  if (harmful) {
+    const factor = harmful.id?.replace(/_/g, ' ') || 'your top pattern';
+    actions.push({ label: `Why does ${factor.split(' ')[0]} matter?`, prompt: `Tell me about the "${harmful.id}" pattern. What does my data show?`, icon: Activity });
+  }
+
+  // Top recommendation → ask about it
+  if (recs.length > 0) {
+    actions.push({ label: recs[0].action.substring(0, 30) + '?', prompt: `Why are you recommending "${recs[0].action}"? What evidence supports this?`, icon: Utensils });
+  }
+
+  // Null findings → ask what doesn't matter
+  const neutralCount = hypotheses.filter((h: any) => h.findingType === 'neutral').length;
+  if (neutralCount > 3) {
+    actions.push({ label: "What doesn't affect me?", prompt: "Which diet factors did the system test but find no effect on my biomarkers?", icon: TrendingUp });
+  }
+
+  // Always include a general one
+  actions.push({ label: 'Weekly summary', prompt: "Give me a summary of how this week went for my diet and biomarkers.", icon: Sparkles });
+
+  return actions.slice(0, 4);
+}
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [quickActions, setQuickActions] = useState(DEFAULT_QUICK_ACTIONS);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Load personalized quick actions from insight data
+  useEffect(() => {
+    const tz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return ''; } })();
+    fetch('/api/today', { headers: tz ? { 'x-timezone': tz } : {} })
+      .then(r => r.json())
+      .then(d => { if (d.insight) setQuickActions(getPersonalizedQuickActions(d.insight)); })
+      .catch(() => {});
+  }, []);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const router = useRouter();
   const { user } = useAuth();
@@ -165,7 +211,7 @@ export default function ChatPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-2">
-                {QUICK_ACTIONS.map(action => {
+                {quickActions.map(action => {
                   const Icon = action.icon;
                   return (
                     <button

@@ -1,13 +1,19 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '../../lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { maybeRefreshCorrelations } from '../../lib/auto-refresh';
 import { maybeAutoSyncWhoop } from '../../lib/whoop-auto-sync';
 import { autoLogRecurringHabits } from '../../lib/recurring-habits';
+import { getPersonalizationStatus } from '../../lib/personalization-status';
+import { getUserTimezone, getTodayInTimezone } from '../../lib/timezone-utils';
+import { buildInsight } from '../../lib/insight-builder';
+import { narrateInsight } from '../../lib/ai-insights-interpreter';
+import { buildNutritionHistory } from '../../lib/recommendation-history';
+import { loadSignalMemory, syncSignalMemory } from '../../lib/signal-memory';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = createClient();
     const { data: { user }, error } = await supabase.auth.getUser();
@@ -20,7 +26,9 @@ export async function GET() {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    const today = new Date().toISOString().split('T')[0]!;
+    // Use the user's timezone to determine "today" — prevents day-boundary mismatches
+    const userTimezone = getUserTimezone(request.headers);
+    const today = getTodayInTimezone(userTimezone);
     const userId = user.id;
 
     // Fetch all data in parallel
@@ -31,6 +39,7 @@ export async function GET() {
       correlationResult,
       profileResult,
       experimentResult,
+      recentNutritionResult,
     ] = await Promise.all([
       // Today's biometric summary
       admin.from('daily_biometric_summaries')
@@ -46,7 +55,7 @@ export async function GET() {
         .single(),
       // Today's meals
       admin.from('meals')
-        .select('id, meal_name, calories, protein, carbs, fat, meal_time, meal_tags, image_url')
+        .select('id, meal_name, calories, protein, carbs, fat, meal_time, meal_tags, image_url, confidence_score')
         .eq('user_id', userId)
         .gte('meal_time', `${today}T00:00:00`)
         .lt('meal_time', `${today}T23:59:59.999`)
@@ -67,6 +76,13 @@ export async function GET() {
         .eq('user_id', userId)
         .eq('status', 'active')
         .single(),
+      // Recent nutrition summaries (last 14 days) for recommendation history
+      admin.from('daily_nutrition_summaries')
+        .select('pct_dv_protein, pct_dv_fiber, pct_dv_magnesium, pct_dv_vitamin_d, pct_dv_iron, pct_dv_calcium, pct_dv_zinc, caffeine_after_2pm, has_late_night_meal, inflammatory_score, nutrient_adequacy_score, summary_date')
+        .eq('user_id', userId)
+        .lt('summary_date', today)
+        .order('summary_date', { ascending: false })
+        .limit(14),
     ]);
 
     const biometric = biometricResult.data;
@@ -173,11 +189,70 @@ export async function GET() {
     const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
     const firstName = profile?.full_name?.split(' ')[0] || user.user_metadata?.full_name?.split(' ')[0] || '';
 
+    // Compute personalization status from profile data
+    const personalizationStatus = getPersonalizationStatus(
+      profile || user.user_metadata || null
+    );
+
+    // ====== Build structured insight with recommendation history ======
+    const recentNutrition = recentNutritionResult.data || [];
+    const history = buildNutritionHistory(recentNutrition);
+
+    // Load persistent signal memory for outcome tracking
+    let persistedSignals: any[] = [];
+    try {
+      persistedSignals = await loadSignalMemory(userId);
+    } catch (e) {
+      console.warn('[today] Signal memory load failed (table may not exist yet):', (e as Error).message);
+    }
+
+    // Compute average meal confidence from today's meals
+    const mealConfidences = meals.filter((m: any) => m.confidence_score != null).map((m: any) => m.confidence_score as number);
+    const avgMealConfidence = mealConfidences.length > 0
+      ? Math.round(mealConfidences.reduce((a: number, b: number) => a + b, 0) / mealConfidences.length)
+      : null;
+
+    const insight = buildInsight(
+      nutrition,
+      biometric,
+      correlationReport || null,
+      avgMealConfidence,
+      history,
+      profile?.goal,
+      persistedSignals,
+    );
+
+    // Sync today's signals into persistent memory (fire-and-forget)
+    if (history.length > 0) {
+      syncSignalMemory(userId, today, history).catch(e =>
+        console.warn('[today] Signal memory sync failed:', (e as Error).message)
+      );
+    }
+
+    // Generate LLM narrative from the structured insight (fire-and-forget safe)
+    let narrative = '';
+    if (insight.facts.length > 0) {
+      try {
+        narrative = await narrateInsight(insight);
+      } catch (e) {
+        console.warn('[today] Narrative generation failed, using fallback');
+        const topRec = insight.recommendations[0];
+        narrative = topRec ? topRec.action : '';
+      }
+    }
+
     return NextResponse.json({
       greeting: `${greeting}${firstName ? ', ' + firstName : ''}.`,
       goal: profile?.goal || 'General Wellness',
 
-      // Body status (4 cards)
+      // Phase 2: Structured insight + narrative
+      insight,
+      narrative,
+
+      // Personalization transparency
+      personalizationStatus,
+
+      // Body status (4 cards) — source: user_data (from WHOOP device)
       biometric: biometric ? {
         sleepScore: biometric.sleep_score,
         recoveryScore: biometric.recovery_score,
@@ -188,9 +263,10 @@ export async function GET() {
         hrvDeviation: biometric.hrv_deviation,
         dayQuality: biometric.day_quality,
         trajectory: biometric.trajectory,
+        _source: 'user_data',
       } : null,
 
-      // Nutrition status
+      // Nutrition status — source: ai_estimate (GPT-4o derived values, computed scores)
       nutrition: nutrition ? {
         totalCalories: Math.round(nutrition.total_calories),
         totalProtein: Math.round(nutrition.total_protein),
@@ -200,6 +276,9 @@ export async function GET() {
         nutrientAdequacy: nutrition.nutrient_adequacy_score,
         inflammatoryScore: nutrition.inflammatory_score,
         nutrientGaps: nutrientGaps.slice(0, 3),
+        _source: 'ai_estimate',
+        _nutrientAdequacySource: 'computed',
+        _inflammatorySource: 'computed',
       } : {
         totalCalories: meals.reduce((s: number, m: any) => s + (m.calories || 0), 0),
         totalProtein: meals.reduce((s: number, m: any) => s + (m.protein || 0), 0),
@@ -209,13 +288,17 @@ export async function GET() {
         nutrientAdequacy: null,
         inflammatoryScore: null,
         nutrientGaps: [],
+        _source: 'ai_estimate',
       },
 
-      // Hero insight
-      heroInsight,
+      // Hero insight — source: computed (from correlation engine)
+      heroInsight: heroInsight ? { ...heroInsight, _source: 'computed' } : null,
 
-      // Recommendation
-      recommendation,
+      // Recommendation — source varies
+      recommendation: recommendation ? {
+        text: recommendation,
+        _source: heroInsight ? 'computed' : 'ai_interpretation',
+      } : null,
 
       // Today's meals (timeline)
       meals: meals.map((m: any) => ({

@@ -24,7 +24,7 @@ function getSupabaseClient() {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   
   if (!supabaseUrl || !supabaseAnonKey) {
-    console.warn('Supabase credentials missing, using mock auth');
+    console.warn('Supabase credentials missing — authentication unavailable');
     return null;
   }
   
@@ -46,16 +46,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const initializeAuth = async () => {
       if (!supabase) {
-        // Mock user for development
-        console.log('Using mock authentication');
-        setUser({
-          id: 'demo-user',
-          email: 'demo@snap2health.com',
-          user_metadata: { name: 'Demo User' },
-          app_metadata: {},
-          aud: 'authenticated',
-          created_at: new Date().toISOString(),
-        } as User);
+        console.error('Supabase client not available — authentication requires valid credentials');
+        setUser(null);
         setLoading(false);
         return;
       }
@@ -88,17 +80,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signIn = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     if (!supabase) {
-      // Mock sign in for development
-      console.log('Mock sign in for:', email);
-      setUser({
-        id: 'demo-user',
-        email,
-        user_metadata: { name: 'Demo User' },
-        app_metadata: {},
-        aud: 'authenticated',
-        created_at: new Date().toISOString(),
-      } as User);
-      return { success: true };
+      return { success: false, error: 'Authentication service not configured. Check Supabase credentials.' };
     }
 
     try {
@@ -119,9 +101,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signUp = async (email: string, password: string, name: string): Promise<{ success: boolean; error?: string; data?: any }> => {
     if (!supabase) {
-      // Mock sign up for development
-      console.log('Mock sign up for:', email);
-      return { success: true, data: { user: { email, user_metadata: { name } } } };
+      return { success: false, error: 'Authentication service not configured. Check Supabase credentials.' };
     }
 
     try {

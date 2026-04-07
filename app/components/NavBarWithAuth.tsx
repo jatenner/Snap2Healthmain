@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from './client/ClientAuthProvider';
-import { User, LogOut, Home, Menu, X, TrendingUp, Beaker, Settings, ChevronDown, Heart, Camera, Clock, MessageCircle, Repeat } from 'lucide-react';
+import { LogOut, Menu, X, TrendingUp, Settings, ChevronDown, Camera, Clock, MessageCircle, Sparkles, User } from 'lucide-react';
 
 export function NavBarWithAuth() {
   const { user, isAuthenticated, signOut, isLoading } = useAuth();
@@ -43,16 +43,13 @@ export function NavBarWithAuth() {
             Snap2Health
           </Link>
 
-          {/* Desktop nav */}
+          {/* Desktop nav — simplified: Upload, Insights, Trends, History, Chat */}
           <nav className="hidden md:flex items-center gap-1">
-            <Link href="/" className={navLink('/')}><Home className="w-4 h-4" /> Home</Link>
             <Link href="/upload" className={navLink('/upload')}><Camera className="w-4 h-4" /> Upload</Link>
-            <Link href="/habits" className={navLink('/habits')}><Repeat className="w-4 h-4" /> Habits</Link>
-            <Link href="/body" className={navLink('/body')}><Heart className="w-4 h-4" /> Body</Link>
+            <Link href="/insights" className={navLink('/insights')}><Sparkles className="w-4 h-4" /> Insights</Link>
             <Link href="/trends" className={navLink('/trends')}><TrendingUp className="w-4 h-4" /> Trends</Link>
-            <Link href="/experiments" className={navLink('/experiments')}><Beaker className="w-4 h-4" /> Insights</Link>
+            <Link href="/meal-history" className={navLink('/meal-history')}><Clock className="w-4 h-4" /> History</Link>
             <Link href="/chat" className={navLink('/chat')}><MessageCircle className="w-4 h-4" /> Chat</Link>
-            <Link href="/meal-history" className={navLink('/meal-history')}><Clock className="w-4 h-4" /> Timeline</Link>
           </nav>
 
           {/* User menu */}
@@ -68,7 +65,7 @@ export function NavBarWithAuth() {
                 {isUserMenuOpen && (
                   <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg py-1 z-50">
                     <Link href="/profile" onClick={() => setIsUserMenuOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50">
-                      <Settings className="w-4 h-4 text-gray-400" /> Profile & Settings
+                      <User className="w-4 h-4 text-gray-400" /> Profile
                     </Link>
                     <hr className="my-1 border-gray-100" />
                     <button onClick={() => { setIsUserMenuOpen(false); signOut(); }} className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 w-full text-left">
@@ -94,18 +91,15 @@ export function NavBarWithAuth() {
         {/* Mobile menu */}
         {isMobileMenuOpen && (
           <div className="md:hidden pb-4 pt-2 space-y-1">
-            <Link href="/" className={mobileLink('/')} onClick={closeMobileMenu}><Home className="w-5 h-5" /> Home</Link>
             <Link href="/upload" className={mobileLink('/upload')} onClick={closeMobileMenu}><Camera className="w-5 h-5" /> Upload</Link>
-            <Link href="/habits" className={mobileLink('/habits')} onClick={closeMobileMenu}><Repeat className="w-5 h-5" /> Habits</Link>
-            <Link href="/body" className={mobileLink('/body')} onClick={closeMobileMenu}><Heart className="w-5 h-5" /> Body</Link>
+            <Link href="/insights" className={mobileLink('/insights')} onClick={closeMobileMenu}><Sparkles className="w-5 h-5" /> Insights</Link>
             <Link href="/trends" className={mobileLink('/trends')} onClick={closeMobileMenu}><TrendingUp className="w-5 h-5" /> Trends</Link>
-            <Link href="/experiments" className={mobileLink('/experiments')} onClick={closeMobileMenu}><Beaker className="w-5 h-5" /> Insights</Link>
+            <Link href="/meal-history" className={mobileLink('/meal-history')} onClick={closeMobileMenu}><Clock className="w-5 h-5" /> History</Link>
             <Link href="/chat" className={mobileLink('/chat')} onClick={closeMobileMenu}><MessageCircle className="w-5 h-5" /> Chat</Link>
-            <Link href="/meal-history" className={mobileLink('/meal-history')} onClick={closeMobileMenu}><Clock className="w-5 h-5" /> Timeline</Link>
             <hr className="border-gray-200 my-2" />
             {isAuthenticated ? (
               <>
-                <Link href="/profile" className={mobileLink('/profile')} onClick={closeMobileMenu}><Settings className="w-5 h-5" /> Profile</Link>
+                <Link href="/profile" className={mobileLink('/profile')} onClick={closeMobileMenu}><Settings className="w-5 h-5" /> Profile & Settings</Link>
                 <button onClick={() => { closeMobileMenu(); signOut(); }} className="flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium text-red-600 hover:bg-red-50 w-full">
                   <LogOut className="w-5 h-5" /> Sign Out
                 </button>

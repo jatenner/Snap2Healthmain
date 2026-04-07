@@ -14,16 +14,11 @@ export interface LocalMeal {
 }
 
 /**
- * Checks if we should use localStorage for meals
+ * localStorage for meals is no longer supported — real auth is required.
+ * @deprecated Always returns false. Remove callers.
  */
 export function shouldUseLocalStorage(): boolean {
-  if (typeof window === 'undefined') return false;
-  
-  const mockAuth = process.env.NEXT_PUBLIC_MOCK_AUTH === 'true';
-  const authBypass = process.env.NEXT_PUBLIC_AUTH_BYPASS === 'true';
-  const isDevelopment = process.env.NEXT_PUBLIC_APP_ENV === 'development';
-  
-  return (mockAuth || authBypass) && isDevelopment;
+  return false;
 }
 
 /**

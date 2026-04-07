@@ -77,7 +77,7 @@ function normalizeMicroName(name: string): string | null {
 // COMPUTE DAILY NUTRITION SUMMARY
 // ============================================================================
 
-export async function computeDailyNutritionSummary(userId: string, date: string, profile?: UserProfile | null) {
+export async function computeDailyNutritionSummary(userId: string, date: string, profile?: UserProfile | null, timezone?: string) {
   const supabase = getSupabaseAdmin();
 
   // Get all meals for this user on this date
@@ -149,9 +149,11 @@ export async function computeDailyNutritionSummary(userId: string, date: string,
   const tagCounts: Record<string, number> = {};
 
   for (const meal of meals) {
-    // Get meal time for timing analysis
+    // Get meal time for timing analysis — use user's timezone if available
     const mealTime = new Date((meal as any).meal_time || (meal as any).created_at);
-    const hour = mealTime.getHours();
+    const hour = timezone
+      ? parseInt(mealTime.toLocaleString('en-US', { timeZone: timezone, hour: 'numeric', hour12: false }), 10)
+      : mealTime.getUTCHours();
 
     // Accumulate macros
     summary.total_calories += meal.calories || 0;

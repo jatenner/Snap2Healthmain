@@ -75,6 +75,18 @@ export interface OutcomeAnalysis {
   } | null;
 }
 
+export interface HypothesisResult {
+  pairId: string;
+  pairName: string;
+  category: string;
+  findingType: 'helpful' | 'harmful' | 'neutral' | 'insufficient_data';
+  detail: string;
+  sampleSize: number;
+  requiredSampleSize: number;
+  effectSize?: number;
+  confidence?: number;
+}
+
 export interface CorrelationReport {
   userId: string;
   generatedAt: string;
@@ -82,7 +94,8 @@ export interface CorrelationReport {
   dataQuality: { fullDays: number; partialDays: number; avgMealsPerDay: number };
   sensitivities: Array<{ variable: string; sensitivity: 'high' | 'medium' | 'low'; score: number }>;
   insights: CorrelationResult[];
-  outcomeAnalyses: OutcomeAnalysis[];      // NEW: outcome-first multi-factor analysis
+  allHypotheses: HypothesisResult[];       // every tested hypothesis including null findings
+  outcomeAnalyses: OutcomeAnalysis[];
   topInsight: CorrelationResult | null;
 }
 
@@ -304,6 +317,7 @@ export async function computeCorrelations(userId: string, userGoal?: string): Pr
       dataQuality: { fullDays: 0, partialDays: 0, avgMealsPerDay: 0 },
       sensitivities: [],
       insights: [],
+      allHypotheses: [],
       outcomeAnalyses: [],
       topInsight: null,
     };
@@ -346,14 +360,43 @@ export async function computeCorrelations(userId: string, userGoal?: string): Pr
   const goalKey = normalizeGoalKey(userGoal);
   const goalWeights = GOAL_WEIGHTS[goalKey] || GOAL_WEIGHTS.general_wellness!;
 
-  // Run all comparisons
+  // Run all comparisons — track EVERY hypothesis, including null findings
   const insights: CorrelationResult[] = [];
+  const allHypotheses: HypothesisResult[] = [];
 
   for (const pair of COMPARISON_PAIRS) {
     const pairedData = getPairedData(pair.lagDays);
-    if (pairedData.length < 10) continue;
+
+    // Insufficient data — record as hypothesis, don't test
+    if (pairedData.length < 10) {
+      allHypotheses.push({
+        pairId: pair.id,
+        pairName: pair.name,
+        category: pair.category,
+        findingType: 'insufficient_data',
+        detail: `Need ${10 - pairedData.length} more paired days to test "${pair.name}". Have ${pairedData.length} of 10 required.`,
+        sampleSize: pairedData.length,
+        requiredSampleSize: 10,
+      });
+      continue;
+    }
 
     const result = computeSingleCorrelation(pair, pairedData);
+
+    // Tested but no meaningful effect — this IS a finding
+    if (!result) {
+      allHypotheses.push({
+        pairId: pair.id,
+        pairName: pair.name,
+        category: pair.category,
+        findingType: 'neutral',
+        detail: `Tested "${pair.name}" across ${pairedData.length} days — no meaningful effect detected (< 3% difference or insufficient group separation).`,
+        sampleSize: pairedData.length,
+        requiredSampleSize: 10,
+      });
+      continue;
+    }
+
     if (result) {
       // Add goal relevance
       const outcomeField = pair.biometricField;
@@ -381,6 +424,22 @@ export async function computeCorrelations(userId: string, userGoal?: string): Pr
       } else {
         result.effectDirection = result.difference > 0 === pair.higherIsBetter ? 'positive' : 'negative';
       }
+
+      // Record as a significant hypothesis (helpful or harmful)
+      const findingType = result.effectDirection === 'positive' ? 'helpful' as const
+        : result.effectDirection === 'negative' ? 'harmful' as const
+        : 'neutral' as const;
+      allHypotheses.push({
+        pairId: pair.id,
+        pairName: pair.name,
+        category: pair.category,
+        findingType,
+        detail: result.displaySentence,
+        sampleSize: result.highGroup.n + result.lowGroup.n,
+        requiredSampleSize: 10,
+        effectSize: result.percentDifference,
+        confidence: result.confidenceScore,
+      });
 
       insights.push(result);
     }
@@ -422,6 +481,7 @@ export async function computeCorrelations(userId: string, userGoal?: string): Pr
     dataQuality: { fullDays, partialDays, avgMealsPerDay },
     sensitivities,
     insights,
+    allHypotheses,
     outcomeAnalyses,
     topInsight: insights.length > 0 ? insights[0]! : null,
   };

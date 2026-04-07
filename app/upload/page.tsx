@@ -172,9 +172,13 @@ export default function UploadPage() {
     setError('');
 
     try {
+      const userTimezone = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return ''; } })();
       const res = await fetch('/api/analyze-text', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(userTimezone ? { 'x-timezone': userTimezone } : {}),
+        },
         body: JSON.stringify({ description: textDescription.trim() }),
       });
 
@@ -232,9 +236,13 @@ export default function UploadPage() {
 
     try {
       // Step 1: Analyze the description with GPT to get real nutrition data
+      const habitTz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return ''; } })();
       const analyzeRes = await fetch('/api/analyze-text', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(habitTz ? { 'x-timezone': habitTz } : {}),
+        },
         body: JSON.stringify({ description: habitDescription.trim() }),
       });
 

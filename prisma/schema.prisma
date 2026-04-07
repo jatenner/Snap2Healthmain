@@ -7,61 +7,30 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// User model for authentication
-model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime?
-  image         String?
-  password      String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  accounts      Account[]
-}
-
-// Necessary for Next auth
-model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String? @db.Text
-  session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-}
+// Note: User authentication is handled by Supabase Auth, not Prisma.
+// This schema only defines the Meal model for type generation.
 
 model Meal {
   id                        String    @id @default(cuid())
-  user_id                   String    // Snake case to match Supabase
-  meal_name                 String?   // Name of the meal
-  image_url                 String?   // URL to meal image
-  calories                  Int?      // Calorie count
-  protein                   Float?    // Protein in grams
-  fat                       Float?    // Fat in grams
-  carbs                     Float?    // Carbohydrates in grams
-  macronutrients           Json?     // Detailed macronutrients array
-  micronutrients           Json?     // Detailed micronutrients array
-  ingredients              String[]  // List of ingredients
-  benefits                 String[]  // Health benefits
-  concerns                 String[]  // Health concerns
-  suggestions              String[]  // Suggestions for improvement
-  analysis                 Json?     // Full OpenAI analysis JSON
-  goal                     String?   // User's nutritional goal
-  personalized_insights    String?   // AI-generated personalized insights
-  insights_status          String?   // Status of insights generation
+  user_id                   String
+  meal_name                 String?
+  image_url                 String?
+  calories                  Int?
+  protein                   Float?
+  fat                       Float?
+  carbs                     Float?
+  macronutrients           Json?
+  micronutrients           Json?
+  ingredients              String[]
+  benefits                 String[]
+  concerns                 String[]
+  suggestions              String[]
+  analysis                 Json?
+  goal                     String?
+  personalized_insights    String?
+  insights_status          String?
   created_at               DateTime  @default(now())
   updated_at               DateTime  @updatedAt
 
   @@map("meals")
-} 
+}
