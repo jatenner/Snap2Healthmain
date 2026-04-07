@@ -166,7 +166,7 @@ Provide 1-3 recommendations and 1-2 experiment proposals. If insufficient data, 
 // The LLM is a translator, not an analyst.
 // ============================================================================
 
-export async function narrateInsight(insight: Insight): Promise<string> {
+export async function narrateInsight(insight: Insight, context?: { mealTimeline?: string }): Promise<string> {
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 20000 });
 
   // Build a compact representation of the structured data
@@ -192,11 +192,15 @@ export async function narrateInsight(insight: Insight): Promise<string> {
     ? `Tested ${hypotheses.length} diet-biomarker hypotheses: ${helpfulCount} helpful, ${harmfulCount} harmful, ${neutralCount} no effect detected, ${insufficientCount} need more data.`
     : 'Not enough data to test hypotheses yet.';
 
+  const timelineText = context?.mealTimeline
+    ? `\nMEAL TIMELINE TODAY:\n${context.mealTimeline}\n`
+    : '';
+
   const prompt = `STRUCTURED INSIGHT DATA (pre-computed, all numbers are final):
 
 FACTS:
 ${factsText}
-
+${timelineText}
 SCORES:
 ${scoresText}
 
@@ -214,11 +218,12 @@ ${recsText}
 
 CONFIDENCE: overall ${insight.confidence.overall}%, data quality ${insight.confidence.dataQuality}%, sample size ${insight.confidence.sampleSize} days, input confidence ${insight.confidence.inputConfidence}%
 
-Write a 3-5 sentence summary. Include:
-1. What the data shows today (reference specific numbers)
-2. If null findings exist, mention them: "We tested X but found no meaningful effect on Y" — this IS a finding
-3. If many hypotheses need more data, note that continued logging will unlock more intelligence
-4. End with the single most important action if one exists`;
+Write a 3-5 sentence summary. Structure it as:
+1. BIOMARKER FIRST: Start with what WHOOP data shows (sleep score, recovery, HRV) — lead with the body, not the diet
+2. CONNECT TO DIET: Then explain what diet factors may be contributing, referencing specific meal times if available (e.g., "dinner at 9:45pm", "caffeine at 3:15pm")
+3. NULL FINDINGS: If hypotheses were tested but showed no effect, mention it — "we tested X but found no meaningful relationship"
+4. ACTION: End with the single most important thing to do differently
+5. If data is insufficient, encourage continued logging`;
 
   try {
     const completion = await openai.chat.completions.create({
@@ -238,8 +243,11 @@ STRICT RULES:
 - Do NOT invent statistics or patterns.
 - Use phrases like "your data shows", "the pattern suggests", "based on ${insight.confidence.sampleSize} days of data".
 - If confidence is low or data is limited, say so clearly.
-- IMPORTANT: Report null/neutral findings honestly. "We tested X and found no meaningful relationship" IS a finding. Do not only highlight positive/negative effects.
-- If diet changed but biomarkers didn't respond, say so: "Your diet may not be the primary driver here" or "no meaningful biomarker response detected."
+- IMPORTANT: Report null/neutral findings honestly. "We tested X and found no meaningful relationship" IS a finding.
+- If diet changed but biomarkers didn't respond, say so: "Your diet may not be the primary driver here."
+- BIOMARKER-LED: Always start with what the body data shows (WHOOP), then connect to diet. Never start with "You ate..." — start with "Your sleep was..." or "Recovery came in at..."
+- If meal timing data is provided, reference specific times: "dinner at 9:45pm" or "caffeine at 3:15pm"
+- Connect poor biomarkers to specific meals when the data supports it: "Your sleep was 42% — a late dinner at 9:45pm and 180mg caffeine at 3:15pm may be factors."
 - Keep it concise: 3-5 sentences maximum.
 - Sound like a knowledgeable advisor, not a statistics report.
 - All nutrient values are AI estimates from meal photos — do not present them as exact measurements.`,

@@ -229,11 +229,26 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Generate LLM narrative from the structured insight (fire-and-forget safe)
+    // Build meal timeline with specific times (for biomarker-LED insight narration)
+    const mealTimeline = meals.length > 0
+      ? meals.map((m: any) => {
+          const time = new Date(m.meal_time).toLocaleTimeString('en-US', {
+            timeZone: userTimezone, hour: 'numeric', minute: '2-digit', hour12: true,
+          });
+          const extras: string[] = [];
+          if (m.protein) extras.push(`${m.protein}g protein`);
+          // Check for caffeine in the meal name or tags
+          if (m.meal_tags?.includes('contains_caffeine')) extras.push('caffeine');
+          if (m.meal_tags?.includes('contains_alcohol')) extras.push('alcohol');
+          return `${m.meal_name} at ${time} (${m.calories} cal${extras.length ? ', ' + extras.join(', ') : ''})`;
+        }).join('; ')
+      : '';
+
+    // Generate LLM narrative from structured insight + meal timing
     let narrative = '';
     if (insight.facts.length > 0) {
       try {
-        narrative = await narrateInsight(insight);
+        narrative = await narrateInsight(insight, { mealTimeline });
       } catch (e) {
         console.warn('[today] Narrative generation failed, using fallback');
         const topRec = insight.recommendations[0];

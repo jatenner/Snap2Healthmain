@@ -227,10 +227,12 @@ Return ONLY valid JSON.`
 
     const mealId = savedMeal?.id;
 
-    // Trigger daily summary recomputation in background
+    // Trigger daily summary recomputation in background (timezone-aware)
     if (mealId) {
-      const dateStr = finalMealTime.toISOString().split('T')[0]!;
-      computeDailyNutritionSummary(userId, dateStr).catch(e =>
+      const { getUserTimezone } = await import('../../lib/timezone-utils');
+      const userTz = getUserTimezone(request.headers);
+      const dateStr = finalMealTime.toLocaleDateString('en-CA', { timeZone: userTz });
+      computeDailyNutritionSummary(userId, dateStr, null, userTz).catch(e =>
         console.error('Background summary error:', e)
       );
     }

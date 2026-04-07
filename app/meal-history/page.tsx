@@ -46,6 +46,8 @@ interface MealHistoryEntry {
   goal?: string;
   created_at: string;
   intake_type?: string;
+  confidence_score?: number;
+  meal_tags?: string[];
 }
 
 interface ContextEvent {
@@ -190,11 +192,58 @@ export default function MealHistoryPage() {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [dateRange, setDateRange] = useState<number | null>(null); // null = all, 3/7/30
+  const [nutritionSummaries, setNutritionSummaries] = useState<any[]>([]);
 
-  const ITEMS_PER_PAGE = 20; // Load 20 meals at a time
+  const ITEMS_PER_PAGE = 20;
 
-  // Memoized grouped meals calculation
-  const groupedMeals = useMemo(() => groupMealsByDate(meals), [meals]);
+  // Filter meals by date range
+  const filteredMeals = useMemo(() => {
+    if (dateRange === null) return meals;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - dateRange);
+    return meals.filter(m => new Date(m.created_at) >= cutoff);
+  }, [meals, dateRange]);
+
+  // Memoized grouped meals from filtered set
+  const groupedMeals = useMemo(() => groupMealsByDate(filteredMeals), [filteredMeals]);
+
+  // Compute range summary from filtered meals
+  const rangeSummary = useMemo(() => {
+    if (filteredMeals.length === 0) return null;
+    const days = groupedMeals.length || 1;
+    return {
+      avgDailyCal: Math.round(filteredMeals.reduce((s, m) => s + (m.calories || 0), 0) / days),
+      avgDailyProtein: Math.round(filteredMeals.reduce((s, m) => s + (m.protein || 0), 0) / days),
+      avgDailyCarbs: Math.round(filteredMeals.reduce((s, m) => s + (m.carbs || 0), 0) / days),
+      avgDailyFat: Math.round(filteredMeals.reduce((s, m) => s + (m.fat || 0), 0) / days),
+      mealsPerDay: (filteredMeals.length / days).toFixed(1),
+      totalMeals: filteredMeals.length,
+      totalDays: days,
+    };
+  }, [filteredMeals, groupedMeals]);
+
+  // Fetch nutrition summaries for micro averages when dateRange changes
+  useEffect(() => {
+    if (!user || dateRange === null) { setNutritionSummaries([]); return; }
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - dateRange);
+    const cutoffStr = cutoff.toISOString().split('T')[0];
+    supabase
+      .from('daily_nutrition_summaries')
+      .select('total_vitamin_d, total_vitamin_c, total_magnesium, total_iron, total_zinc, total_calcium, total_potassium')
+      .eq('user_id', user.id)
+      .gte('summary_date', cutoffStr)
+      .order('summary_date', { ascending: false })
+      .then(({ data }: { data: any }) => setNutritionSummaries(data || []));
+  }, [user, dateRange]);
+
+  const microAvgs = useMemo(() => {
+    if (nutritionSummaries.length === 0) return null;
+    const n = nutritionSummaries.length;
+    const avg = (f: string) => Math.round(nutritionSummaries.reduce((s: number, r: any) => s + (r[f] || 0), 0) / n);
+    return { vitD: avg('total_vitamin_d'), vitC: avg('total_vitamin_c'), mag: avg('total_magnesium'), iron: avg('total_iron'), zinc: avg('total_zinc') };
+  }, [nutritionSummaries]);
 
   const fetchMealHistory = useCallback(async (pageNum = 0, append = false) => {
     try {
@@ -226,7 +275,9 @@ export default function MealHistoryPage() {
           carbs,
           goal,
           created_at,
-          intake_type
+          intake_type,
+          confidence_score,
+          meal_tags
         `)
         .eq('user_id', user?.id)
         .order('created_at', { ascending: false })
@@ -377,6 +428,58 @@ export default function MealHistoryPage() {
           </Link>
         </div>
 
+        {/* Date range filter */}
+        <div className="flex gap-2 mb-4">
+          {([3, 7, 30, null] as const).map(d => (
+            <button
+              key={d ?? 'all'}
+              onClick={() => setDateRange(d)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                dateRange === d
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-700/50 text-slate-300 hover:bg-slate-600/50'
+              }`}
+            >
+              {d ? `${d} days` : 'All'}
+            </button>
+          ))}
+        </div>
+
+        {/* Range summary card */}
+        {rangeSummary && dateRange !== null && (
+          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 mb-4">
+            <p className="text-xs text-slate-400 mb-2">{rangeSummary.totalDays} days &middot; {rangeSummary.totalMeals} meals &middot; {rangeSummary.mealsPerDay} meals/day avg</p>
+            <div className="grid grid-cols-4 gap-3 mb-3">
+              <div className="text-center">
+                <div className="text-lg font-bold text-orange-400">{rangeSummary.avgDailyCal}</div>
+                <div className="text-[10px] text-slate-400">cal/day</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-bold text-blue-400">{rangeSummary.avgDailyProtein}g</div>
+                <div className="text-[10px] text-slate-400">protein</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-bold text-yellow-400">{rangeSummary.avgDailyCarbs}g</div>
+                <div className="text-[10px] text-slate-400">carbs</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-bold text-pink-400">{rangeSummary.avgDailyFat}g</div>
+                <div className="text-[10px] text-slate-400">fat</div>
+              </div>
+            </div>
+            {microAvgs && (
+              <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-700">
+                <span className="text-[10px] text-slate-400">Avg daily micros:</span>
+                <span className="text-[10px] text-slate-300">D: {microAvgs.vitD}mcg</span>
+                <span className="text-[10px] text-slate-300">C: {microAvgs.vitC}mg</span>
+                <span className="text-[10px] text-slate-300">Mg: {microAvgs.mag}mg</span>
+                <span className="text-[10px] text-slate-300">Fe: {microAvgs.iron}mg</span>
+                <span className="text-[10px] text-slate-300">Zn: {microAvgs.zinc}mg</span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Content */}
         {meals.length === 0 ? (
           <Card className="max-w-2xl mx-auto bg-slate-800/50 backdrop-blur-xl border-slate-700/50">
@@ -498,8 +601,26 @@ export default function MealHistoryPage() {
                                     <h3 className="font-semibold text-slate-100 line-clamp-1">
                                       {meal.meal_name || 'Untitled Meal'}
                                     </h3>
+                                    {meal.confidence_score != null && (
+                                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
+                                        meal.confidence_score >= 80 ? 'bg-emerald-500/20 text-emerald-400'
+                                        : meal.confidence_score >= 60 ? 'bg-amber-500/20 text-amber-400'
+                                        : 'bg-red-500/20 text-red-400'
+                                      }`}>{meal.confidence_score}%</span>
+                                    )}
                                   </div>
-                                  
+
+                                  {/* Tags */}
+                                  {meal.meal_tags && meal.meal_tags.length > 0 && (
+                                    <div className="flex gap-1 mb-2">
+                                      {meal.meal_tags.slice(0, 3).map((tag: string) => (
+                                        <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-600/50 text-slate-300">
+                                          {tag.replace(/_/g, ' ')}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+
                                   {meal.meal_description && (
                                     <p className="text-sm text-slate-400 mb-3 line-clamp-2">
                                       {meal.meal_description}
@@ -507,7 +628,7 @@ export default function MealHistoryPage() {
                                   )}
 
                                   {/* Nutrition Summary */}
-                                  <div className="grid grid-cols-3 gap-2 mb-4 text-xs">
+                                  <div className="grid grid-cols-4 gap-2 mb-4 text-xs">
                                     <div className="text-center p-2 bg-slate-700/50 rounded-lg">
                                       <div className="font-semibold text-slate-100">{meal.calories}</div>
                                       <div className="text-slate-400">Calories</div>
@@ -520,11 +641,15 @@ export default function MealHistoryPage() {
                                       <div className="font-semibold text-slate-100">{meal.carbs}g</div>
                                       <div className="text-slate-400">Carbs</div>
                                     </div>
+                                    <div className="text-center p-2 bg-slate-700/50 rounded-lg">
+                                      <div className="font-semibold text-slate-100">{meal.fat}g</div>
+                                      <div className="text-slate-400">Fat</div>
+                                    </div>
                                   </div>
 
                                   {/* Actions */}
                                   <div className="flex gap-2">
-                                    <Link href={`/analysis/${meal.id}`} className="flex-1">
+                                    <Link href={`/meal/${meal.id}`} className="flex-1">
                                       <Button variant="outline" size="sm" className="w-full bg-slate-700/50 hover:bg-slate-600/50 text-slate-100 border-slate-600/50">
                                         <Eye className="h-3 w-3 mr-1" />
                                         View Analysis

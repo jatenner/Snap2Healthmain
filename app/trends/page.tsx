@@ -97,8 +97,13 @@ function CorrelationCard({ insight }: { insight: CorrelationInsight }) {
 const BIOMETRIC_OPTIONS = [
   { key: 'sleep', label: 'Sleep Score', color: '#60a5fa' },
   { key: 'recovery', label: 'Recovery', color: '#4ade80' },
-  { key: 'hrv', label: 'HRV', color: '#c084fc' },
+  { key: 'hrv', label: 'HRV (ms)', color: '#c084fc' },
   { key: 'rhr', label: 'Resting HR', color: '#f87171' },
+  { key: 'strain', label: 'Strain', color: '#f59e0b' },
+  { key: 'respiratoryRate', label: 'Resp Rate', color: '#06b6d4' },
+  { key: 'deepSleep', label: 'Deep Sleep (min)', color: '#1d4ed8' },
+  { key: 'remSleep', label: 'REM Sleep (min)', color: '#7c3aed' },
+  { key: 'sleepEfficiency', label: 'Sleep Efficiency', color: '#059669' },
 ];
 
 const NUTRITION_OPTIONS = [
@@ -110,6 +115,16 @@ const NUTRITION_OPTIONS = [
   { key: 'calories', label: 'Calories', color: '#a78bfa' },
   { key: 'caffeine', label: 'Caffeine (mg)', color: '#fbbf24' },
   { key: 'sodium', label: 'Sodium (mg)', color: '#f97316' },
+  { key: 'water', label: 'Water (ml)', color: '#0ea5e9' },
+  { key: 'vitaminD', label: 'Vitamin D (mcg)', color: '#d97706' },
+  { key: 'vitaminC', label: 'Vitamin C (mg)', color: '#ea580c' },
+  { key: 'magnesium', label: 'Magnesium (mg)', color: '#16a34a' },
+  { key: 'iron', label: 'Iron (mg)', color: '#dc2626' },
+  { key: 'zinc', label: 'Zinc (mg)', color: '#8b5cf6' },
+  { key: 'calcium', label: 'Calcium (mg)', color: '#94a3b8' },
+  { key: 'potassium', label: 'Potassium (mg)', color: '#ca8a04' },
+  { key: 'omega3', label: 'Omega-3 (mg)', color: '#0d9488' },
+  { key: 'alcohol', label: 'Alcohol (g)', color: '#be123c' },
 ];
 
 function MetricToggle({ options, selected, onSelect, label }: {
@@ -189,9 +204,9 @@ function TrendChart({ chartData, hasBiometrics, hasNutrition }: { chartData: any
               contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px' }}
               labelStyle={{ color: '#9ca3af' }}
             />
-            <Line yAxisId="left" type="monotone" dataKey={bioMetric} stroke={bioOption.color} strokeWidth={2} dot={false} connectNulls />
+            <Line yAxisId="left" type="monotone" dataKey={bioMetric} stroke={bioOption.color} strokeWidth={2} dot={{ r: 3, fill: bioOption.color }} />
             {hasNutData && (
-              <Line yAxisId="right" type="monotone" dataKey={nutMetric} stroke={nutOption.color} strokeWidth={2} dot={false} connectNulls strokeDasharray="5 5" />
+              <Line yAxisId="right" type="monotone" dataKey={nutMetric} stroke={nutOption.color} strokeWidth={2} dot={{ r: 3, fill: nutOption.color }} strokeDasharray="5 5" />
             )}
           </LineChart>
         </ResponsiveContainer>
@@ -207,7 +222,8 @@ function TrendsContent() {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/trends?days=${range}`)
+    const tz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return ''; } })();
+    fetch(`/api/trends?days=${range}`, { headers: tz ? { 'x-timezone': tz } : {} })
       .then(r => r.json())
       .then(d => { if (!d.error) setData(d); })
       .catch(() => {})
@@ -224,23 +240,42 @@ function TrendsContent() {
 
   const { biometrics, nutrition, correlations, outcomeAnalyses, sensitivities } = data;
 
-  // Prepare chart data
+  // Prepare chart data — null (not zero) for days without data
   const chartData = biometrics.map((b: any) => {
     const nutDay = nutrition.find((n: any) => n.summary_date === b.summary_date);
+    // Only include nutrition values if the user actually logged meals that day
+    const hasMeals = nutDay && (nutDay.meal_count || 0) > 0;
     return {
       date: b.summary_date.substring(5), // MM-DD
-      sleep: b.sleep_score,
-      recovery: b.recovery_score,
+      // Biometrics (from WHOOP — always present if biometric row exists)
+      sleep: b.sleep_score ?? null,
+      recovery: b.recovery_score ?? null,
       hrv: b.hrv ? Math.round(b.hrv * 10) / 10 : null,
-      rhr: b.resting_heart_rate,
-      protein: nutDay?.total_protein || null,
-      carbs: nutDay?.total_carbs || null,
-      fat: nutDay?.total_fat || null,
-      calories: nutDay?.total_calories || null,
-      fiber: nutDay?.total_fiber || null,
-      sugar: nutDay?.total_sugar || null,
-      caffeine: nutDay?.total_caffeine || null,
-      sodium: nutDay?.total_sodium || null,
+      rhr: b.resting_heart_rate ?? null,
+      strain: b.strain ?? null,
+      respiratoryRate: b.respiratory_rate ?? null,
+      deepSleep: b.deep_sleep_minutes ?? null,
+      remSleep: b.rem_sleep_minutes ?? null,
+      sleepEfficiency: b.sleep_efficiency ?? null,
+      // Nutrition (null if no meals logged — never fake data)
+      protein: hasMeals ? nutDay.total_protein : null,
+      carbs: hasMeals ? nutDay.total_carbs : null,
+      fat: hasMeals ? nutDay.total_fat : null,
+      calories: hasMeals ? nutDay.total_calories : null,
+      fiber: hasMeals ? nutDay.total_fiber : null,
+      sugar: hasMeals ? nutDay.total_sugar : null,
+      caffeine: hasMeals ? nutDay.total_caffeine : null,
+      sodium: hasMeals ? nutDay.total_sodium : null,
+      water: hasMeals ? nutDay.total_water_ml : null,
+      vitaminD: hasMeals ? nutDay.total_vitamin_d : null,
+      vitaminC: hasMeals ? nutDay.total_vitamin_c : null,
+      magnesium: hasMeals ? nutDay.total_magnesium : null,
+      iron: hasMeals ? nutDay.total_iron : null,
+      zinc: hasMeals ? nutDay.total_zinc : null,
+      calcium: hasMeals ? nutDay.total_calcium : null,
+      potassium: hasMeals ? nutDay.total_potassium : null,
+      omega3: hasMeals ? nutDay.total_omega3 : null,
+      alcohol: hasMeals ? nutDay.total_alcohol : null,
     };
   });
 

@@ -201,7 +201,8 @@ export async function POST(request: NextRequest) {
     if (dbSaveSuccessful) {
       generateInsightsInBackground(actualMealId, userId, session?.user?.user_metadata || {}, analysis)
         .catch(() => {});
-      computeDailyNutritionSummary(userId, mealTimeNow.toISOString().split('T')[0]!)
+      const localDate = mealTimeNow.toLocaleDateString('en-CA', { timeZone: userTz });
+      computeDailyNutritionSummary(userId, localDate, null, userTz)
         .catch(() => {});
     }
 
