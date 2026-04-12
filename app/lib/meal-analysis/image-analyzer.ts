@@ -9,7 +9,7 @@ import OpenAI from 'openai';
 
 const NUTRITION_JSON_SCHEMA = `{
   "mealName": "descriptive name",
-  "mealDescription": "detailed description",
+  "mealDescription": "1-2 sentence overview of what this meal is and its nutritional character",
   "consumptionType": "meal" | "beverage" | "supplement" | "snack",
   "calories": number, "protein": number, "carbs": number, "fat": number,
   "macronutrients": [
@@ -25,11 +25,13 @@ const NUTRITION_JSON_SCHEMA = `{
   ],
   "micronutrients": [25 vitamins/minerals with amount, unit, percentDailyValue],
   "foods": ["identified items"], "ingredients": ["main ingredients"],
-  "benefits": ["health benefits"], "concerns": ["nutritional concerns"],
-  "suggestions": ["improvement suggestions"], "healthRating": number
+  "benefits": ["specific benefit with mechanism — e.g. 'High leucine content supports muscle protein synthesis via mTOR signaling, especially effective within 2 hours of training'"],
+  "concerns": ["specific concern with metabolic context — e.g. 'Refined carbs without fiber will spike blood glucose and insulin; pair with fat or vinegar to blunt the glycemic response'"],
+  "suggestions": ["specific actionable upgrade — e.g. 'Add 100g spinach for magnesium (supports HRV and deep sleep) and folate at negligible caloric cost'"],
+  "healthRating": number
 }`;
 
-const SYSTEM_PROMPT = "You are a nutrition expert. Analyze images of food, beverages, or supplements. This includes meals, drinks (coffee, alcohol, smoothies, juice), supplement bottles/pills, protein shakes, and anything consumable. If you see a supplement bottle or label, read the label and extract the nutrient amounts. Assume the user consumed everything shown. Return comprehensive nutrition data in valid JSON format. Be efficient but thorough.";
+const SYSTEM_PROMPT = "You are an elite performance nutritionist trained by Peter Attia and Andrew Huberman. Analyze images of food, beverages, or supplements. This includes meals, drinks (coffee, alcohol, smoothies, juice), supplement bottles/pills, protein shakes, and anything consumable. If you see a supplement bottle or label, read the label and extract the nutrient amounts. Assume the user consumed everything shown. Return comprehensive nutrition data in valid JSON format. For benefits and concerns, think like a longevity-focused physician: reference specific mechanisms (mTOR, AMPK, glycemic load, inflammatory pathways, sleep architecture, HRV impact, gut microbiome). For suggestions, give specific actionable upgrades with the expected physiological benefit. Never give generic advice like 'eat more vegetables'. Be precise and science-grounded.";
 
 /**
  * Parse GPT response text into a JSON object.
@@ -102,6 +104,9 @@ IMPORTANT:
 - For supplements: read the label if visible and extract exact amounts
 - Caffeine and Alcohol amounts should be 0 if not present
 - Omega-3, Tryptophan, Choline: estimate if food sources are present, 0 if not
+- Benefits: 3-5 specific benefits referencing mechanisms (e.g., omega-3 DHA supports neuronal membrane fluidity; fiber feeds short-chain fatty acid production for gut barrier integrity; magnesium activates parasympathetic tone improving deep sleep). Be specific to THIS meal's actual contents.
+- Concerns: 2-4 specific concerns with metabolic context (e.g., high glycemic load without fiber pairing will produce a glucose spike followed by reactive hypoglycemia; saturated fat from processed sources promotes LDL particle oxidation). Only flag real issues for THIS meal.
+- Suggestions: 2-3 precise upgrades with expected outcome (e.g., 'Replace white rice with 150g sweet potato to lower glycemic load by ~40% while adding beta-carotene for retinol conversion'). Each suggestion must name a specific food, amount, and physiological reason.
 
 Daily Values for calculations:
 Protein: 50g, Carbs: 300g, Fat: 65g, Saturated Fat: 20g, Fiber: 25g, Sodium: 2300mg, Vitamin A: 900mcg, Vitamin C: 90mg, Vitamin D: 20mcg, Calcium: 1000mg, Iron: 18mg, Potassium: 4700mg, Magnesium: 400mg, Phosphorus: 1250mg, Zinc: 11mg, B1: 1.2mg, B2: 1.3mg, B3: 16mg, B6: 1.7mg, B12: 2.4mcg, Folate: 400mcg, Vitamin E: 15mg, Vitamin K: 120mcg, Choline: 550mg

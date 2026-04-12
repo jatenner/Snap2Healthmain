@@ -115,8 +115,10 @@ function MealDetailContent() {
         </div>
       )}
 
-      {/* Tags */}
-      {tags.length > 0 && <div className="flex flex-wrap gap-1.5">{tags.map((t: string) => <TagChip key={t} tag={t} />)}</div>}
+      {/* Description */}
+      {meal.analysis?.mealDescription && (
+        <p className="text-sm text-gray-500 -mt-2">{meal.analysis.mealDescription}</p>
+      )}
 
       {/* Macros */}
       <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-3">
@@ -159,11 +161,39 @@ function MealDetailContent() {
         </div>
       )}
 
-      {/* Benefits / Concerns */}
-      {((meal.benefits?.length > 0) || (meal.concerns?.length > 0)) && (
-        <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-2">
-          {meal.benefits?.length > 0 && <div><span className="text-[10px] text-green-400 uppercase">Benefits</span>{meal.benefits.map((b: string, i: number) => <p key={i} className="text-xs text-gray-600 mt-0.5">{b}</p>)}</div>}
-          {meal.concerns?.length > 0 && <div><span className="text-[10px] text-yellow-400 uppercase">Concerns</span>{meal.concerns.map((c: string, i: number) => <p key={i} className="text-xs text-gray-600 mt-0.5">{c}</p>)}</div>}
+      {/* Analysis — Benefits / Concerns / Suggestions */}
+      {((meal.benefits?.length > 0) || (meal.concerns?.length > 0) || (meal.suggestions?.length > 0)) && (
+        <div className="space-y-3">
+          {meal.benefits?.length > 0 && (
+            <div className="bg-white border border-green-200 rounded-2xl p-4">
+              <h2 className="text-sm font-medium text-green-700 mb-2">What This Meal Does Well</h2>
+              <ul className="space-y-2">
+                {meal.benefits.map((b: string, i: number) => (
+                  <li key={i} className="text-sm text-gray-700 leading-relaxed pl-4 relative before:content-[''] before:absolute before:left-0 before:top-2 before:w-2 before:h-2 before:bg-green-400 before:rounded-full">{b}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {meal.concerns?.length > 0 && (
+            <div className="bg-white border border-amber-200 rounded-2xl p-4">
+              <h2 className="text-sm font-medium text-amber-700 mb-2">Watch Out For</h2>
+              <ul className="space-y-2">
+                {meal.concerns.map((c: string, i: number) => (
+                  <li key={i} className="text-sm text-gray-700 leading-relaxed pl-4 relative before:content-[''] before:absolute before:left-0 before:top-2 before:w-2 before:h-2 before:bg-amber-400 before:rounded-full">{c}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {meal.suggestions?.length > 0 && (
+            <div className="bg-white border border-blue-200 rounded-2xl p-4">
+              <h2 className="text-sm font-medium text-blue-700 mb-2">How to Upgrade This Meal</h2>
+              <ul className="space-y-2">
+                {meal.suggestions.map((s: string, i: number) => (
+                  <li key={i} className="text-sm text-gray-700 leading-relaxed pl-4 relative before:content-[''] before:absolute before:left-0 before:top-2 before:w-2 before:h-2 before:bg-blue-400 before:rounded-full">{s}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
 
