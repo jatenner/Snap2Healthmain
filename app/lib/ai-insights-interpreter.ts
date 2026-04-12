@@ -218,12 +218,16 @@ ${recsText}
 
 CONFIDENCE: overall ${insight.confidence.overall}%, data quality ${insight.confidence.dataQuality}%, sample size ${insight.confidence.sampleSize} days, input confidence ${insight.confidence.inputConfidence}%
 
-Write a 3-5 sentence summary. Structure it as:
-1. BIOMARKER FIRST: Start with what WHOOP data shows (sleep score, recovery, HRV) — lead with the body, not the diet
-2. CONNECT TO DIET: Then explain what diet factors may be contributing, referencing specific meal times if available (e.g., "dinner at 9:45pm", "caffeine at 3:15pm")
-3. NULL FINDINGS: If hypotheses were tested but showed no effect, mention it — "we tested X but found no meaningful relationship"
-4. ACTION: End with the single most important thing to do differently
-5. If data is insufficient, encourage continued logging`;
+Return a JSON object with this EXACT structure:
+{
+  "headline": "1 sentence max — the single most important thing. Lead with the biometric, connect to the cause. E.g. 'Sleep dropped to 42% — late dinner at 9:45pm and 68g sugar likely disrupted glucose stability overnight.'",
+  "body": "2-3 sentences explaining WHY through the physiological mechanism. E.g. 'High refined sugar before bed triggers a glucose spike followed by reactive hypoglycemia around 2-3am, which activates cortisol and fragments deep sleep. Your HRV dropped from 52ms to 38ms, consistent with elevated sympathetic drive.' If things are GOOD, explain why: 'The 42g protein from salmon provides tryptophan, a serotonin/melatonin precursor that supports sleep onset.'",
+  "action": "1 specific thing to do. Name the food, the amount, and the expected effect. E.g. 'Add 100g leafy greens to dinner — the magnesium supports parasympathetic tone and should improve deep sleep within 2-3 days.'",
+  "status": "good | mixed | poor | insufficient_data"
+}
+
+If data is insufficient, set status to "insufficient_data" and keep headline/body/action focused on what to log next.
+Return ONLY valid JSON.`;
 
   try {
     const completion = await openai.chat.completions.create({
@@ -231,26 +235,18 @@ Write a 3-5 sentence summary. Structure it as:
       messages: [
         {
           role: 'system',
-          content: `You are given structured health data that has already been computed and analyzed.
+          content: `You are a nutritional biochemist and performance health expert (think Peter Attia, Andrew Huberman). You are given pre-computed data from a user's diet and WHOOP biometrics. Your job is to REASON about the physiological mechanisms connecting what they ate to what happened in their body, then communicate it clearly.
 
-Your ONLY job is to explain this data in plain English.
-
-STRICT RULES:
-- You are a TRANSLATOR, not an analyst.
-- Reference ONLY the numbers and findings provided.
-- Do NOT introduce new causes, mechanisms, or biological explanations.
-- Do NOT speculate about insulin, hormones, cortisol, gut microbiome, or any process not in the data.
-- Do NOT invent statistics or patterns.
-- Use phrases like "your data shows", "the pattern suggests", "based on ${insight.confidence.sampleSize} days of data".
-- If confidence is low or data is limited, say so clearly.
-- IMPORTANT: Report null/neutral findings honestly. "We tested X and found no meaningful relationship" IS a finding.
-- If diet changed but biomarkers didn't respond, say so: "Your diet may not be the primary driver here."
-- BIOMARKER-LED: Always start with what the body data shows (WHOOP), then connect to diet. Never start with "You ate..." — start with "Your sleep was..." or "Recovery came in at..."
-- If meal timing data is provided, reference specific times: "dinner at 9:45pm" or "caffeine at 3:15pm"
-- Connect poor biomarkers to specific meals when the data supports it: "Your sleep was 42% — a late dinner at 9:45pm and 180mg caffeine at 3:15pm may be factors."
-- Keep it concise: 3-5 sentences maximum.
-- Sound like a knowledgeable advisor, not a statistics report.
-- All nutrient values are AI estimates from meal photos — do not present them as exact measurements.`,
+YOU MUST:
+- Explain the WHY using real biochemistry: glucose metabolism, insulin response, inflammatory cascades (IL-6, TNF-α), neurotransmitter pathways (tryptophan → serotonin → melatonin), autonomic nervous system (sympathetic vs parasympathetic), gut-brain axis, mTOR signaling, cortisol dynamics
+- Lead with the biometric finding (WHOOP data), then connect to diet through the mechanism
+- Reference specific meals and times from the data: "dinner at 9:45pm", "caffeine at 3:15pm"
+- When things are BAD, explain the chain: "68g sugar → glucose spike → insulin surge → reactive hypoglycemia at 2am → cortisol release → fragmented sleep architecture"
+- When things are GOOD, explain what worked: "Salmon's EPA/DHA reduced inflammatory markers, tryptophan from the protein supported melatonin synthesis → deeper slow-wave sleep"
+- When diet looks fine but biometrics are bad, reason about other causes: training strain, travel, illness, sleep environment
+- Be honest about confidence: distinguish "strong pattern in your data + established science" from "possible but only 3 data points"
+- All numbers come from the data provided. Do NOT invent statistics.
+- Return ONLY valid JSON in the requested format.`,
         },
         { role: 'user', content: prompt },
       ],
@@ -258,15 +254,29 @@ STRICT RULES:
       temperature: 0.15,
     });
 
-    return completion.choices[0]?.message?.content?.trim() || 'Unable to generate summary at this time.';
+    const raw = completion.choices[0]?.message?.content?.trim() || '';
+    // Try to parse JSON response
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[0]);
+        // Return as JSON string so caller can parse structured insight
+        return JSON.stringify(parsed);
+      } catch {
+        return raw;
+      }
+    }
+    return raw;
   } catch (e) {
     console.error('[narrateInsight] LLM call failed:', e);
-    // Deterministic fallback — no LLM needed
     const topScore = insight.scores[0];
     const topRec = insight.recommendations[0];
-    let fallback = `Today you logged ${insight.facts.find(f => f.label === 'Meals logged')?.value || 0} meals.`;
-    if (topScore) fallback += ` ${topScore.name}: ${topScore.interpretation}.`;
-    if (topRec) fallback += ` Suggestion: ${topRec.action}.`;
-    return fallback;
+    const fallback = {
+      headline: topScore ? `${topScore.name}: ${topScore.interpretation}` : 'Log more meals to unlock insights.',
+      body: topRec ? topRec.action : 'Keep logging to build your dietary profile.',
+      action: 'Log your next meal to help build your pattern history.',
+      status: 'insufficient_data',
+    };
+    return JSON.stringify(fallback);
   }
 }

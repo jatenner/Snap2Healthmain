@@ -41,11 +41,13 @@ export async function GET(request: NextRequest) {
       experimentResult,
       recentNutritionResult,
     ] = await Promise.all([
-      // Today's biometric summary
+      // Recent biometric summary (today or most recent within 7 days)
       admin.from('daily_biometric_summaries')
         .select('*')
         .eq('user_id', userId)
-        .eq('summary_date', today)
+        .gte('summary_date', new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0]!)
+        .order('summary_date', { ascending: false })
+        .limit(1)
         .single(),
       // Today's nutrition summary
       admin.from('daily_nutrition_summaries')
