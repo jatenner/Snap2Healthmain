@@ -256,6 +256,17 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Fire-and-forget background tasks (MUST be before return)
+    autoLogRecurringHabits(userId).catch(e =>
+      console.error('[today] Background habit logging error:', e)
+    );
+    maybeAutoSyncWhoop(userId).catch(e =>
+      console.error('[today] Background WHOOP sync error:', e)
+    );
+    maybeRefreshCorrelations(userId).catch(e =>
+      console.error('[today] Background correlation refresh error:', e)
+    );
+
     return NextResponse.json({
       greeting: `${greeting}${firstName ? ', ' + firstName : ''}.`,
       goal: profile?.goal || 'General Wellness',
@@ -354,17 +365,6 @@ export async function GET(request: NextRequest) {
         ? Math.round((Date.now() - new Date(correlationResult.data.generated_at).getTime()) / (1000 * 60 * 60))
         : null,
     });
-
-    // Fire-and-forget background tasks
-    autoLogRecurringHabits(userId).catch(e =>
-      console.error('[today] Background habit logging error:', e)
-    );
-    maybeAutoSyncWhoop(userId).catch(e =>
-      console.error('[today] Background WHOOP sync error:', e)
-    );
-    maybeRefreshCorrelations(userId).catch(e =>
-      console.error('[today] Background correlation refresh error:', e)
-    );
 
   } catch (err: any) {
     console.error('Today API error:', err.message);
