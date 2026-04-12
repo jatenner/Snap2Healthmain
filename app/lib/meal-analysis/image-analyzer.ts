@@ -104,9 +104,10 @@ IMPORTANT:
 - For supplements: read the label if visible and extract exact amounts
 - Caffeine and Alcohol amounts should be 0 if not present
 - Omega-3, Tryptophan, Choline: estimate if food sources are present, 0 if not
-- Benefits: 3-5 specific benefits referencing mechanisms (e.g., omega-3 DHA supports neuronal membrane fluidity; fiber feeds short-chain fatty acid production for gut barrier integrity; magnesium activates parasympathetic tone improving deep sleep). Be specific to THIS meal's actual contents.
-- Concerns: 2-4 specific concerns with metabolic context (e.g., high glycemic load without fiber pairing will produce a glucose spike followed by reactive hypoglycemia; saturated fat from processed sources promotes LDL particle oxidation). Only flag real issues for THIS meal.
-- Suggestions: 2-3 precise upgrades with expected outcome (e.g., 'Replace white rice with 150g sweet potato to lower glycemic load by ~40% while adding beta-carotene for retinol conversion'). Each suggestion must name a specific food, amount, and physiological reason.
+- Benefits: 3-5 benefits that CITE THE ACTUAL NUMBERS from your analysis. Example: 'This meal delivers 42g protein (84% DV) — the high leucine content from eggs and chicken activates mTOR signaling for muscle protein synthesis, especially effective within 2 hours of resistance training.' Always include the specific gram/mg amount and % DV from this meal.
+- Concerns: 2-4 concerns that reference THIS meal's actual amounts. Example: 'The 38g sugar (mostly from the sauce) will produce a significant glucose spike — with only 4g fiber, there is minimal glycemic buffering. Consider that this meal's 1,200mg sodium (52% DV) also promotes fluid retention that can elevate resting heart rate overnight.' Always cite the numbers.
+- Suggestions: 2-3 upgrades referencing what THIS meal is missing. Example: 'This meal has 0mg omega-3 — adding 100g salmon or 15g walnuts would provide ~1.5g EPA/DHA to support anti-inflammatory pathways and HRV.' Always name a specific food, amount, and what it would change about this meal's nutritional profile.
+- For micronutrients: ONLY include nutrients that are meaningfully present (amount > 0). Do NOT pad with zeros. A meal with 5 real micronutrients is better than 25 where 20 are zero.
 
 Daily Values for calculations:
 Protein: 50g, Carbs: 300g, Fat: 65g, Saturated Fat: 20g, Fiber: 25g, Sodium: 2300mg, Vitamin A: 900mcg, Vitamin C: 90mg, Vitamin D: 20mcg, Calcium: 1000mg, Iron: 18mg, Potassium: 4700mg, Magnesium: 400mg, Phosphorus: 1250mg, Zinc: 11mg, B1: 1.2mg, B2: 1.3mg, B3: 16mg, B6: 1.7mg, B12: 2.4mcg, Folate: 400mcg, Vitamin E: 15mg, Vitamin K: 120mcg, Choline: 550mg

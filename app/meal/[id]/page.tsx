@@ -88,7 +88,7 @@ function MealDetailContent() {
 
   const mealTime = new Date(meal.meal_time || meal.created_at);
   const macroMax = Math.max(meal.protein || 0, meal.carbs || 0, meal.fat || 0, 1);
-  const micros = Array.isArray(meal.micronutrients) ? meal.micronutrients : [];
+  const micros = (Array.isArray(meal.micronutrients) ? meal.micronutrients : []).filter((m: any) => m.amount > 0);
   const topMicros = micros.filter((m: any) => (m.percentDailyValue || 0) >= 15).sort((a: any, b: any) => (b.percentDailyValue || 0) - (a.percentDailyValue || 0));
   const tags = Array.isArray(meal.meal_tags) ? meal.meal_tags : [];
 
