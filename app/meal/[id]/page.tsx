@@ -20,17 +20,43 @@ function TagChip({ tag }: { tag: string }) {
   );
 }
 
-function MacroBar({ label, grams, color, maxGrams }: { label: string; grams: number; color: string; maxGrams: number }) {
-  const pct = maxGrams > 0 ? Math.min(100, (grams / maxGrams) * 100) : 0;
+function MacroBar({ label, grams, pctDV, color }: { label: string; grams: number; pctDV: number | null; color: string }) {
+  const pct = pctDV != null ? Math.min(100, pctDV) : 0;
+  const targetGrams = pctDV && pctDV > 0 ? Math.round(grams / (pctDV / 100)) : null;
   return (
     <div>
-      <div className="flex justify-between text-xs mb-0.5">
-        <span className="text-gray-400">{label}</span>
-        <span className="text-gray-900 font-medium">{Math.round(grams)}g</span>
+      <div className="flex justify-between items-baseline text-xs mb-1">
+        <span className="text-gray-900 font-medium">{label}</span>
+        <span className="text-gray-500">
+          <span className="text-gray-900 font-semibold">{Math.round(grams)}g</span>
+          {targetGrams && <span className="text-gray-400"> / {targetGrams}g</span>}
+        </span>
       </div>
-      <div className="w-full bg-gray-100 rounded-full h-2">
-        <div className={`h-2 rounded-full ${color}`} style={{ width: `${pct}%` }} />
+      <div className="w-full bg-gray-100 rounded-full h-2.5 relative">
+        <div className={`h-2.5 rounded-full ${color}`} style={{ width: `${pct}%` }} />
       </div>
+      {pctDV != null && <div className="text-[10px] text-gray-400 mt-0.5 text-right">{Math.round(pctDV)}% of daily target</div>}
+    </div>
+  );
+}
+
+function NutrientRow({ name, amount, unit, pctDV }: { name: string; amount: number; unit: string; pctDV: number | null }) {
+  const pct = pctDV != null ? Math.min(100, pctDV) : 0;
+  const barColor = pct >= 75 ? 'bg-green-400' : pct >= 25 ? 'bg-blue-400' : 'bg-gray-300';
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-gray-600 w-24 flex-shrink-0 truncate">{name}</span>
+      <div className="flex-1 bg-gray-100 rounded-full h-1.5">
+        <div className={`h-1.5 rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-[11px] text-gray-500 w-16 text-right flex-shrink-0">
+        {amount}{unit}
+      </span>
+      {pctDV != null && (
+        <span className={`text-[10px] w-10 text-right flex-shrink-0 font-medium ${pct >= 75 ? 'text-green-600' : pct >= 25 ? 'text-blue-600' : 'text-gray-400'}`}>
+          {Math.round(pctDV)}%
+        </span>
+      )}
     </div>
   );
 }
@@ -87,10 +113,12 @@ function MealDetailContent() {
   if (!meal) return <div className="text-center py-20 text-gray-400">Meal not found.</div>;
 
   const mealTime = new Date(meal.meal_time || meal.created_at);
-  const macroMax = Math.max(meal.protein || 0, meal.carbs || 0, meal.fat || 0, 1);
+  const macros = Array.isArray(meal.macronutrients) ? meal.macronutrients : [];
+  const getMacroDV = (name: string) => macros.find((m: any) => (m.name || '').toLowerCase().includes(name))?.percentDailyValue ?? null;
   const micros = (Array.isArray(meal.micronutrients) ? meal.micronutrients : []).filter((m: any) => m.amount > 0);
-  const topMicros = micros.filter((m: any) => (m.percentDailyValue || 0) >= 15).sort((a: any, b: any) => (b.percentDailyValue || 0) - (a.percentDailyValue || 0));
-  const tags = Array.isArray(meal.meal_tags) ? meal.meal_tags : [];
+  const micros75 = micros.filter((m: any) => (m.percentDailyValue || 0) >= 75).sort((a: any, b: any) => (b.percentDailyValue || 0) - (a.percentDailyValue || 0));
+  const micros25 = micros.filter((m: any) => (m.percentDailyValue || 0) >= 25 && (m.percentDailyValue || 0) < 75).sort((a: any, b: any) => (b.percentDailyValue || 0) - (a.percentDailyValue || 0));
+  const microsLow = micros.filter((m: any) => (m.percentDailyValue || 0) < 25).sort((a: any, b: any) => (b.percentDailyValue || 0) - (a.percentDailyValue || 0));
 
   return (
     <div className="max-w-lg mx-auto px-4 py-6 space-y-5">
@@ -120,44 +148,54 @@ function MealDetailContent() {
         <p className="text-sm text-gray-500 -mt-2">{meal.analysis.mealDescription}</p>
       )}
 
-      {/* Macros */}
+      {/* Macros — actual vs daily target */}
       <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-3">
-        <h2 className="text-sm font-medium text-gray-900">Macronutrients</h2>
-        <MacroBar label="Protein" grams={meal.protein || 0} color="bg-blue-500" maxGrams={macroMax * 1.2} />
-        <MacroBar label="Carbs" grams={meal.carbs || 0} color="bg-yellow-500" maxGrams={macroMax * 1.2} />
-        <MacroBar label="Fat" grams={meal.fat || 0} color="bg-orange-500" maxGrams={macroMax * 1.2} />
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-medium text-gray-900">Macronutrients</h2>
+          <span className="text-[10px] text-gray-400">% of daily target</span>
+        </div>
+        <MacroBar label="Protein" grams={meal.protein || 0} pctDV={getMacroDV('protein')} color="bg-blue-500" />
+        <MacroBar label="Carbs" grams={meal.carbs || 0} pctDV={getMacroDV('carb')} color="bg-yellow-500" />
+        <MacroBar label="Fat" grams={meal.fat || 0} pctDV={getMacroDV('fat')} color="bg-orange-500" />
+        <MacroBar label="Fiber" grams={macros.find((m: any) => (m.name || '').toLowerCase().includes('fiber'))?.amount || 0} pctDV={getMacroDV('fiber')} color="bg-green-500" />
       </div>
 
-      {/* Micronutrients */}
+      {/* Micronutrients — compact with %DV bars */}
       {micros.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-2xl p-4">
-          <h2 className="text-sm font-medium text-gray-900 mb-3">Nutrients</h2>
-          {topMicros.length > 0 && (
-            <div className="mb-3">
-              <span className="text-[10px] text-green-400 uppercase">Good sources</span>
-              <div className="mt-1 space-y-1">
-                {topMicros.slice(0, 5).map((m: any) => (
-                  <div key={m.name} className="flex justify-between text-xs">
-                    <span className="text-gray-600">{m.name}</span>
-                    <span className="text-green-400">{m.amount}{m.unit} ({m.percentDailyValue}%)</span>
-                  </div>
-                ))}
+        <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-medium text-gray-900">Vitamins & Minerals</h2>
+            <span className="text-[10px] text-gray-400">% Daily Value</span>
+          </div>
+          {micros75.length > 0 && (
+            <div>
+              <span className="text-[10px] text-green-600 font-medium uppercase">Strong sources (75%+ DV)</span>
+              <div className="mt-1.5 space-y-1.5">
+                {micros75.map((m: any) => <NutrientRow key={m.name} name={m.name} amount={m.amount} unit={m.unit} pctDV={m.percentDailyValue} />)}
               </div>
             </div>
           )}
-          {showAllMicros && (
-            <div className="space-y-1 mb-2">
-              {micros.map((m: any) => (
-                <div key={m.name} className="flex justify-between text-xs">
-                  <span className="text-gray-400">{m.name}</span>
-                  <span className="text-gray-600">{m.amount}{m.unit}</span>
-                </div>
-              ))}
+          {micros25.length > 0 && (
+            <div>
+              <span className="text-[10px] text-blue-600 font-medium uppercase">Moderate sources (25-75% DV)</span>
+              <div className="mt-1.5 space-y-1.5">
+                {micros25.map((m: any) => <NutrientRow key={m.name} name={m.name} amount={m.amount} unit={m.unit} pctDV={m.percentDailyValue} />)}
+              </div>
             </div>
           )}
-          <button onClick={() => setShowAllMicros(!showAllMicros)} className="text-xs text-blue-600 flex items-center gap-1 mt-1">
-            {showAllMicros ? <><ChevronUp className="w-3 h-3" /> Less</> : <><ChevronDown className="w-3 h-3" /> All {micros.length} nutrients</>}
-          </button>
+          {showAllMicros && microsLow.length > 0 && (
+            <div>
+              <span className="text-[10px] text-gray-400 font-medium uppercase">Trace amounts (&lt;25% DV)</span>
+              <div className="mt-1.5 space-y-1.5">
+                {microsLow.map((m: any) => <NutrientRow key={m.name} name={m.name} amount={m.amount} unit={m.unit} pctDV={m.percentDailyValue} />)}
+              </div>
+            </div>
+          )}
+          {microsLow.length > 0 && (
+            <button onClick={() => setShowAllMicros(!showAllMicros)} className="text-xs text-blue-600 flex items-center gap-1">
+              {showAllMicros ? <><ChevronUp className="w-3 h-3" /> Hide trace nutrients</> : <><ChevronDown className="w-3 h-3" /> +{microsLow.length} trace nutrients</>}
+            </button>
+          )}
         </div>
       )}
 

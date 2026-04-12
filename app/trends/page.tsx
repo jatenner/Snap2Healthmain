@@ -282,6 +282,30 @@ function TrendsContent() {
   const hasCorrelations = correlations.length > 0;
   const hasNutrition = nutrition.length > 0;
 
+  // Compute daily averages for the selected period
+  const nutWithMeals = nutrition.filter((n: any) => (n.meal_count || 0) > 0);
+  const avgDays = nutWithMeals.length || 1;
+  const dailyAvg = {
+    calories: Math.round(nutWithMeals.reduce((s: number, n: any) => s + (n.total_calories || 0), 0) / avgDays),
+    protein: Math.round(nutWithMeals.reduce((s: number, n: any) => s + (n.total_protein || 0), 0) / avgDays),
+    carbs: Math.round(nutWithMeals.reduce((s: number, n: any) => s + (n.total_carbs || 0), 0) / avgDays),
+    fat: Math.round(nutWithMeals.reduce((s: number, n: any) => s + (n.total_fat || 0), 0) / avgDays),
+    fiber: Math.round(nutWithMeals.reduce((s: number, n: any) => s + (n.total_fiber || 0), 0) / avgDays),
+    sugar: Math.round(nutWithMeals.reduce((s: number, n: any) => s + (n.total_sugar || 0), 0) / avgDays),
+    caffeine: Math.round(nutWithMeals.reduce((s: number, n: any) => s + (n.total_caffeine || 0), 0) / avgDays),
+    sodium: Math.round(nutWithMeals.reduce((s: number, n: any) => s + (n.total_sodium || 0), 0) / avgDays),
+    water: Math.round(nutWithMeals.reduce((s: number, n: any) => s + (n.total_water_ml || 0), 0) / avgDays),
+    vitD: Math.round(nutWithMeals.reduce((s: number, n: any) => s + (n.total_vitamin_d || 0), 0) / avgDays * 10) / 10,
+    vitC: Math.round(nutWithMeals.reduce((s: number, n: any) => s + (n.total_vitamin_c || 0), 0) / avgDays),
+    mag: Math.round(nutWithMeals.reduce((s: number, n: any) => s + (n.total_magnesium || 0), 0) / avgDays),
+    iron: Math.round(nutWithMeals.reduce((s: number, n: any) => s + (n.total_iron || 0), 0) / avgDays * 10) / 10,
+    omega3: Math.round(nutWithMeals.reduce((s: number, n: any) => s + (n.total_omega3 || 0), 0) / avgDays),
+    mealsPerDay: (nutWithMeals.reduce((s: number, n: any) => s + (n.meal_count || 0), 0) / avgDays).toFixed(1),
+  };
+
+  // Daily targets (FDA + Attia-informed)
+  const targets = { protein: 120, carbs: 250, fat: 65, fiber: 30, sugar: 25, caffeine: 400, sodium: 2300, vitD: 20, vitC: 90, mag: 400, iron: 18, omega3: 1000 };
+
   return (
     <div className="max-w-lg mx-auto px-4 py-6 space-y-6">
       {/* Header + Range */}
@@ -301,6 +325,83 @@ function TrendsContent() {
           ))}
         </div>
       </div>
+
+      {/* ====== DAILY AVERAGES ====== */}
+      {hasNutrition && nutWithMeals.length > 0 && (
+        <div>
+          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">Daily Averages ({avgDays} days)</h2>
+          <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-4">
+            {/* Macro averages with targets */}
+            <div className="space-y-2">
+              {([
+                { label: 'Protein', value: dailyAvg.protein, target: targets.protein, unit: 'g', color: 'bg-blue-500' },
+                { label: 'Carbs', value: dailyAvg.carbs, target: targets.carbs, unit: 'g', color: 'bg-yellow-500' },
+                { label: 'Fat', value: dailyAvg.fat, target: targets.fat, unit: 'g', color: 'bg-orange-500' },
+                { label: 'Fiber', value: dailyAvg.fiber, target: targets.fiber, unit: 'g', color: 'bg-green-500' },
+              ] as const).map(m => {
+                const pct = Math.min(100, (m.value / m.target) * 100);
+                const isLow = pct < 50;
+                return (
+                  <div key={m.label}>
+                    <div className="flex justify-between text-xs mb-0.5">
+                      <span className="text-gray-900 font-medium">{m.label}</span>
+                      <span className={isLow ? 'text-red-500 font-medium' : 'text-gray-600'}>
+                        {m.value}{m.unit} <span className="text-gray-400">/ {m.target}{m.unit}</span>
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-100 rounded-full h-2">
+                      <div className={`h-2 rounded-full ${m.color}`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Secondary metrics grid */}
+            <div className="grid grid-cols-3 gap-3 pt-2 border-t border-gray-100">
+              <div className="text-center">
+                <div className="text-lg font-bold text-gray-900">{dailyAvg.calories}</div>
+                <div className="text-[10px] text-gray-400">cal/day</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-bold text-gray-900">{dailyAvg.sugar}g</div>
+                <div className={`text-[10px] ${dailyAvg.sugar > targets.sugar ? 'text-red-400' : 'text-gray-400'}`}>sugar {dailyAvg.sugar > targets.sugar ? '(high)' : ''}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-bold text-gray-900">{dailyAvg.caffeine}mg</div>
+                <div className="text-[10px] text-gray-400">caffeine</div>
+              </div>
+            </div>
+
+            {/* Key micros */}
+            <div className="pt-2 border-t border-gray-100">
+              <span className="text-[10px] text-gray-400 uppercase">Key vitamin & mineral averages</span>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1.5">
+                {([
+                  { label: 'Vitamin D', value: dailyAvg.vitD, target: targets.vitD, unit: 'mcg' },
+                  { label: 'Vitamin C', value: dailyAvg.vitC, target: targets.vitC, unit: 'mg' },
+                  { label: 'Magnesium', value: dailyAvg.mag, target: targets.mag, unit: 'mg' },
+                  { label: 'Iron', value: dailyAvg.iron, target: targets.iron, unit: 'mg' },
+                  { label: 'Omega-3', value: dailyAvg.omega3, target: targets.omega3, unit: 'mg' },
+                  { label: 'Sodium', value: dailyAvg.sodium, target: targets.sodium, unit: 'mg' },
+                ] as const).map(v => {
+                  const pct = Math.round((v.value / v.target) * 100);
+                  const isLow = pct < 50;
+                  const isHigh = v.label === 'Sodium' && pct > 100;
+                  return (
+                    <div key={v.label} className="flex justify-between text-xs py-0.5">
+                      <span className="text-gray-500">{v.label}</span>
+                      <span className={isHigh ? 'text-red-500 font-medium' : isLow ? 'text-amber-500' : 'text-gray-700'}>
+                        {v.value}{v.unit} <span className="text-gray-400 text-[10px]">({pct}%)</span>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ====== LINK TO INSIGHTS FOR INTERPRETATION ====== */}
       {(hasCorrelations || (outcomeAnalyses && outcomeAnalyses.length > 0)) && (
