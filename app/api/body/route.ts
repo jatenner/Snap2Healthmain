@@ -55,6 +55,11 @@ export async function GET() {
       ? Math.floor((Date.now() - new Date(latestDate).getTime()) / 86400000)
       : null;
 
+    // Fire-and-forget: auto-sync WHOOP if stale (must be before return)
+    maybeAutoSyncWhoop(user!.id).catch(e =>
+      console.error('[body] Background WHOOP sync error:', e)
+    );
+
     return NextResponse.json({
       today: todayData,
       yesterday: yesterdayData,
@@ -78,11 +83,6 @@ export async function GET() {
       } : null,
       trajectory: todayData?.trajectory || null,
     });
-
-    // Fire-and-forget: auto-sync WHOOP if stale
-    maybeAutoSyncWhoop(user!.id).catch(e =>
-      console.error('[body] Background WHOOP sync error:', e)
-    );
 
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
