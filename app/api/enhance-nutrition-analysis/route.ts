@@ -4,6 +4,13 @@ import OpenAI from 'openai';
 // Enhanced nutrition analysis using GPT-4 for complete and accurate results
 export async function POST(request: Request) {
   try {
+    const { createClient: createServerClient } = await import('../../lib/supabase/server');
+    const supabase = createServerClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { mealData, imageDescription } = await request.json();
 
     if (!process.env.OPENAI_API_KEY) {
