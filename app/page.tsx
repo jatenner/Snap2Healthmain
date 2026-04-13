@@ -8,6 +8,41 @@ import { useEffect, useState } from 'react';
 
 const TARGETS = { calories: 2200, protein: 120, carbs: 250, fat: 65 };
 
+const MEAL_SLOTS = [
+  { key: 'breakfast', label: 'Breakfast', icon: '🌅', start: 5, end: 11 },
+  { key: 'lunch', label: 'Lunch', icon: '☀️', start: 11, end: 15 },
+  { key: 'dinner', label: 'Dinner', icon: '🌙', start: 17, end: 22 },
+] as const;
+
+function getMealSlot(timeStr: string): string {
+  const hour = new Date(timeStr).getHours();
+  if (hour >= 5 && hour < 11) return 'breakfast';
+  if (hour >= 11 && hour < 15) return 'lunch';
+  if (hour >= 15 && hour < 17) return 'snack';
+  if (hour >= 17 && hour < 22) return 'dinner';
+  return 'snack';
+}
+
+function assignMealSlots(meals: any[]): Map<string, any[]> {
+  const slots = new Map<string, any[]>();
+  const usedSlots = new Set<string>();
+
+  // Sort by time
+  const sorted = [...meals].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+
+  for (const meal of sorted) {
+    let slot = getMealSlot(meal.time);
+    // If this slot already has a main meal, make it a snack
+    if ((slot === 'breakfast' || slot === 'lunch' || slot === 'dinner') && usedSlots.has(slot)) {
+      slot = 'snack';
+    }
+    if (slot !== 'snack') usedSlots.add(slot);
+    if (!slots.has(slot)) slots.set(slot, []);
+    slots.get(slot)!.push(meal);
+  }
+  return slots;
+}
+
 interface NarrativeInsight {
   headline: string;
   body: string;
@@ -194,25 +229,61 @@ function AuthenticatedHome() {
         </div>
       )}
 
-      {/* ====== TODAY'S MEALS ====== */}
-      {nut.mealCount > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-semibold text-gray-900">Meals</span>
-            <Link href="/meal-history" className="text-xs text-blue-600 font-medium flex items-center gap-0.5">All <ChevronRight className="w-3 h-3" /></Link>
+      {/* ====== TODAY'S MEALS — grouped by slot ====== */}
+      {nut.mealCount > 0 && (() => {
+        const slotMap = assignMealSlots(data.meals);
+        return (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-semibold text-gray-900">Meals</span>
+              <Link href="/meal-history" className="text-xs text-blue-600 font-medium flex items-center gap-0.5">All <ChevronRight className="w-3 h-3" /></Link>
+            </div>
+            <div className="space-y-3">
+              {MEAL_SLOTS.map(slot => {
+                const meals = slotMap.get(slot.key) || [];
+                const notLogged = meals.length === 0;
+                return (
+                  <div key={slot.key}>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="text-xs">{slot.icon}</span>
+                      <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{slot.label}</span>
+                    </div>
+                    {notLogged ? (
+                      <Link href="/upload" className="block bg-gray-50 border border-dashed border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-400 hover:bg-gray-100 transition-colors">
+                        + Log {slot.label.toLowerCase()}
+                      </Link>
+                    ) : meals.map((meal: any) => (
+                      <Link key={meal.id} href={`/meal/${meal.id}`} className="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-3 py-2.5 hover:bg-gray-50 transition-colors mb-1">
+                        <span className="text-sm text-gray-900 font-medium truncate max-w-[200px]">{meal.name}</span>
+                        <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
+                          {meal.calories} cal &middot; {new Date(meal.time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                );
+              })}
+              {/* Snacks (if any) */}
+              {(slotMap.get('snack') || []).length > 0 && (
+                <div>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="text-xs">🍎</span>
+                    <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Snacks</span>
+                  </div>
+                  {slotMap.get('snack')!.map((meal: any) => (
+                    <Link key={meal.id} href={`/meal/${meal.id}`} className="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-3 py-2.5 hover:bg-gray-50 transition-colors mb-1">
+                      <span className="text-sm text-gray-900 font-medium truncate max-w-[200px]">{meal.name}</span>
+                      <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
+                        {meal.calories} cal &middot; {new Date(meal.time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-          <div className="space-y-1.5">
-            {data.meals.slice(0, 5).map((meal: any) => (
-              <Link key={meal.id} href={`/meal/${meal.id}`} className="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-3 py-2.5 hover:bg-gray-50 transition-colors">
-                <span className="text-sm text-gray-900 font-medium truncate max-w-[200px]">{meal.name}</span>
-                <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
-                  {meal.calories} cal &middot; {new Date(meal.time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                </span>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ====== QUICK ACTIONS ====== */}
       <div className="flex gap-2">
